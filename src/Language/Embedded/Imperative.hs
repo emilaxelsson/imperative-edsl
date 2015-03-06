@@ -8,6 +8,7 @@ module Language.Embedded.Imperative where
 
 
 
+import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 
@@ -75,6 +76,17 @@ data RefCMD p exp a
     SetRef          ::        Ref a -> exp a -> RefCMD p exp ()
     UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp (exp a)
 
+data Arr a
+    = ArrComp String
+    | ArrEval (IOArray Int a)
+
+-- | Commands for mutable arrays
+data ArrCMD p exp a
+  where
+    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp (Arr (exp a))
+    GetArr :: (p a, Integral n) => exp n -> Arr (exp a) -> ArrCMD p exp (exp a)
+    SetArr :: Integral n        => exp n -> exp a -> Arr (exp a) -> ArrCMD p exp ()
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -87,6 +99,11 @@ runRefCMD NewRef                        = fmap RefEval $ newIORef (error "Readin
 runRefCMD (GetRef (RefEval r))          = fmap litExp  $ readIORef r
 runRefCMD (SetRef (RefEval r) a)        = writeIORef r $ evalExp a
 runRefCMD (UnsafeFreezeRef (RefEval r)) = fmap litExp  $ readIORef r
+
+runArrCMD :: EvalExp exp => ArrCMD (VarPred exp) exp a -> IO a
+runArrCMD (NewArr i a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp i) - 1) a
+runArrCMD (GetArr i (ArrEval arr))   = readArray arr (fromIntegral (evalExp i))
+runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) a
 
 
 
@@ -129,6 +146,35 @@ compRefCMD (SetRef (RefComp ref) exp) = do
     v <- compExp exp
     addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
+
+compArrCMD :: CompExp exp => ArrCMD (Typeable :/\: VarPred exp) exp a -> CGen a
+compArrCMD (NewArr size init) = do
+    addInclude "<string.h>"
+    sym <- gensym "a"
+    v   <- compExp size
+    i   <- compExp init -- todo: use this with memset
+    addLocal [cdecl| float $id:sym[ $v ]; |] -- todo: get real type
+    addStm   [cstm| memset($id:sym, $i, sizeof( $id:sym )); |]
+    return $ ArrComp sym
+-- compArrCMD (NewArr size init) = do
+--     addInclude "<string.h>"
+--     sym <- gensym "a"
+--     v   <- compExp size
+--     i   <- compExp init -- todo: use this with memset
+--     addLocal [cdecl| float* $id:sym = calloc($v, sizeof(float)); |] -- todo: get real type
+--     addFinalStm [cstm| free($id:sym); |]
+--     addInclude "<stdlib.h>"
+--     return $ ArrComp sym
+compArrCMD (GetArr expi (ArrComp arr)) = do
+    sym <- gensym "a"
+    i   <- compExp expi
+    addLocal [cdecl| float $id:sym; |] -- todo: get real type
+    addStm   [cstm| $id:sym = $id:arr[ $i ]; |]
+    return $ varExp sym
+compArrCMD (SetArr expi expv (ArrComp arr)) = do
+    v <- compExp expv
+    i <- compExp expi
+    addStm [cstm| $id:arr[ $i ] = $v; |]
 
 
 
