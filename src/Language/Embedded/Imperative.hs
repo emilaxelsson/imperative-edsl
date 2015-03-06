@@ -236,26 +236,26 @@ instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (ArrCMD pre
 ----------------------------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: pred a => Program (RefCMD pred exp) (Ref a)
+newRef :: pred a => ProgramT (RefCMD pred exp) m (Ref a)
 newRef = singleton NewRef
 
 -- | Create an initialized reference
-initRef :: pred a => exp a -> Program (RefCMD pred exp) (Ref a)
+initRef :: pred a => exp a -> ProgramT (RefCMD pred exp) m (Ref a)
 initRef = singleton . InitRef
 
 -- | Get the contents of reference
-getRef :: pred a => Ref a -> Program (RefCMD pred exp) (exp a)
+getRef :: pred a => Ref a -> ProgramT (RefCMD pred exp) m (exp a)
 getRef r = singleton (GetRef r)
 
 -- | Set the contents of reference
-setRef :: pred a => Ref a -> exp a -> Program (RefCMD pred exp) ()
+setRef :: pred a => Ref a -> exp a -> ProgramT (RefCMD pred exp) m ()
 setRef r = singleton . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: pred a => Ref a -> (exp a -> exp a) -> Program (RefCMD pred exp) ()
+modifyRef :: (pred a, Monad m) => Ref a -> (exp a -> exp a) -> ProgramT (RefCMD pred exp) m ()
 modifyRef r f = getRef r >>= setRef r . f
 
 -- | Freeze the contents of reference (only safe if the reference is never accessed again)
-unsafeFreezeRef :: pred a => Ref a -> Program (RefCMD pred exp) (exp a)
+unsafeFreezeRef :: pred a => Ref a -> ProgramT (RefCMD pred exp) m (exp a)
 unsafeFreezeRef r = singleton (UnsafeFreezeRef r)
 
