@@ -1,6 +1,9 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | Deep embedding of imperative programs. The embedding is parameterized on the expression
+-- language.
+
 module Language.Embedded.Imperative where
 
 
@@ -42,6 +45,7 @@ class CompExp exp
     -- | Compilation of expressions
     compExp :: exp a -> CGen C.Exp
 
+-- | Variable identifier
 type VarId = String
 
 
