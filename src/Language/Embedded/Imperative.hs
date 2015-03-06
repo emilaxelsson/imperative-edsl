@@ -48,6 +48,14 @@ class CompExp exp
 -- | Variable identifier
 type VarId = String
 
+-- | Universal predicate
+class    Any a
+instance Any a
+
+-- | Predicate conjunction
+class    (p1 a, p2 a) => (p1 :/\: p2) a
+instance (p1 a, p2 a) => (p1 :/\: p2) a
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -97,9 +105,6 @@ typeOfP1 _ = typeOf (undefined :: a)
 
 typeOfP2 :: forall proxy1 proxy2 a . Typeable a => proxy1 (proxy2 a) -> TypeRep
 typeOfP2 _ = typeOf (undefined :: a)
-
-class    (p1 a, p2 a) => (p1 :/\: p2) a
-instance (p1 a, p2 a) => (p1 :/\: p2) a
 
 compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp a -> CGen a
 compRefCMD cmd@NewRef = do
