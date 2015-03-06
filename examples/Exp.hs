@@ -15,17 +15,18 @@ data Exp a where
   Lit :: (Eq a, Show a) => a -> Exp a
   Add :: Exp Int -> Exp Int -> Exp Int
 
+type instance VarPred Exp = Eq :/\: Show
+
 instance EvalExp Exp
   where
-    type LitPred Exp = Eq :/\: Show
     litExp = Lit
     evalExp (Lit a) = a
     evalExp (Add a b) = evalExp a + evalExp b
 
 instance CompExp Exp
   where
-    type VarPred Exp = Eq
     varExp = Var
+
     compExp (Lit l)   = return [cexp| $id:s |]
       where
         s = show l

@@ -21,14 +21,14 @@ import Language.C.Monad
 -- * Interpretation of expressions
 ----------------------------------------------------------------------------------------------------
 
+-- | Constraint on the types of variables in a given expression language
+type family VarPred (exp :: * -> *) :: * -> Constraint
+
 -- | General interface for evaluating expressions
 class EvalExp exp
   where
-    -- | Predicate for literals
-    type LitPred exp :: * -> Constraint
-
     -- | Literal expressions
-    litExp  :: LitPred exp a => a -> exp a
+    litExp  :: VarPred exp a => a -> exp a
 
     -- | Evaluation of (closed) expressions
     evalExp :: exp a -> a
@@ -36,9 +36,6 @@ class EvalExp exp
 -- | General interface for compiling expressions
 class CompExp exp
   where
-    -- | Predicate for variables
-    type VarPred exp :: * -> Constraint
-
     -- | Variable expressions
     varExp  :: VarPred exp a => VarId -> exp a
 
@@ -72,7 +69,7 @@ data RefCMD p exp a
 -- * Running commands
 ----------------------------------------------------------------------------------------------------
 
-runRefCMD :: EvalExp exp => RefCMD (LitPred exp) exp a -> IO a
+runRefCMD :: EvalExp exp => RefCMD (VarPred exp) exp a -> IO a
 runRefCMD (InitRef a)                   = fmap RefEval $ newIORef $ evalExp a
 runRefCMD NewRef                        = fmap RefEval $ newIORef (error "Reading uninitialized reference")
 runRefCMD (GetRef (RefEval r))          = fmap litExp  $ readIORef r
