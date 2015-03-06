@@ -101,6 +101,7 @@ import qualified Language.C.Syntax as C
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Monoid
+import Text.PrettyPrint.Mainland
 
 -- | Code generation flags
 data Flags = Flags
@@ -171,6 +172,12 @@ cenvToCUnit env =
     tds    = reverse $ _typedefs env
     protos = reverse $ _prototypes env
     globs  = reverse $ _globals env
+
+-- | Generate a C document
+prettyCGen :: CGen a -> IO Doc
+prettyCGen ma = do
+    (_,cenv) <- runCGen ma (defaultCEnv Flags)
+    return $ ppr $ cenvToCUnit cenv
 
 -- | Retrieve a fresh identifier
 freshId :: MonadC m => m Integer
@@ -313,4 +320,10 @@ inModule name prg = do
     unique .= oldUnique
     modules %= Map.insertWith (<>) name defs
     return a
+
+-- | Wrap a program in a main function
+wrapMain :: MonadC m => m a -> m ()
+wrapMain prog = do
+    (_,params,items) <- inNewFunction $ prog >> addStm [cstm| return 0; |]
+    addGlobal [cedecl| int main($params:params){ $items:items }|]
 
