@@ -12,6 +12,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 
+import Control.Monad.Identity
 import Control.Monad.Operational
 import Data.Constraint
 import Language.C.Quote.C
@@ -60,6 +61,52 @@ instance (p1 a, p2 a) => (p1 :/\: p2) a
 
 
 ----------------------------------------------------------------------------------------------------
+-- * Combining and stacking program embeddings
+----------------------------------------------------------------------------------------------------
+
+interpretWithMonadT
+    :: (Monad m, Monad n)
+    => (forall a. i a -> m a)
+    -> (forall a. n a -> m a)
+    -> ProgramT i n b
+    -> m b
+interpretWithMonadT inti intp p = do
+    p' <- intp $ viewT p
+    case p' of
+      Return a -> return a
+      i :>>= k -> inti i >>= interpretWithMonadT inti intp . k
+
+-- | Interpret an instruction set @i@ in the monad @m@
+class Interp i m
+  where
+    interp :: i a -> m a
+
+data (instr1 :+: instr2) a
+    = Inl (instr1 a)
+    | Inr (instr2 a)
+
+instance (Interp i1 m, Interp i2 m) => Interp (i1 :+: i2) m
+  where
+    interp (Inl i) = interp i
+    interp (Inr i) = interp i
+
+-- | Interpret a program @p a@ in the monad @m@
+class InterpretWithMonad prog m
+  where
+    iwm :: prog a -> m a
+
+instance (Interp instr m, Monad m) => InterpretWithMonad (ProgramT instr Identity) m
+  where
+    iwm = interpretWithMonad interp
+
+instance (Interp i1 m, InterpretWithMonad (ProgramT i2 n) m, Monad m, Monad n) =>
+    InterpretWithMonad (ProgramT i1 (ProgramT i2 n)) m
+  where
+    iwm = interpretWithMonadT interp iwm
+
+
+
+----------------------------------------------------------------------------------------------------
 -- * Commands
 ----------------------------------------------------------------------------------------------------
 
@@ -104,6 +151,9 @@ runArrCMD :: EvalExp exp => ArrCMD (VarPred exp) exp a -> IO a
 runArrCMD (NewArr i a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp i) - 1) a
 runArrCMD (GetArr i (ArrEval arr))   = readArray arr (fromIntegral (evalExp i))
 runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) a
+
+instance (EvalExp exp, pred ~ VarPred exp) => Interp (RefCMD pred exp) IO where interp = runRefCMD
+instance (EvalExp exp, pred ~ VarPred exp) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
 
 
 
@@ -175,6 +225,9 @@ compArrCMD (SetArr expi expv (ArrComp arr)) = do
     v <- compExp expv
     i <- compExp expi
     addStm [cstm| $id:arr[ $i ] = $v; |]
+
+instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
+instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
 
 
 
