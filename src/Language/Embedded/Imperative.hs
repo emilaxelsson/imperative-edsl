@@ -60,7 +60,7 @@ data RefCMD p exp a
     NewRef          :: p a => RefCMD p exp (Ref a)
     InitRef         :: p a => exp a -> RefCMD p exp (Ref a)
     GetRef          :: p a => Ref a -> RefCMD p exp (exp a)
-    SetRef          :: p a => Ref a -> exp a -> RefCMD p exp ()
+    SetRef          ::        Ref a -> exp a -> RefCMD p exp ()
     UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp (exp a)
 
 
