@@ -48,411 +48,269 @@
 -- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 -- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+-- Copyright (c) 2015, Anders Persson
+--
+-- All rights reserved.
+--
+-- Redistribution and use in source and binary forms, with or without
+-- modification, are permitted provided that the following conditions are met:
+--
+--     * Redistributions of source code must retain the above copyright
+--       notice, this list of conditions and the following disclaimer.
+--
+--     * Redistributions in binary form must reproduce the above
+--       copyright notice, this list of conditions and the following
+--       disclaimer in the documentation and/or other materials provided
+--       with the distribution.
+--
+--     * Neither the name of Anders Persson nor the names of other
+--       contributors may be used to endorse or promote products derived
+--       from this software without specific prior written permission.
+--
+-- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+-- "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+-- LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+-- A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+-- OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+-- SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+-- LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+-- DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+-- THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+-- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+-- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Data.Array.Nikola.Backend.C.Monad (
-    PtrCExp(..),
-    CExp(..),
+-- | A monad for C code generation
+module Language.C.Monad
+  where
 
-    Idx(..),
-
-    CudaDim(..),
-    cudaDimVar,
-
-    CudaKernel(..),
-    CudaThreadBlockDim,
-    CudaGridDim,
-
-    CudaWorkBlock(..),
-
-    C(..),
-    CEnv(..),
-    defaultCEnv,
-    runC,
-    cenvToCUnit,
-
-    getFlags,
-
-    useIndex,
-    collectIndices,
-    getIndices,
-
-    addWorkBlock,
-    collectWorkBlocks,
-    getWorkBlocks,
-
-    lookupVarTrans,
-    extendVarTrans,
-
-    gensym,
-
-    addInclude,
-    addTypedef,
-    addPrototype,
-    addGlobal,
-    addParam,
-    addLocal,
-    addStm,
-    addFinalStm,
-
-    inBlock,
-    inNewBlock,
-    inNewBlock_,
-    inNewFunction,
-    collectDefinitions
-  ) where
-
-import Control.Applicative (Applicative,
-                            (<$>))
+import Control.Lens
+import Control.Applicative
+import Control.Monad.State.Strict
 import Control.Monad.Exception
-import Control.Monad.State
-import Data.List (foldl')
+
+import Language.C.Quote.C
+import qualified Language.C.Syntax as C
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Language.C.Quote.CUDA
-import qualified Language.C.Syntax as C
-import Text.PrettyPrint.Mainland
+import Data.Monoid
 
-#if !MIN_VERSION_template_haskell(2,7,0)
-import qualified Data.Loc
-import qualified Data.Symbol
-import qualified Language.C.Syntax
-#endif /* !MIN_VERSION_template_haskell(2,7,0) */
+-- | Code generation flags
+data Flags = Flags
 
-import Data.Array.Nikola.Backend.Flags
-import Data.Array.Nikola.Language.Check
-import Data.Array.Nikola.Language.Syntax
-
--- | C representation of Nikola array data
-data PtrCExp = PtrCE C.Exp
-             | TupPtrCE [PtrCExp]
-
--- | C representation of Nikola values
-data CExp = VoidCE
-          | ScalarCE C.Exp
-          | TupCE [CExp]
-          | ArrayCE PtrCExp [CExp]
-          | FunCE C.Exp
-
-instance Pretty PtrCExp where
-    ppr (PtrCE ce)     = ppr ce
-    ppr (TupPtrCE ces) = tuple (map ppr ces)
-
-instance Pretty CExp where
-    ppr VoidCE            = text "void"
-    ppr (ScalarCE ce)     = ppr ce
-    ppr (TupCE ces)       = tuple (map ppr ces)
-    ppr (ArrayCE ce dims) = ppr ce <> brackets (commasep (map ppr dims))
-    ppr (FunCE   ce)      = ppr ce
-
-instance ToExp PtrCExp where
-    toExp (PtrCE ce) = toExp ce
-    toExp ce         = faildoc $ text "Cannot convert" <+>
-                                 (squotes . ppr) ce <+>
-                                 text "to a C expression"
-
-instance ToExp CExp where
-    toExp (ScalarCE ce)  = toExp ce
-    toExp (ArrayCE ce _) = toExp ce
-    toExp (FunCE ce)     = toExp ce
-
-    toExp ce = faildoc $ text "Cannot convert" <+>
-                         (squotes . ppr) ce <+>
-                         text "to a C expression"
-
--- ^ Loop index variable
-data Idx = CIdx
-         | CudaThreadIdx CudaDim
-         | IrregCudaThreadIdx CudaDim
-  deriving (Eq, Ord, Show)
-
--- ^ CUDA dimension
-data CudaDim = CudaDimX
-             | CudaDimY
-             | CudaDimZ
-  deriving (Eq, Ord, Show)
-
-cudaDimVar :: CudaDim -> String
-cudaDimVar CudaDimX = "x"
-cudaDimVar CudaDimY = "y"
-cudaDimVar CudaDimZ = "z"
-
--- ^ CUDA kernel
-data CudaKernel = CudaKernel
-    { cukernDefs ::  [C.Definition]  -- ^ The kernel's compiled C source
-    , cukernName :: String           -- ^ The name of the kernel
-    , cukernIdxs :: [(Idx, Exp)]     -- ^ A list of indices the kernel uses and
-                                     -- their bounds. The bounds are written in
-                                     -- terms of the kernel's parameters.
-
-    , cukernWorkBlocks :: [CudaWorkBlock] -- ^ The kernel's work blocks.
-
-    , cukernRewrite :: Exp -> [Exp] -> Exp -- ^ Rewrite an expression written in
-                                           -- terms of the kernel's parameters
-                                           -- to an expression written in terms
-                                           -- of a list of arguments.
-    }
-
-type CudaThreadBlockDim = (Int, Int, Int)
-
-type CudaGridDim = (Int, Int, Int)
-
-data CudaWorkBlock = CudaWorkBlock
-    { cuworkBlockCounter :: String -- ^ The name of the CUDA global that holds
-                                   -- the number of processed blocks.
-    }
-
--- The state used by the C code generation monad
+-- | Code generator state.
 data CEnv = CEnv
-  {  cFlags :: Flags
+    { _flags      :: Flags
 
-  ,  cVarTypes :: Map.Map Var Type
-  ,  cVarTrans :: Map.Map Var CExp
+    , _unique     :: !Integer
 
-  ,  cUniq :: !Int
+    , _modules    :: Map.Map String [C.Definition]
+    , _includes   :: Set.Set String
+    , _typedefs   :: [C.Definition]
+    , _prototypes :: [C.Definition]
+    , _globals    :: [C.Definition]
 
-  ,  cContext :: Context
+    , _params     :: [C.Param]
+    , _args       :: [C.Exp]
+    , _locals     :: [C.InitGroup]
+    , _stms       :: [C.Stm]
+    , _finalStms  :: [C.Stm]
+    }
 
-  ,  cIndices :: [(Idx, Exp)]
+makeLenses ''CEnv
 
-  ,  cWorkBlocks :: [CudaWorkBlock]
-
-  ,  cIncludes   :: Set.Set String
-  ,  cTypedefs   :: [C.Definition]
-  ,  cPrototypes :: [C.Definition]
-  ,  cGlobals    :: [C.Definition]
-
-  ,  cParams    :: [C.Param]
-  ,  cLocals    :: [C.InitGroup]
-  ,  cStms      :: [C.Stm]
-  ,  cFinalStms :: [C.Stm]
-  }
-
+-- | Default code generator state
 defaultCEnv :: Flags -> CEnv
-defaultCEnv flags = CEnv
-  {  cFlags = flags
+defaultCEnv fl = CEnv
+    { _flags      = fl
+    , _unique     = 10000
+    , _modules    = mempty
+    , _includes   = mempty
+    , _typedefs   = mempty
+    , _prototypes = mempty
+    , _globals    = mempty
+    , _params     = mempty
+    , _args       = mempty
+    , _locals     = mempty
+    , _stms       = mempty
+    , _finalStms  = mempty
+    }
 
-  ,  cVarTypes = Map.empty
-  ,  cVarTrans = Map.empty
+-- | Code generation type constraints
+type MonadC m = (Functor m, Applicative m, Monad m, MonadState CEnv m, MonadException m, MonadFix m)
 
-  ,  cUniq = 0
+-- | The C code generation monad transformer
+newtype CGenT t a = CGenT { runCGenT :: StateT CEnv (ExceptionT t) a }
+  deriving (Functor, Applicative, Monad, MonadException, MonadState CEnv, MonadIO, MonadFix)
 
-  ,  cContext = Host
+type CGen = CGenT IO
 
-  ,  cIndices = []
+-- | Run the C code generation monad
+runCGen :: CGen a -> CEnv -> IO (a, CEnv)
+runCGen m s = runExceptionT (runStateT (runCGenT m) s) >>= liftException
 
-  ,  cWorkBlocks = []
-
-  ,  cIncludes   = Set.empty
-  ,  cTypedefs   = []
-  ,  cPrototypes = []
-  ,  cGlobals    = []
-
-  ,  cParams    = []
-  ,  cLocals    = []
-  ,  cStms      = []
-  ,  cFinalStms = []
-  }
-
-newtype C a = C { unC :: StateT CEnv (ExceptionT IO) a }
-  deriving (Functor,
-            Applicative,
-            Monad,
-            MonadException,
-            MonadIO,
-            MonadState CEnv)
-
-runC :: C a -> CEnv -> IO (a, CEnv)
-runC m s = do
-    (a, s') <- runExceptionT (runStateT (unC m) s) >>= liftException
-    return (a, s')
-
+-- | Extract a compilation unit from the 'CEnv' state
 cenvToCUnit :: CEnv -> [C.Definition]
 cenvToCUnit env =
-    [cunit|$edecls:includes
-           $edecls:typedefs
-           $edecls:prototypes
-           $edecls:globals|]
+    [cunit|$edecls:incs
+           $edecls:tds
+           $edecls:protos
+           $edecls:globs|]
   where
-    includes = map toInclude (Set.toList (cIncludes env))
+    incs = map toInclude (Set.toList (_includes env))
       where
         toInclude :: String -> C.Definition
         toInclude inc = [cedecl|$esc:("#include " ++ inc)|]
+    tds    = reverse $ _typedefs env
+    protos = reverse $ _prototypes env
+    globs  = reverse $ _globals env
 
-    typedefs   = (reverse . cTypedefs) env
-    prototypes = (reverse . cPrototypes) env
-    globals    = (reverse . cGlobals) env
+-- | Retrieve a fresh identifier
+freshId :: MonadC m => m Integer
+freshId = unique <<%= succ
 
-instance MonadCheck C where
-    getContext = gets cContext
-
-    setContext ctx = modify $ \s -> s { cContext = ctx }
-
-    lookupVarType v = do
-        maybe_tau <- gets $ \s -> Map.lookup v (cVarTypes s)
-        case maybe_tau of
-          Just tau -> return tau
-          Nothing  -> faildoc $ text "Variable" <+> ppr v <+>
-                      text "not in scope"
-
-    extendVarTypes vtaus act = do
-        old_cVarTypes <- gets cVarTypes
-        modify $ \s -> s { cVarTypes = foldl' insert (cVarTypes s) vtaus }
-        x  <- act
-        modify $ \s -> s { cVarTypes = old_cVarTypes }
-        return x
-      where
-        insert m (k, v) = Map.insert k v m
-
-getFlags :: C Flags
-getFlags = gets cFlags
-
-useIndex :: (Idx, Exp) -> C ()
-useIndex idx =
-    modify $ \s -> s { cIndices = idx : cIndices s }
-
-collectIndices :: C a -> C (a, [(Idx, Exp)])
-collectIndices act = do
-    old_idxs <- gets cIndices
-    modify $ \s -> s { cIndices = [] }
-    a    <- act
-    idxs <- gets cIndices
-    modify $ \s -> s { cIndices = old_idxs }
-    return (a, reverse idxs)
-
-getIndices :: C [(Idx, Exp)]
-getIndices =
-    reverse <$> gets cIndices
-
-addWorkBlock :: CudaWorkBlock -> C ()
-addWorkBlock wb =
-    modify $ \s -> s { cWorkBlocks = wb : cWorkBlocks s }
-
-collectWorkBlocks :: C a -> C (a, [CudaWorkBlock])
-collectWorkBlocks act = do
-    old_wbs <- gets cWorkBlocks
-    modify $ \s -> s { cWorkBlocks = [] }
-    a   <- act
-    wbs <- gets cWorkBlocks
-    modify $ \s -> s { cWorkBlocks = old_wbs }
-    return (a, wbs)
-
-getWorkBlocks :: C [CudaWorkBlock]
-getWorkBlocks =
-    gets cWorkBlocks
-
-lookupVarTrans :: Var -> C CExp
-lookupVarTrans v = do
-    maybe_cexp <- gets $ \s -> Map.lookup v (cVarTrans s)
-    case maybe_cexp of
-      Just cexp -> return cexp
-      Nothing ->   faildoc $ text "Variable" <+> ppr v <+> text "not in scope"
-
-extendVarTrans :: [(Var, CExp)] -> C a -> C a
-extendVarTrans vexps act = do
-    old_cVarTrans <- gets cVarTrans
-    modify $ \s -> s { cVarTrans = foldl' insert (cVarTrans s) vexps }
-    x  <- act
-    modify $ \s -> s { cVarTrans = old_cVarTrans }
-    return x
-  where
-    insert m (k, v) = Map.insert k v m
-
-gensym :: String -> C String
+-- | Generate a fresh symbol by appending a fresh id to a base name
+gensym :: MonadC m => String -> m String
 gensym s = do
-    u <- gets cUniq
-    modify $ \s -> s { cUniq = u + 1 }
+    u <- freshId
     return $ s ++ show u
 
-addInclude :: String -> C ()
-addInclude inc = modify $ \s ->
-    s { cIncludes = Set.insert inc (cIncludes s) }
+-- | Add an include pre-processor directive. Specify '<>' or '""' around
+-- the file name.
+addInclude :: MonadC m => String -> m ()
+addInclude inc = includes %= Set.insert inc
 
-addTypedef :: C.Definition -> C ()
-addTypedef def = modify $ \s ->
-    s { cTypedefs = def : cTypedefs s }
+-- | Add a local include directive. The argument will be surrounded by '""'
+addLocalInclude :: MonadC m => String -> m ()
+addLocalInclude inc = addInclude ("\"" ++ inc ++ "\"")
 
-addPrototype :: C.Definition -> C ()
-addPrototype def = modify $ \s ->
-    s { cPrototypes = def : cPrototypes s }
+-- | Add a system include directive. The argument will be surrounded by '<>'
+addSystemInclude :: MonadC m => String -> m ()
+addSystemInclude inc = addInclude ("<" ++ inc ++ ">")
 
-addGlobal :: C.Definition -> C ()
-addGlobal def = modify $ \s ->
-    s { cGlobals = def : cGlobals s }
+-- | Add a type definition
+addTypedef :: MonadC m => C.Definition -> m ()
+addTypedef def = typedefs %= (def:)
 
-addParam :: C.Param -> C ()
-addParam param = modify $ \s ->
-    s { cParams = param : cParams s }
+-- | Add a function prototype
+addPrototype :: MonadC m => C.Definition -> m ()
+addPrototype def = prototypes %= (def:)
 
-addLocal :: C.InitGroup -> C ()
-addLocal def = modify $ \s ->
-    s { cLocals = def : cLocals s }
+-- | Add a global definition
+addGlobal :: MonadC m => C.Definition -> m ()
+addGlobal def = globals %= (def:)
 
-addStm :: C.Stm -> C ()
-addStm def = modify $ \s ->
-    s { cStms = def : cStms s }
+-- | Add multiple global definitions
+addGlobals :: MonadC m => [C.Definition] -> m ()
+addGlobals defs = globals %= (defs++)
 
-addFinalStm :: C.Stm -> C ()
-addFinalStm def = modify $ \s ->
-    s { cFinalStms = def : cFinalStms s }
+-- | Add a function parameter when building a function definition
+addParam :: MonadC m => C.Param -> m ()
+addParam param = params %= (param:)
 
-inBlock :: C a -> C a
-inBlock act = do
-    (a, items) <- inNewBlock act
+-- | Add a function argument when building a function call
+addArg :: MonadC m => C.Exp -> m ()
+addArg arg = args %= (arg:)
+
+-- | Add a local declaration (including initializations)
+addLocal :: MonadC m => C.InitGroup -> m ()
+addLocal def = locals %= (def:)
+
+-- | Add multiple local declarations
+addLocals :: MonadC m => [C.InitGroup] -> m ()
+addLocals defs = locals %= (reverse defs++)
+
+-- | Add a statement to the current block
+addStm :: MonadC m => C.Stm -> m ()
+addStm stm = stms %= (stm:)
+
+-- | Add a sequence of statements to the current block
+addStms :: MonadC m => [C.Stm] -> m ()
+addStms ss = stms %= (reverse ss++)
+
+-- | Add a statement to the end of the current block
+addFinalStm :: MonadC m => C.Stm -> m ()
+addFinalStm stm = finalStms %= (stm:)
+
+-- | Run an action in a new block
+inBlock :: MonadC m => m a -> m a
+inBlock ma = do
+    (a, items) <- inNewBlock ma
     addStm [cstm|{ $items:items }|]
     return a
 
-inNewBlock :: C a -> C (a, [C.BlockItem])
-inNewBlock act = do
-    oldCLocals    <- gets cLocals
-    oldCStms      <- gets cStms
-    oldCFinalStms <- gets cFinalStms
-    modify $ \s -> s { cLocals = [], cStms = [], cFinalStms = [] }
-    x <- act
-    locals    <- reverse <$> gets cLocals
-    stms      <- reverse <$> gets cStms
-    finalstms <- gets cFinalStms
-    modify $ \s -> s { cLocals    = oldCLocals
-                     , cStms      = oldCStms
-                     , cFinalStms = oldCFinalStms
-                     }
-    return (x, map C.BlockDecl locals ++
-               map C.BlockStm stms ++
-               map C.BlockStm finalstms)
+-- | Run an action as a block and capture the items.
+-- Does not place the items in an actual C block.
+inNewBlock :: MonadC m => m a -> m (a, [C.BlockItem])
+inNewBlock ma = do
+    oldLocals    <- locals    <<.= mempty
+    oldStms      <- stms      <<.= mempty
+    oldFinalStms <- finalStms <<.= mempty
+    x <- ma
+    ls  <- reverse <$> (locals    <<.= oldLocals)
+    ss  <- reverse <$> (stms      <<.= oldStms)
+    fss <- reverse <$> (finalStms <<.= oldFinalStms)
+    return (x, map C.BlockDecl ls  ++
+               map C.BlockStm  ss  ++
+               map C.BlockStm  fss
+           )
 
-inNewBlock_ :: C () -> C [C.BlockItem]
-inNewBlock_ act = snd <$> inNewBlock act
+-- | Run an action as a block and capture the items.
+-- Does not place the items in an actual C block.
+inNewBlock_ :: MonadC m => m a -> m [C.BlockItem]
+inNewBlock_ ma = snd <$> inNewBlock ma
 
-inNewFunction :: C () -> C ([C.Param], [C.BlockItem])
+-- | Run an action as a function declaration.
+-- Does not create a new function.
+inNewFunction :: MonadC m => m a -> m (a,[C.Param],[C.BlockItem])
 inNewFunction comp = do
-    oldCParams <- gets cParams
-    modify $ \s -> s { cParams = [] }
-    (_, items) <- inNewBlock comp
-    params <- gets cParams
-    modify $ \s -> s { cParams = oldCParams }
-    return (reverse params, items)
+    oldParams <- params <<.= mempty
+    (a,items)  <- inNewBlock comp
+    ps <- params <<.= oldParams
+    return (a, reverse ps, items)
 
-collectDefinitions :: C a -> C (a, [C.Definition])
-collectDefinitions act = do
-    old_cIncludes   <- gets cIncludes
-    old_cTypedefs   <- gets cTypedefs
-    old_cPrototypes <- gets cPrototypes
-    old_cGlobals    <- gets cGlobals
-    modify $ \s -> s {  cIncludes   = Set.empty
-                     ,  cTypedefs   = []
-                     ,  cPrototypes = []
-                     ,  cGlobals    = []
-                     }
-    a    <- act
-    s'   <- get
-    modify $ \s -> s {  cIncludes   = old_cIncludes `Set.union` cIncludes s'
-                     ,  cTypedefs   = old_cTypedefs   ++ cTypedefs s'
-                     ,  cPrototypes = old_cPrototypes ++ cPrototypes s'
-                     ,  cGlobals    = old_cGlobals    ++ cGlobals s'
+-- | Declare a function
+inFunction :: MonadC m => String -> m a -> m a
+inFunction fun ma = do
+    (a,ps,items) <- inNewFunction ma
+    let ty = [cty| void |]
+    addPrototype [cedecl| $ty:ty $id:fun($params:ps);|]
+    addGlobal [cedecl| $ty:ty $id:fun($params:ps){ $items:items }|]
+    return a
+
+-- | Collect all global definitions in the current state
+collectDefinitions :: MonadC m => m a -> m (a, [C.Definition])
+collectDefinitions ma = do
+    oldIncludes   <- includes   <<.= mempty
+    oldTypedefs   <- typedefs   <<.= mempty
+    oldPrototypes <- prototypes <<.= mempty
+    oldGlobals    <- globals    <<.= mempty
+    a  <- ma
+    s' <- get
+    modify $ \s -> s { _includes   = oldIncludes    -- <> _includes s'
+                     , _typedefs   = oldTypedefs    -- <> _typedefs s'
+                     , _prototypes = oldPrototypes  -- <> _prototypes s'
+                     , _globals    = oldGlobals     -- <> _globals s'
                      }
     return (a, cenvToCUnit s')
+
+-- | Collect all function arguments in the current state
+collectArgs :: MonadC m => m [C.Exp]
+collectArgs = args <<.= mempty
+
+-- | Declare a C translation unit
+inModule :: MonadC m => String -> m a -> m a
+inModule name prg = do
+    oldUnique <- unique <<.= 10000
+    (a, defs) <- collectDefinitions prg
+    unique .= oldUnique
+    modules %= Map.insertWith (<>) name defs
+    return a
+
