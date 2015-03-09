@@ -131,7 +131,7 @@ makeLenses ''CEnv
 defaultCEnv :: Flags -> CEnv
 defaultCEnv fl = CEnv
     { _flags      = fl
-    , _unique     = 10000
+    , _unique     = 0
     , _modules    = mempty
     , _includes   = mempty
     , _typedefs   = mempty
