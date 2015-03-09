@@ -13,6 +13,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:
+    Data.ALaCarte
     Language.C.Monad,
     Language.Embedded.Imperative
 
