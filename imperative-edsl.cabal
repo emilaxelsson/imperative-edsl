@@ -48,7 +48,6 @@ library
     language-c-quote,
     lens,
     mainland-pretty,
-    mtl,
-    operational
+    mtl
 
   hs-source-dirs: src

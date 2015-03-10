@@ -12,8 +12,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 
-import Control.Monad.Identity
-import Control.Monad.Operational
+import Control.Monad.Operational.Compositional
 import Data.Constraint
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
@@ -61,52 +60,6 @@ instance (p1 a, p2 a) => (p1 :/\: p2) a
 
 
 ----------------------------------------------------------------------------------------------------
--- * Combining and stacking program embeddings
-----------------------------------------------------------------------------------------------------
-
-interpretWithMonadT
-    :: (Monad m, Monad n)
-    => (forall a. i a -> m a)
-    -> (forall a. n a -> m a)
-    -> ProgramT i n b
-    -> m b
-interpretWithMonadT inti intp p = do
-    p' <- intp $ viewT p
-    case p' of
-      Return a -> return a
-      i :>>= k -> inti i >>= interpretWithMonadT inti intp . k
-
--- | Interpret an instruction set @i@ in the monad @m@
-class Interp i m
-  where
-    interp :: i a -> m a
-
-data (instr1 :+: instr2) a
-    = Inl (instr1 a)
-    | Inr (instr2 a)
-
-instance (Interp i1 m, Interp i2 m) => Interp (i1 :+: i2) m
-  where
-    interp (Inl i) = interp i
-    interp (Inr i) = interp i
-
--- | Interpret a program @p a@ in the monad @m@
-class InterpretWithMonad prog m
-  where
-    iwm :: prog a -> m a
-
-instance (Interp instr m, Monad m) => InterpretWithMonad (ProgramT instr Identity) m
-  where
-    iwm = interpretWithMonad interp
-
-instance (Interp i1 m, InterpretWithMonad (ProgramT i2 n) m, Monad m, Monad n) =>
-    InterpretWithMonad (ProgramT i1 (ProgramT i2 n)) m
-  where
-    iwm = interpretWithMonadT interp iwm
-
-
-
-----------------------------------------------------------------------------------------------------
 -- * Commands
 ----------------------------------------------------------------------------------------------------
 
@@ -115,24 +68,38 @@ data Ref a
     | RefEval (IORef a)
 
 -- | Commands for mutable references
-data RefCMD p exp a
+data RefCMD p exp (prog :: * -> *) a
   where
-    NewRef          :: p a => RefCMD p exp (Ref a)
-    InitRef         :: p a => exp a -> RefCMD p exp (Ref a)
-    GetRef          :: p a => Ref a -> RefCMD p exp (exp a)
-    SetRef          ::        Ref a -> exp a -> RefCMD p exp ()
-    UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp (exp a)
+    NewRef          :: p a => RefCMD p exp prog (Ref a)
+    InitRef         :: p a => exp a -> RefCMD p exp prog (Ref a)
+    GetRef          :: p a => Ref a -> RefCMD p exp prog (exp a)
+    SetRef          ::        Ref a -> exp a -> RefCMD p exp prog ()
+    UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp prog (exp a)
+
+instance MapInstr (RefCMD p exp)
+  where
+    imap f NewRef              = NewRef
+    imap f (InitRef a)         = InitRef a
+    imap f (GetRef r)          = GetRef r
+    imap f (SetRef r a)        = SetRef r a
+    imap f (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
 data Arr a
     = ArrComp String
     | ArrEval (IOArray Int a)
 
 -- | Commands for mutable arrays
-data ArrCMD p exp a
+data ArrCMD p exp (prog :: * -> *) a
   where
-    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp (Arr (exp a))
-    GetArr :: (p a, Integral n) => exp n -> Arr (exp a) -> ArrCMD p exp (exp a)
-    SetArr :: Integral n        => exp n -> exp a -> Arr (exp a) -> ArrCMD p exp ()
+    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp prog (Arr (exp a))
+    GetArr :: (p a, Integral n) => exp n -> Arr (exp a) -> ArrCMD p exp prog (exp a)
+    SetArr :: Integral n        => exp n -> exp a -> Arr (exp a) -> ArrCMD p exp prog ()
+
+instance MapInstr (ArrCMD p exp)
+  where
+    imap f (NewArr n a)        = NewArr n a
+    imap f (GetArr i arr)      = GetArr i arr
+    imap f (SetArr i a arr)    = SetArr i a arr
 
 
 
@@ -140,15 +107,15 @@ data ArrCMD p exp a
 -- * Running commands
 ----------------------------------------------------------------------------------------------------
 
-runRefCMD :: EvalExp exp => RefCMD (VarPred exp) exp a -> IO a
+runRefCMD :: EvalExp exp => RefCMD (VarPred exp) exp prog a -> IO a
 runRefCMD (InitRef a)                   = fmap RefEval $ newIORef $ evalExp a
 runRefCMD NewRef                        = fmap RefEval $ newIORef (error "Reading uninitialized reference")
 runRefCMD (GetRef (RefEval r))          = fmap litExp  $ readIORef r
 runRefCMD (SetRef (RefEval r) a)        = writeIORef r $ evalExp a
 runRefCMD (UnsafeFreezeRef (RefEval r)) = fmap litExp  $ readIORef r
 
-runArrCMD :: EvalExp exp => ArrCMD (VarPred exp) exp a -> IO a
-runArrCMD (NewArr i a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp i) - 1) a
+runArrCMD :: EvalExp exp => ArrCMD (VarPred exp) exp prog a -> IO a
+runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) a
 runArrCMD (GetArr i (ArrEval arr))   = readArray arr (fromIntegral (evalExp i))
 runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) a
 
@@ -173,7 +140,7 @@ typeOfP1 _ = typeOf (undefined :: a)
 typeOfP2 :: forall proxy1 proxy2 a . Typeable a => proxy1 (proxy2 a) -> TypeRep
 typeOfP2 _ = typeOf (undefined :: a)
 
-compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp a -> CGen a
+compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     let t = compTypeRep (typeOfP2 cmd)
     sym <- gensym "r"
@@ -197,7 +164,7 @@ compRefCMD (SetRef (RefComp ref) exp) = do
     addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
-compArrCMD :: CompExp exp => ArrCMD (Typeable :/\: VarPred exp) exp a -> CGen a
+compArrCMD :: CompExp exp => ArrCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
 compArrCMD (NewArr size init) = do
     addInclude "<string.h>"
     sym <- gensym "a"

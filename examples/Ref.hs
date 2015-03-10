@@ -2,8 +2,7 @@ module Ref where
 
 
 
-import Control.Monad.Operational
-
+import Control.Monad.Operational.Compositional
 import Language.C.Monad
 import Language.Embedded.Imperative
 
