@@ -60,6 +60,37 @@ instance (p1 a, p2 a) => (p1 :/\: p2) a
 
 
 ----------------------------------------------------------------------------------------------------
+-- * Composing instruction sets
+----------------------------------------------------------------------------------------------------
+
+-- | Tag an instruction with a predicate and expression. This is needed to avoid types like
+-- @(`RefCMD` pred exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @pred@ and
+-- @exp@ by constraining @i@, so the instrance search will always fail. The solution is to change
+-- the type to @(`RefCMD` pred exp `:<:` i) => `Program` (`Tag` pred exp i) ()@.
+newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
+    Tag {unTag :: instr prog a}
+  deriving (Functor)
+
+instance (i :<: j) => i :<: Tag pred exp j
+  where
+    inj = Tag . inj
+
+instance MapInstr i => MapInstr (Tag pred exp i)
+  where
+    imap f = Tag . imap f . unTag
+
+instance Interp i m => Interp (Tag pred exp i) m
+  where
+    interp = interp . unTag
+
+-- | Create a program from an instruction in a tagged instruction set
+singleTag :: (i pred exp :<: instr) =>
+    i pred exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
+singleTag = singleton . Tag . inj
+
+
+
+----------------------------------------------------------------------------------------------------
 -- * Commands
 ----------------------------------------------------------------------------------------------------
 
@@ -203,26 +234,29 @@ instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (ArrCMD pre
 ----------------------------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: pred a => ProgramT (RefCMD pred exp) m (Ref a)
-newRef = singleton NewRef
+newRef :: (pred a, RefCMD pred exp :<: instr) => ProgramT (Tag pred exp instr) m (Ref a)
+newRef = singleTag NewRef
 
 -- | Create an initialized reference
-initRef :: pred a => exp a -> ProgramT (RefCMD pred exp) m (Ref a)
-initRef = singleton . InitRef
+initRef :: (pred a, RefCMD pred exp :<: instr) => exp a -> ProgramT (Tag pred exp instr) m (Ref a)
+initRef = singleTag . InitRef
 
--- | Get the contents of reference
-getRef :: pred a => Ref a -> ProgramT (RefCMD pred exp) m (exp a)
-getRef r = singleton (GetRef r)
+-- | Get the contents of a reference
+getRef :: (pred a, RefCMD pred exp :<: instr) => Ref a -> ProgramT (Tag pred exp instr) m (exp a)
+getRef = singleTag . GetRef
 
--- | Set the contents of reference
-setRef :: pred a => Ref a -> exp a -> ProgramT (RefCMD pred exp) m ()
-setRef r = singleton . SetRef r
+-- | Set the contents of a reference
+setRef :: (pred a, RefCMD pred exp :<: instr) =>
+    Ref a -> exp a -> ProgramT (Tag pred exp instr) m ()
+setRef r = singleTag . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (pred a, Monad m) => Ref a -> (exp a -> exp a) -> ProgramT (RefCMD pred exp) m ()
+modifyRef :: (pred a, RefCMD pred exp :<: instr, Monad m) =>
+    Ref a -> (exp a -> exp a) -> ProgramT (Tag pred exp instr) m ()
 modifyRef r f = getRef r >>= setRef r . f
 
 -- | Freeze the contents of reference (only safe if the reference is never accessed again)
-unsafeFreezeRef :: pred a => Ref a -> ProgramT (RefCMD pred exp) m (exp a)
-unsafeFreezeRef r = singleton (UnsafeFreezeRef r)
+unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
+    Ref a -> ProgramT (Tag pred exp instr) m (exp a)
+unsafeFreezeRef = singleTag . UnsafeFreezeRef
 

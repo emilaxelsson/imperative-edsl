@@ -74,7 +74,7 @@ singleton :: instr (ProgramT instr m) a -> ProgramT instr m a
 singleton = Instr
 
 -- | Make a program from a single primitive instruction
-singleInj :: (instr :<: i) => instr (ProgramT i m) a -> ProgramT i m a
+singleInj :: (i :<: instr) => i (ProgramT instr m) a -> ProgramT instr m a
 singleInj = Instr . inj
 
 -- | Class for mapping over the sub-programs of instructions
