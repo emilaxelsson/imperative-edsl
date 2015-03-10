@@ -91,9 +91,9 @@ data Arr a
 -- | Commands for mutable arrays
 data ArrCMD p exp (prog :: * -> *) a
   where
-    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp prog (Arr (exp a))
-    GetArr :: (p a, Integral n) => exp n -> Arr (exp a) -> ArrCMD p exp prog (exp a)
-    SetArr :: Integral n        => exp n -> exp a -> Arr (exp a) -> ArrCMD p exp prog ()
+    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp prog (Arr a)
+    GetArr :: (p a, Integral n) => exp n -> Arr a -> ArrCMD p exp prog (exp a)
+    SetArr :: Integral n        => exp n -> exp a -> Arr a -> ArrCMD p exp prog ()
 
 instance MapInstr (ArrCMD p exp)
   where
@@ -115,9 +115,9 @@ runRefCMD (SetRef (RefEval r) a)        = writeIORef r $ evalExp a
 runRefCMD (UnsafeFreezeRef (RefEval r)) = fmap litExp  $ readIORef r
 
 runArrCMD :: EvalExp exp => ArrCMD (VarPred exp) exp prog a -> IO a
-runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) a
-runArrCMD (GetArr i (ArrEval arr))   = readArray arr (fromIntegral (evalExp i))
-runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) a
+runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
+runArrCMD (GetArr i (ArrEval arr))   = fmap litExp $ readArray arr (fromIntegral (evalExp i))
+runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 
 instance (EvalExp exp, pred ~ VarPred exp) => Interp (RefCMD pred exp) IO where interp = runRefCMD
 instance (EvalExp exp, pred ~ VarPred exp) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
