@@ -24,6 +24,7 @@ library
 
   default-extensions:
     ConstraintKinds
+    DeriveDataTypeable
     DeriveFunctor
     FlexibleContexts
     FlexibleInstances
