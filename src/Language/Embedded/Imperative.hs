@@ -11,6 +11,7 @@ module Language.Embedded.Imperative where
 import Data.Array.IO
 import Data.IORef
 import Data.Typeable
+import qualified System.IO as IO
 
 import Control.Monad.Operational.Compositional
 import Data.Constraint
@@ -84,9 +85,14 @@ instance Interp i m => Interp (Tag pred exp i) m
     interp = interp . unTag
 
 -- | Create a program from an instruction in a tagged instruction set
-singleTag :: (i pred exp :<: instr) =>
+singlePE :: (i pred exp :<: instr) =>
     i pred exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
-singleTag = singleton . Tag . inj
+singlePE = singleton . Tag . inj
+
+-- | Create a program from an instruction in a tagged instruction set
+singleE :: (i exp :<: instr) =>
+    i exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
+singleE = singleton . Tag . inj
 
 
 
@@ -132,9 +138,9 @@ data ArrCMD p exp (prog :: * -> *) a
 
 instance MapInstr (ArrCMD p exp)
   where
-    imap f (NewArr n a)        = NewArr n a
-    imap f (GetArr i arr)      = GetArr i arr
-    imap f (SetArr i a arr)    = SetArr i a arr
+    imap f (NewArr n a)     = NewArr n a
+    imap f (GetArr i arr)   = GetArr i arr
+    imap f (SetArr i a arr) = SetArr i a arr
 
 data ControlCMD exp prog a
   where
@@ -147,6 +153,27 @@ instance MapInstr (ControlCMD exp)
     imap g (If c t f)        = If c (g t) (g f)
     imap g (While cont body) = While (g cont) (g body)
     imap g Break             = Break
+
+data Handle
+    = HandleComp String
+    | HandleEval IO.Handle
+  deriving Typeable
+
+data FileCMD exp (prog :: * -> *) a
+  where
+    Open  :: FilePath            -> FileCMD exp prog Handle -- todo: allow specifying read/write mode
+    Close :: Handle              -> FileCMD exp prog ()
+    Put   :: Handle -> exp Float -> FileCMD exp prog ()
+    Get   :: Handle              -> FileCMD exp prog (exp Float) -- todo: generalize to arbitrary types
+    Eof   :: Handle              -> FileCMD exp prog (exp Bool)
+
+instance MapInstr (FileCMD exp)
+  where
+    imap f (Open file) = Open file
+    imap f (Close hdl) = Close hdl
+    imap f (Put hdl a) = Put hdl a
+    imap f (Get hdl)   = Get hdl
+    imap f (Eof hdl)   = Eof hdl
 
 
 
@@ -175,9 +202,31 @@ runControlCMD (While cont body) = do
       else return ()
 runControlCMD Break = error "runControlCMD not implemented for Break"
 
-instance (EvalExp exp, pred ~ VarPred exp) => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, pred ~ VarPred exp) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
-instance (EvalExp exp)                     => Interp (ControlCMD exp)  IO where interp = runControlCMD
+readWord :: IO.Handle -> IO String
+readWord h = do
+    eof <- IO.hIsEOF h
+    if eof
+      then return ""
+      else do
+          c  <- IO.hGetChar h
+          cs <- readWord h
+          return (c:cs)
+
+runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
+runFileCMD (Open path)            = fmap HandleEval $ IO.openFile path IO.ReadWriteMode
+runFileCMD (Close (HandleEval h)) = IO.hClose h
+runFileCMD (Put (HandleEval h) a) = IO.hPrint h (evalExp a)
+runFileCMD (Get (HandleEval h))   = do
+    w <- readWord h
+    case reads w of
+        [(f,"")] -> return $ litExp f
+        _        -> error "runFileCMD: Get: no parse"
+runFileCMD (Eof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
+
+instance (EvalExp exp, pred ~ VarPred exp)                  => Interp (RefCMD pred exp) IO where interp = runRefCMD
+instance (EvalExp exp, pred ~ VarPred exp)                  => Interp (ArrCMD pred exp) IO where interp = runArrCMD
+instance EvalExp exp                                        => Interp (ControlCMD exp)  IO where interp = runControlCMD
+instance (EvalExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     IO where interp = runFileCMD
 
 
 
@@ -266,9 +315,37 @@ compControlCMD (While b t) = do
       -- TODO The b program should be re-executed at the end of each iteration
 compControlCMD Break = addStm [cstm| break; |]
 
-instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance (CompExp exp)                                     => Interp (ControlCMD exp)  CGen where interp = compControlCMD
+compFileCMD :: (CompExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp CGen a -> CGen a
+compFileCMD (Open path) = do
+    addInclude "<stdio.h>"
+    addInclude "<stdlib.h>"
+    sym <- gensym "v"
+    addLocal [cdecl| typename FILE * $id:sym; |]
+    addStm   [cstm| $id:sym = fopen($id:path', "r+"); |]
+    return $ HandleComp sym
+  where
+    path' = show path
+compFileCMD (Close (HandleComp h)) = do
+    addStm [cstm| fclose($id:h); |]
+compFileCMD (Put (HandleComp h) exp) = do
+    v <- compExp exp
+    addStm [cstm| fprintf($id:h, "%f ", $v); |]
+compFileCMD (Get (HandleComp h)) = do
+    sym <- gensym "v"
+    addLocal [cdecl| float $id:sym; |]
+    addStm   [cstm| fscanf($id:h, "%f", &$id:sym); |]
+    return $ varExp sym
+compFileCMD (Eof (HandleComp h)) = do
+    addInclude "<stdbool.h>"
+    sym <- gensym "v"
+    addLocal [cdecl| int $id:sym; |]
+    addStm   [cstm| $id:sym = feof($id:h); |]
+    return $ varExp sym
+
+instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
+instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
+instance CompExp exp                                        => Interp (ControlCMD exp)  CGen where interp = compControlCMD
+instance (CompExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     CGen where interp = compFileCMD
 
 
 
@@ -278,20 +355,20 @@ instance (CompExp exp)                                     => Interp (ControlCMD
 
 -- | Create an uninitialized reference
 newRef :: (pred a, RefCMD pred exp :<: instr) => ProgramT (Tag pred exp instr) m (Ref a)
-newRef = singleTag NewRef
+newRef = singlePE NewRef
 
 -- | Create an initialized reference
 initRef :: (pred a, RefCMD pred exp :<: instr) => exp a -> ProgramT (Tag pred exp instr) m (Ref a)
-initRef = singleTag . InitRef
+initRef = singlePE . InitRef
 
 -- | Get the contents of a reference
 getRef :: (pred a, RefCMD pred exp :<: instr) => Ref a -> ProgramT (Tag pred exp instr) m (exp a)
-getRef = singleTag . GetRef
+getRef = singlePE . GetRef
 
 -- | Set the contents of a reference
 setRef :: (pred a, RefCMD pred exp :<: instr) =>
     Ref a -> exp a -> ProgramT (Tag pred exp instr) m ()
-setRef r = singleTag . SetRef r
+setRef r = singlePE . SetRef r
 
 -- | Modify the contents of reference
 modifyRef :: (pred a, RefCMD pred exp :<: instr, Monad m) =>
@@ -301,36 +378,51 @@ modifyRef r f = getRef r >>= setRef r . f
 -- | Freeze the contents of reference (only safe if the reference is never accessed again)
 unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
     Ref a -> ProgramT (Tag pred exp instr) m (exp a)
-unsafeFreezeRef = singleTag . UnsafeFreezeRef
+unsafeFreezeRef = singlePE . UnsafeFreezeRef
 
 -- | Create an uninitialized an array
 newArr :: (pred a, ArrCMD pred exp :<: instr) =>
     exp Int -> exp a -> ProgramT (Tag pred exp instr) m (Arr a)
-newArr n a = singleTag $ NewArr n a
+newArr n a = singlePE $ NewArr n a
 
 -- | Set the contents of an array
 getArr :: (pred a, ArrCMD pred exp :<: instr) =>
     exp Int -> Arr a -> ProgramT (Tag pred exp instr) m (exp a)
-getArr i arr = singleTag (GetArr i arr)
+getArr i arr = singlePE (GetArr i arr)
 
 -- | Set the contents of an array
 setArr :: (pred a, ArrCMD pred exp :<: instr) =>
     exp Int -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
-setArr i a arr = singleTag (SetArr i a arr)
+setArr i a arr = singlePE (SetArr i a arr)
 
 iff :: (ControlCMD exp :<: instr)
     => exp Bool
     -> ProgramT (Tag pred exp instr) m ()
     -> ProgramT (Tag pred exp instr) m ()
     -> ProgramT (Tag pred exp instr) m ()
-iff b t f = singleton $ Tag $ inj $ If b t f
+iff b t f = singleE $ If b t f
 
 while :: (ControlCMD exp :<: instr)
     => ProgramT (Tag pred exp instr) m (exp Bool)
     -> ProgramT (Tag pred exp instr) m ()
     -> ProgramT (Tag pred exp instr) m ()
-while b t = singleton $ Tag $ inj $ While b t
+while b t = singleE $ While b t
 
 break :: (ControlCMD exp :<: instr) => ProgramT (Tag pred exp instr) m ()
-break = singleton $ Tag $ inj (Break :: ControlCMD exp (ProgramT (Tag pred exp instr) m) ())
+break = singleE Break
+
+open :: (FileCMD exp :<: instr) => FilePath -> ProgramT (Tag pred exp instr) m Handle
+open = singleE . Open
+
+close :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m ()
+close = singleE . Close
+
+fput :: (FileCMD exp :<: instr) => Handle -> exp Float -> ProgramT (Tag pred exp instr) m ()
+fput hdl = singleE . Put hdl
+
+fget :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Float)
+fget = singleE . Get
+
+feof :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Bool)
+feof = singleE . Eof
 
