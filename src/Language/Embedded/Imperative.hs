@@ -260,3 +260,18 @@ unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
     Ref a -> ProgramT (Tag pred exp instr) m (exp a)
 unsafeFreezeRef = singleTag . UnsafeFreezeRef
 
+-- | Create an uninitialized an array
+newArr :: (pred a, ArrCMD pred exp :<: instr) =>
+    exp Int -> exp a -> ProgramT (Tag pred exp instr) m (Arr a)
+newArr n a = singleTag $ NewArr n a
+
+-- | Set the contents of an array
+getArr :: (pred a, ArrCMD pred exp :<: instr) =>
+    exp Int -> Arr a -> ProgramT (Tag pred exp instr) m (exp a)
+getArr i arr = singleTag (GetArr i arr)
+
+-- | Set the contents of an array
+setArr :: (pred a, ArrCMD pred exp :<: instr) =>
+    exp Int -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
+setArr i a arr = singleTag (SetArr i a arr)
+

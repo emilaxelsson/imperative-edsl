@@ -10,14 +10,14 @@ import Exp
 
 
 
-prog1 :: pred Int => Program (Tag pred Exp (RefCMD pred Exp)) (Exp Int)
+prog1 :: pred Int => Program (Tag pred Exp (RefCMD pred Exp :+: ArrCMD pred Exp)) (Exp Int)
 prog1 = do
-    r1 <- initRef (Lit 4)
-    r2 <- initRef (Lit 5)
-    a <- unsafeFreezeRef r1
-    b <- getRef r2
+    ref <- initRef (Lit 4)
+    arr <- newArr (Lit 10) (Lit 6)
+    a   <- unsafeFreezeRef ref
+    b   <- getArr (Lit 3) arr
     let c = Add a b
-    setRef r2 c
+    setRef ref c
     return c
 
 eval1 :: IO Int
