@@ -36,6 +36,7 @@ module Control.Monad.Operational.Compositional
 import Control.Applicative (Applicative (..))
 import Control.Monad.Identity
 import Control.Monad.Trans
+import Data.Typeable
 
 import Data.ALaCarte
 
@@ -47,6 +48,7 @@ data ProgramT instr m a
     Lift  :: m a -> ProgramT instr m a
     Bind  :: ProgramT instr m a -> (a -> ProgramT instr m b) -> ProgramT instr m b
     Instr :: instr (ProgramT instr m) a -> ProgramT instr m a
+  deriving Typeable
 
 -- | Representation of programs parameterized by its primitive instructions
 type Program instr = ProgramT instr Identity

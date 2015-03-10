@@ -69,7 +69,7 @@ instance (p1 a, p2 a) => (p1 :/\: p2) a
 -- the type to @(`RefCMD` pred exp `:<:` i) => `Program` (`Tag` pred exp i) ()@.
 newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
     Tag {unTag :: instr prog a}
-  deriving (Functor)
+  deriving (Typeable, Functor)
 
 instance (i :<: j) => i :<: Tag pred exp j
   where
@@ -97,6 +97,7 @@ singleTag = singleton . Tag . inj
 data Ref a
     = RefComp String
     | RefEval (IORef a)
+  deriving Typeable
 
 -- | Commands for mutable references
 data RefCMD p exp (prog :: * -> *) a
@@ -106,6 +107,7 @@ data RefCMD p exp (prog :: * -> *) a
     GetRef          :: p a => Ref a -> RefCMD p exp prog (exp a)
     SetRef          ::        Ref a -> exp a -> RefCMD p exp prog ()
     UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp prog (exp a)
+  deriving Typeable
 
 instance MapInstr (RefCMD p exp)
   where
@@ -118,6 +120,7 @@ instance MapInstr (RefCMD p exp)
 data Arr a
     = ArrComp String
     | ArrEval (IOArray Int a)
+  deriving Typeable
 
 -- | Commands for mutable arrays
 data ArrCMD p exp (prog :: * -> *) a
@@ -125,6 +128,7 @@ data ArrCMD p exp (prog :: * -> *) a
     NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp prog (Arr a)
     GetArr :: (p a, Integral n) => exp n -> Arr a -> ArrCMD p exp prog (exp a)
     SetArr :: Integral n        => exp n -> exp a -> Arr a -> ArrCMD p exp prog ()
+  deriving Typeable
 
 instance MapInstr (ArrCMD p exp)
   where
