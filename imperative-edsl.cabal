@@ -37,6 +37,7 @@ library
     TypeOperators
 
   other-extensions:
+    PolyKinds
     QuasiQuotes
     UndecidableInstances
 
