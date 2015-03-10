@@ -5,17 +5,16 @@ module Ref where
 import Control.Monad.Operational.Compositional
 import Language.C.Monad
 import Language.Embedded.Imperative
-
-import Exp
-
+import Language.Embedded.Expr
 
 
-prog1 :: pred Int => Program (Tag pred Exp (RefCMD pred Exp :+: ArrCMD pred Exp)) (Exp Int)
+
+prog1 :: pred Int => Program (Tag pred Expr (RefCMD pred Expr :+: ArrCMD pred Expr)) (Expr Int)
 prog1 = do
-    ref <- initRef (Lit 4)
-    arr <- newArr (Lit 10) (Lit 6)
+    ref <- initRef 4
+    arr <- newArr 10 6
     a   <- unsafeFreezeRef ref
-    b   <- getArr (Lit 3) arr
+    b   <- getArr 3 arr
     let c = Add a b
     setRef ref c
     return c
