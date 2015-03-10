@@ -9,14 +9,21 @@ import Language.Embedded.Expr
 
 
 
-prog1 :: pred Int => Program (Tag pred Expr (RefCMD pred Expr :+: ArrCMD pred Expr)) (Expr Int)
+type Instr pred
+    =   RefCMD pred Expr
+    :+: ArrCMD pred Expr
+    :+: ControlCMD Expr
+
+prog1 :: pred Int => Program (Tag pred Expr (Instr pred)) (Expr Int)
 prog1 = do
     ref <- initRef 4
     arr <- newArr 10 6
     a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
     let c = Add a b
-    setRef ref c
+    iff (Eq a 4)
+      (setRef ref c)
+      (setRef ref b)
     return c
 
 eval1 :: IO Int

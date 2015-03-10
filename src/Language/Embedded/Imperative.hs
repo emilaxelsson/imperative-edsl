@@ -136,6 +136,18 @@ instance MapInstr (ArrCMD p exp)
     imap f (GetArr i arr)      = GetArr i arr
     imap f (SetArr i a arr)    = SetArr i a arr
 
+data ControlCMD exp prog a
+  where
+    If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
+    While :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
+    Break :: ControlCMD exp prog ()
+
+instance MapInstr (ControlCMD exp)
+  where
+    imap g (If c t f)        = If c (g t) (g f)
+    imap g (While cont body) = While (g cont) (g body)
+    imap g Break             = Break
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -154,8 +166,18 @@ runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral 
 runArrCMD (GetArr i (ArrEval arr))   = fmap litExp $ readArray arr (fromIntegral (evalExp i))
 runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 
+runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
+runControlCMD (If c t f)        = if evalExp c then t else f
+runControlCMD (While cont body) = do
+    c <- cont
+    if evalExp c
+      then body >> runControlCMD (While cont body)
+      else return ()
+runControlCMD Break = error "runControlCMD not implemented for Break"
+
 instance (EvalExp exp, pred ~ VarPred exp) => Interp (RefCMD pred exp) IO where interp = runRefCMD
 instance (EvalExp exp, pred ~ VarPred exp) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
+instance (EvalExp exp)                     => Interp (ControlCMD exp)  IO where interp = runControlCMD
 
 
 
@@ -228,8 +250,25 @@ compArrCMD (SetArr expi expv (ArrComp arr)) = do
     i <- compExp expi
     addStm [cstm| $id:arr[ $i ] = $v; |]
 
+compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
+compControlCMD (If c t f) = do
+    cc <- compExp c
+    ct <- inNewBlock_ t
+    cf <- inNewBlock_ f
+    case null cf of
+      True  -> addStm [cstm| if ($cc) {$items:ct} |]
+      False -> addStm [cstm| if ($cc) {$items:ct} else {$items:cf} |]
+compControlCMD (While b t) = do
+    be  <- b
+    bc <- compExp be
+    ct <- inNewBlock_ t
+    addStm [cstm| while ($bc) {$items:ct} |]
+      -- TODO The b program should be re-executed at the end of each iteration
+compControlCMD Break = addStm [cstm| break; |]
+
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
+instance (CompExp exp)                                     => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 
 
 
@@ -278,4 +317,20 @@ getArr i arr = singleTag (GetArr i arr)
 setArr :: (pred a, ArrCMD pred exp :<: instr) =>
     exp Int -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
 setArr i a arr = singleTag (SetArr i a arr)
+
+iff :: (ControlCMD exp :<: instr)
+    => exp Bool
+    -> ProgramT (Tag pred exp instr) m ()
+    -> ProgramT (Tag pred exp instr) m ()
+    -> ProgramT (Tag pred exp instr) m ()
+iff b t f = singleton $ Tag $ inj $ If b t f
+
+while :: (ControlCMD exp :<: instr)
+    => ProgramT (Tag pred exp instr) m (exp Bool)
+    -> ProgramT (Tag pred exp instr) m ()
+    -> ProgramT (Tag pred exp instr) m ()
+while b t = singleton $ Tag $ inj $ While b t
+
+break :: (ControlCMD exp :<: instr) => ProgramT (Tag pred exp instr) m ()
+break = singleton $ Tag $ inj (Break :: ControlCMD exp (ProgramT (Tag pred exp instr) m) ())
 
