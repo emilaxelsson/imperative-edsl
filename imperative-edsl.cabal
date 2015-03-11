@@ -17,6 +17,7 @@ library
     Data.ALaCarte
     Language.C.Monad,
     Language.Embedded.Imperative
+    Language.Embedded.Backend.C
 
   -- other-modules:
 
