@@ -13,6 +13,8 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:
+    Control.Monad.Operational.Compositional
+    Data.ALaCarte
     Language.C.Monad,
     Language.Embedded.Imperative
 
@@ -22,6 +24,8 @@ library
 
   default-extensions:
     ConstraintKinds
+    DeriveDataTypeable
+    DeriveFunctor
     FlexibleContexts
     FlexibleInstances
     GADTs
@@ -33,6 +37,7 @@ library
     TypeOperators
 
   other-extensions:
+    PolyKinds
     QuasiQuotes
     UndecidableInstances
 
@@ -45,7 +50,6 @@ library
     language-c-quote,
     lens,
     mainland-pretty,
-    mtl,
-    operational
+    mtl
 
   hs-source-dirs: src
