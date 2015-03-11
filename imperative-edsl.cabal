@@ -15,7 +15,8 @@ library
   exposed-modules:
     Control.Monad.Operational.Compositional
     Data.ALaCarte
-    Language.C.Monad,
+    Language.C.Monad
+    Language.Embedded.Expr
     Language.Embedded.Imperative
     Language.Embedded.Backend.C
 
