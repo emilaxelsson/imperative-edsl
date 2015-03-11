@@ -337,11 +337,13 @@ compControlCMD (If c t f) = do
     case null cf of
       True  -> addStm [cstm| if ($cc) {$items:ct} |]
       False -> addStm [cstm| if ($cc) {$items:ct} else {$items:cf} |]
-compControlCMD (While b t) = do
-    be  <- b
-    bc <- compExp be
-    ct <- inNewBlock_ t
-    addStm [cstm| while ($bc) {$items:ct} |]
+compControlCMD (While cont body) = do
+    bodyc <- inNewBlock_ $ do
+        conte <- cont
+        contc <- compExp conte
+        addStm [cstm| if (! $contc) {break;} |]
+        body
+    addStm [cstm| while (1) {$items:bodyc} |]
       -- TODO The b program should be re-executed at the end of each iteration
 compControlCMD Break = addStm [cstm| break; |]
 
