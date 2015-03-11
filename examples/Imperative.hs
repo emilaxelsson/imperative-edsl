@@ -1,6 +1,7 @@
+{-# LANGUAGE TypeOperators   #-}
+{-# LANGUAGE ConstraintKinds #-}
+
 module Imperative where
-
-
 
 import Control.Monad.Operational.Compositional
 import Language.C.Monad
