@@ -13,6 +13,7 @@ import Data.IORef
 import Data.Typeable
 import qualified System.IO as IO
 
+import Control.Monad (when)
 import Control.Monad.Operational.Compositional
 import Data.Constraint
 import Language.C.Quote.C
@@ -195,11 +196,10 @@ runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i))
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f
-runControlCMD (While cont body) = do
-    c <- cont
-    if evalExp c
-      then body >> runControlCMD (While cont body)
-      else return ()
+runControlCMD (While cont body) = loop
+  where loop = do
+          c <- cont
+          when (evalExp c) $ body >> loop
 runControlCMD Break = error "runControlCMD not implemented for Break"
 
 readWord :: IO.Handle -> IO String
