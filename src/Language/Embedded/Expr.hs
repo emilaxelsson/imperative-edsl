@@ -60,7 +60,7 @@ instance EvalExp Expr
     litExp  = Val
     evalExp = evalExpr
 
-compExpr :: Expr a -> CGen C.Exp
+compExpr :: (MonadC m) => Expr a -> m C.Exp
 compExpr (Var v) = return [cexp| $id:v |]
 compExpr (Val v) = case show v of
     "True"  -> addInclude "<stdbool.h>" >> return [cexp| true |]

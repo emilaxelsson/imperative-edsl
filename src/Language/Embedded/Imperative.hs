@@ -49,7 +49,7 @@ class CompExp exp
     varExp  :: VarPred exp a => VarId -> exp a
 
     -- | Compilation of expressions
-    compExp :: exp a -> CGen C.Exp
+    compExp :: (MonadC m) => exp a -> m C.Exp
 
 -- | Variable identifier
 type VarId = String
