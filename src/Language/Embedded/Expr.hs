@@ -40,86 +40,86 @@ data Expr a
 
 type instance VarPred Expr = Show
 
-evalExpr' :: Expr a -> a
-evalExpr' (Val a)   = a
-evalExpr' (Add a b) = evalExpr' a + evalExpr' b
-evalExpr' (Sub a b) = evalExpr' a - evalExpr' b
-evalExpr' (Mul a b) = evalExpr' a * evalExpr' b
-evalExpr' (Div a b) = evalExpr' a / evalExpr' b
-evalExpr' (Mod a b) = evalExpr' a `mod` evalExpr' b
-evalExpr' (Sin a)   = sin $ evalExpr' a
-evalExpr' (I2N a)   = fromInteger $ fromIntegral $ evalExpr' a
-evalExpr' (Not   a) = not $ evalExpr' a
-evalExpr' (And a b) = evalExpr' a && evalExpr' b
-evalExpr' (Or  a b) = evalExpr' a || evalExpr' b
-evalExpr' (Eq  a b) = evalExpr' a == evalExpr' b
-evalExpr' (LEq a b) = evalExpr' a <= evalExpr' b
+evalExpr :: Expr a -> a
+evalExpr (Val a)   = a
+evalExpr (Add a b) = evalExpr a + evalExpr b
+evalExpr (Sub a b) = evalExpr a - evalExpr b
+evalExpr (Mul a b) = evalExpr a * evalExpr b
+evalExpr (Div a b) = evalExpr a / evalExpr b
+evalExpr (Mod a b) = evalExpr a `mod` evalExpr b
+evalExpr (Sin a)   = sin $ evalExpr a
+evalExpr (I2N a)   = fromInteger $ fromIntegral $ evalExpr a
+evalExpr (Not   a) = not $ evalExpr a
+evalExpr (And a b) = evalExpr a && evalExpr b
+evalExpr (Or  a b) = evalExpr a || evalExpr b
+evalExpr (Eq  a b) = evalExpr a == evalExpr b
+evalExpr (LEq a b) = evalExpr a <= evalExpr b
 
 instance EvalExp Expr
   where
     litExp  = Val
-    evalExp = evalExpr'
+    evalExp = evalExpr
 
-compExp' :: Expr a -> CGen C.Exp
-compExp' (Var v) = return [cexp| $id:v |]
-compExp' (Val v) = case show v of
+compExpr :: Expr a -> CGen C.Exp
+compExpr (Var v) = return [cexp| $id:v |]
+compExpr (Val v) = case show v of
     "True"  -> addInclude "<stdbool.h>" >> return [cexp| true |]
     "False" -> addInclude "<stdbool.h>" >> return [cexp| false |]
     v'      -> return [cexp| $id:v' |]
-compExp' (Add a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Add a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' + $b' |]
-compExp' (Sub a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Sub a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' - $b' |]
-compExp' (Mul a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Mul a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' * $b' |]
-compExp' (Div a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Div a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' / $b' |]
-compExp' (Exp a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Exp a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' ^ $b' |]
-compExp' (Sin a)   = do
-  a' <- compExp' a
+compExpr (Sin a)   = do
+  a' <- compExpr a
   return [cexp| sin( $a' ) |]
-compExp' (Mod a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Mod a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' % $b'|]
-compExp' (I2N a) = do
-  a' <- compExp' a
+compExpr (I2N a) = do
+  a' <- compExpr a
   return [cexp| $a' |]
-compExp' (Not  a)  = do
-  a' <- compExp' a
+compExpr (Not  a)  = do
+  a' <- compExpr a
   return [cexp| ! $a' |]
-compExp' (And a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (And a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| ($a' && $b') |]
-compExp' (Or a b)  = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Or a b)  = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| ($a' || $b') |]
-compExp' (Eq a b)  = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (Eq a b)  = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' == $b' |]
-compExp' (LEq a b) = do
-  a' <- compExp' a
-  b' <- compExp' b
+compExpr (LEq a b) = do
+  a' <- compExpr a
+  b' <- compExpr b
   return [cexp| $a' <= $b' |]
 
 instance CompExp Expr
   where
     varExp  = Var
-    compExp = compExp'
+    compExp = compExpr
 
 instance (Show a, Num a, Eq a) => Num (Expr a)
   where
