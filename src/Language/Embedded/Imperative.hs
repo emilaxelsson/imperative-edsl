@@ -5,6 +5,7 @@
 -- language.
 
 module Language.Embedded.Imperative where
+  -- TODO Should export PrintfArg
 
 
 
@@ -12,6 +13,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import qualified System.IO as IO
+import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
 import Control.Monad (when)
@@ -179,7 +181,7 @@ instance MapInstr (FileCMD exp)
 
 data ConsoleCMD exp (prog :: * -> *) a
   where
-    Printf :: Show a => String -> exp a -> ConsoleCMD exp prog ()
+    Printf :: PrintfArg a => String -> exp a -> ConsoleCMD exp prog ()
 
 instance MapInstr (ConsoleCMD exp)
   where
@@ -223,11 +225,14 @@ readWord :: IO.Handle -> IO String
 readWord h = do
     eof <- IO.hIsEOF h
     if eof
+    then return ""
+    else do
+      c  <- IO.hGetChar h
+      if c == ' '
       then return ""
       else do
-          c  <- IO.hGetChar h
-          cs <- readWord h
-          return (c:cs)
+        cs <- readWord h
+        return (c:cs)
 
 runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
 runFileCMD (Open path)            = fmap HandleEval $ IO.openFile path IO.ReadWriteMode
@@ -237,11 +242,11 @@ runFileCMD (Get (HandleEval h))   = do
     w <- readWord h
     case reads w of
         [(f,"")] -> return $ litExp f
-        _        -> error "runFileCMD: Get: no parse"
+        _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
 runFileCMD (Eof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
 
 runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
-runConsoleCMD (Printf format a) = Printf.printf format (show $ evalExp a)
+runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
 
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
@@ -482,7 +487,7 @@ fget = singleE . Get
 feof :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Bool)
 feof = singleE . Eof
 
-printf :: (Show a, ConsoleCMD exp :<: instr) =>
+printf :: (PrintfArg a, ConsoleCMD exp :<: instr) =>
     String -> exp a -> ProgramT (Tag pred exp instr) m ()
 printf format = singleE . Printf format
 
