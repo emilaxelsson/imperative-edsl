@@ -12,6 +12,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import qualified System.IO as IO
+import qualified Text.Printf as Printf
 
 import Control.Monad (when)
 import Control.Monad.Operational.Compositional
@@ -176,6 +177,22 @@ instance MapInstr (FileCMD exp)
     imap f (Get hdl)   = Get hdl
     imap f (Eof hdl)   = Eof hdl
 
+data ConsoleCMD exp (prog :: * -> *) a
+  where
+    Printf :: Show a => String -> exp a -> ConsoleCMD exp prog ()
+
+instance MapInstr (ConsoleCMD exp)
+  where
+    imap f (Printf form a) = Printf form a
+
+data TimeCMD exp (prog :: * -> *) a
+  where
+    GetTime :: TimeCMD exp prog (exp Double)
+
+instance MapInstr (TimeCMD exp)
+  where
+    imap f GetTime = GetTime
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -223,10 +240,18 @@ runFileCMD (Get (HandleEval h))   = do
         _        -> error "runFileCMD: Get: no parse"
 runFileCMD (Eof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
 
+runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
+runConsoleCMD (Printf format a) = Printf.printf format (show $ evalExp a)
+
+runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
+runTimeCMD GetTime | False = undefined
+
 instance (EvalExp exp, pred ~ VarPred exp)                  => Interp (RefCMD pred exp) IO where interp = runRefCMD
 instance (EvalExp exp, pred ~ VarPred exp)                  => Interp (ArrCMD pred exp) IO where interp = runArrCMD
 instance EvalExp exp                                        => Interp (ControlCMD exp)  IO where interp = runControlCMD
 instance (EvalExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     IO where interp = runFileCMD
+instance EvalExp exp                                        => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
+instance EvalExp exp                                        => Interp (TimeCMD exp)     IO where interp = runTimeCMD
 
 
 
@@ -342,10 +367,41 @@ compFileCMD (Eof (HandleComp h)) = do
     addStm   [cstm| $id:sym = feof($id:h); |]
     return $ varExp sym
 
+compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
+compConsoleCMD (Printf format a) = do
+    addInclude "<stdio.h>"
+    let format' = show format
+    a' <- compExp a
+    addStm [cstm| printf($id:format', $exp:a'); |]
+
+getTimeDef :: C.Definition
+getTimeDef = [cedecl|
+// From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
+double get_time()
+{
+    struct timeval t;
+    struct timezone tzp;
+    gettimeofday(&t, &tzp);
+    return t.tv_sec + t.tv_usec*1e-6;
+}
+|]
+
+compTimeCMD :: (CompExp exp, VarPred exp Double) => TimeCMD exp CGen a -> CGen a
+compTimeCMD GetTime = do
+    addInclude "<sys/time.h>"
+    addInclude "<sys/resource.h>"
+    addGlobal getTimeDef
+    sym <- gensym "t"
+    addLocal [cdecl| double $id:sym; |]
+    addStm   [cstm| $id:sym = get_time(); |]
+    return $ varExp sym
+
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
 instance CompExp exp                                        => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     CGen where interp = compFileCMD
+instance CompExp exp                                        => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
+instance (CompExp exp, VarPred exp Double)                  => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
 
 
 
@@ -425,4 +481,11 @@ fget = singleE . Get
 
 feof :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Bool)
 feof = singleE . Eof
+
+printf :: (Show a, ConsoleCMD exp :<: instr) =>
+    String -> exp a -> ProgramT (Tag pred exp instr) m ()
+printf format = singleE . Printf format
+
+getTime :: (TimeCMD exp :<: instr) => ProgramT (Tag pred exp instr) m (exp Double)
+getTime = singleE GetTime
 
