@@ -150,3 +150,7 @@ instance (Show a, Fractional a, Eq a) => Fractional (Expr a)
 
     recip = error "recip not implemented for Expr"
 
+true, false :: Expr Bool
+true  = Val True
+false = Val False
+
