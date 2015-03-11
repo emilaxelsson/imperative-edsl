@@ -83,7 +83,7 @@ singleInj = Instr . inj
 class MapInstr instr
   where
     -- | Map over the sub-programs of instructions
-    imap :: (forall a . m a -> n a) -> instr m a -> instr n a
+    imap :: (forall b . m b -> n b) -> instr m a -> instr n a
 
 instance (MapInstr i1, MapInstr i2) => MapInstr (i1 :+: i2)
   where
@@ -101,8 +101,8 @@ liftProgram = go
 
 -- | Interpret a program in a monad
 interpretWithMonadT :: forall instr m n a . (MapInstr instr, Monad m)
-    => (forall a . instr m a -> m a)
-    -> (forall a . n a -> m a)
+    => (forall b . instr m b -> m b)
+    -> (forall b . n b -> m b)
     -> ProgramT instr n a -> m a
 interpretWithMonadT runi runn = go
   where
@@ -113,7 +113,7 @@ interpretWithMonadT runi runn = go
 
 -- | Interpret a program in a monad
 interpretWithMonad :: (MapInstr instr, Monad m) =>
-    (forall a . instr m a -> m a) -> Program instr a -> m a
+    (forall b . instr m b -> m b) -> Program instr a -> m a
 interpretWithMonad interp = interpretWithMonadT interp (return . runIdentity)
 
 -- | @`Interp` i m@ represents the fact that @i@ can be interpreted in the monad @m@
@@ -129,7 +129,7 @@ instance (Interp i1 m, Interp i2 m) => Interp (i1 :+: i2) m
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
 -- 'MapInstr' class.
-interpretT :: (Interp i m, MapInstr i, Monad m) => (forall a . n a -> m a) -> ProgramT i n a -> m a
+interpretT :: (Interp i m, MapInstr i, Monad m) => (forall b . n b -> m b) -> ProgramT i n a -> m a
 interpretT = interpretWithMonadT interp
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
