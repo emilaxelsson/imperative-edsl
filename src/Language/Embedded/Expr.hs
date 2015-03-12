@@ -12,7 +12,6 @@ import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
 import Language.C.Monad
-import Language.Embedded.Imperative
 import Language.Embedded.Interpretation
 
 

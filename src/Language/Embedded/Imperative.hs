@@ -1,4 +1,3 @@
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Deep embedding of imperative programs. The embedding is parameterized on the expression
