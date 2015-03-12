@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
--- | Interpretation of @Language.Embedded@ programs
+-- | Interpretation of expressions
 module Language.Embedded.Interpretation
   ( VarId
   , VarPred
@@ -14,9 +14,6 @@ import Language.C.Monad (MonadC)
 import Language.C.Syntax
 
 
-----------------------------------------------------------------------------------------------------
--- * Interpretation of expressions
-----------------------------------------------------------------------------------------------------
 
 -- | Constraint on the types of variables in a given expression language
 type family VarPred (exp :: * -> *) :: * -> Constraint

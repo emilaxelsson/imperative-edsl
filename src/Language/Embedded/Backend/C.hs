@@ -12,10 +12,6 @@ import Language.C.Monad
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
-----------------------------------------------------------------------------------------------------
--- * Compiling commands
-----------------------------------------------------------------------------------------------------
-
 -- | Translate a `TypeRep` into a C type
 compTypeRep :: TypeRep -> C.Type
 compTypeRep trep = case show trep of
