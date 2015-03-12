@@ -3,7 +3,15 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Utilities for working with type predicates (i.e. types of kind @* -> `Constraint`@)
-module Data.TypePredicates where
+module Data.TypePredicates
+  ( Dict (..)
+  , (:/\:)
+  , Any
+  , Subsumes
+  , weakL
+  , weakR
+  , (:<) (..)
+  ) where
 
 
 
