@@ -10,6 +10,10 @@ module Language.Embedded.Imperative
 
     -- * Working with instruction sets
   , Tag (..)
+  , injPE
+  , prjPE
+  , injE
+  , prjE
   , singlePE
   , singleE
 
@@ -101,15 +105,31 @@ instance Interp i m => Interp (Tag pred exp i) m
   where
     interp = interp . unTag
 
+-- | Inject an instruction in a tagged instruction set
+injPE :: (i pred exp :<: instr) => i pred exp prog a -> Tag pred exp instr prog a
+injPE = Tag . inj
+
+-- | Project an instruction from a tagged instruction set
+prjPE :: (i pred exp :<: instr) => Tag pred exp instr prog a -> Maybe (i pred exp prog a)
+prjPE = prj . unTag
+
+-- | Inject an instruction in a tagged instruction set
+injE :: (i exp :<: instr) => i exp prog a -> Tag pred exp instr prog a
+injE = Tag . inj
+
+-- | Project an instruction from a tagged instruction set
+prjE :: (i exp :<: instr) => Tag pred exp instr prog a -> Maybe (i exp prog a)
+prjE = prj . unTag
+
 -- | Create a program from an instruction in a tagged instruction set
 singlePE :: (i pred exp :<: instr) =>
     i pred exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
-singlePE = singleton . Tag . inj
+singlePE = singleton . injPE
 
 -- | Create a program from an instruction in a tagged instruction set
 singleE :: (i exp :<: instr) =>
     i exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
-singleE = singleton . Tag . inj
+singleE = singleton . injE
 
 
 
