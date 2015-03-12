@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | Generate C code from @Language.Embedded.Imperative@ programs
 module Language.Embedded.Backend.C where
 
 import Data.Typeable
@@ -15,18 +16,22 @@ import qualified Language.C.Syntax as C
 -- * Compiling commands
 ----------------------------------------------------------------------------------------------------
 
+-- | Translate a `TypeRep` into a C type
 compTypeRep :: TypeRep -> C.Type
 compTypeRep trep = case show trep of
     "Bool"  -> [cty| int   |]
     "Int"   -> [cty| int   |]  -- todo: should only use fix-width Haskell ints
     "Float" -> [cty| float |]
 
+-- | Extract a `TypeRep` from a proxy
 typeOfP1 :: forall proxy a . Typeable a => proxy a -> TypeRep
 typeOfP1 _ = typeOf (undefined :: a)
 
+-- | Extract a `TypeRep` from a nested proxy
 typeOfP2 :: forall proxy1 proxy2 a . Typeable a => proxy1 (proxy2 a) -> TypeRep
 typeOfP2 _ = typeOf (undefined :: a)
 
+-- | Compile `RefCMD`
 compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     let t = compTypeRep (typeOfP2 cmd)
@@ -51,6 +56,7 @@ compRefCMD (SetRef (RefComp ref) exp) = do
     addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
+-- | Compile `ArrCMD`
 compArrCMD :: CompExp exp => ArrCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
 compArrCMD (NewArr size init) = do
     addInclude "<string.h>"
@@ -80,6 +86,7 @@ compArrCMD (SetArr expi expv (ArrComp arr)) = do
     i <- compExp expi
     addStm [cstm| $id:arr[ $i ] = $v; |]
 
+-- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
 compControlCMD (If c t f) = do
     cc <- compExp c
@@ -98,6 +105,7 @@ compControlCMD (While cont body) = do
       -- TODO The b program should be re-executed at the end of each iteration
 compControlCMD Break = addStm [cstm| break; |]
 
+-- | Compile `FileCMD`
 compFileCMD :: (CompExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp CGen a -> CGen a
 compFileCMD (Open path) = do
     addInclude "<stdio.h>"
@@ -125,6 +133,7 @@ compFileCMD (Eof (HandleComp h)) = do
     addStm   [cstm| $id:sym = feof($id:h); |]
     return $ varExp sym
 
+-- | Compile `ConsoleCMD`
 compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
 compConsoleCMD (Printf format a) = do
     addInclude "<stdio.h>"
@@ -132,6 +141,7 @@ compConsoleCMD (Printf format a) = do
     a' <- compExp a
     addStm [cstm| printf($id:format', $exp:a'); |]
 
+-- | Generate a time sampling function
 getTimeDef :: C.Definition
 getTimeDef = [cedecl|
 // From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
@@ -144,6 +154,7 @@ double get_time()
 }
 |]
 
+-- | Compile `TimeCMD`
 compTimeCMD :: (CompExp exp, VarPred exp Double) => TimeCMD exp CGen a -> CGen a
 compTimeCMD GetTime = do
     addInclude "<sys/time.h>"

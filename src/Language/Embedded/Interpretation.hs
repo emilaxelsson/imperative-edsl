@@ -1,6 +1,15 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module Language.Embedded.Interpretation where
+-- | Interpretation of @Language.Embedded@ programs
+module Language.Embedded.Interpretation
+  ( VarId
+  , VarPred
+  , EvalExp(..)
+  , CompExp(..)
+  , Any
+  , (:/\:)
+  )
+  where
 
 import Data.Constraint
 import Language.C.Monad (MonadC)
