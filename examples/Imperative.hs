@@ -16,7 +16,7 @@ import Language.Embedded.Backend.C ()
 
 type Pred = Typeable :/\: VarPred Expr
 
-refProg :: Pred Int => Program (Tag Pred Expr (RefCMD Pred Expr)) (Expr Int)
+refProg :: Program (Tag Pred Expr (RefCMD Pred Expr)) (Expr Int)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
@@ -31,7 +31,7 @@ type CMD1
     :+: ArrCMD Pred Expr
     :+: ControlCMD Expr
 
-arrProg :: Pred Int => Program (Tag Pred Expr CMD1) (Expr Int)
+arrProg :: Program (Tag Pred Expr CMD1) (Expr Int)
 arrProg = do
     ref <- initRef 4
     arr <- newArr 10 6
@@ -61,7 +61,7 @@ type CMD2
     :+: FileCMD Expr
     :+: ConsoleCMD Expr
 
-summer :: Pred Float => Program (Tag Pred Expr CMD2) ()
+summer :: Program (Tag Pred Expr CMD2) ()
 summer = do
     inp <- open "input"
     let cont = fmap Not $ feof inp
