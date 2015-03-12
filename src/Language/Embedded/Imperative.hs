@@ -79,11 +79,11 @@ data RefCMD p exp (prog :: * -> *) a
 
 instance MapInstr (RefCMD p exp)
   where
-    imap f NewRef              = NewRef
-    imap f (InitRef a)         = InitRef a
-    imap f (GetRef r)          = GetRef r
-    imap f (SetRef r a)        = SetRef r a
-    imap f (UnsafeFreezeRef r) = UnsafeFreezeRef r
+    imap _ NewRef              = NewRef
+    imap _ (InitRef a)         = InitRef a
+    imap _ (GetRef r)          = GetRef r
+    imap _ (SetRef r a)        = SetRef r a
+    imap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
 data Arr a
     = ArrComp String
@@ -100,9 +100,9 @@ data ArrCMD p exp (prog :: * -> *) a
 
 instance MapInstr (ArrCMD p exp)
   where
-    imap f (NewArr n a)     = NewArr n a
-    imap f (GetArr i arr)   = GetArr i arr
-    imap f (SetArr i a arr) = SetArr i a arr
+    imap _ (NewArr n a)     = NewArr n a
+    imap _ (GetArr i arr)   = GetArr i arr
+    imap _ (SetArr i a arr) = SetArr i a arr
 
 data ControlCMD exp prog a
   where
@@ -114,7 +114,7 @@ instance MapInstr (ControlCMD exp)
   where
     imap g (If c t f)        = If c (g t) (g f)
     imap g (While cont body) = While (g cont) (g body)
-    imap g Break             = Break
+    imap _ Break             = Break
 
 data Handle
     = HandleComp String
@@ -131,11 +131,11 @@ data FileCMD exp (prog :: * -> *) a
 
 instance MapInstr (FileCMD exp)
   where
-    imap f (Open file) = Open file
-    imap f (Close hdl) = Close hdl
-    imap f (Put hdl a) = Put hdl a
-    imap f (Get hdl)   = Get hdl
-    imap f (Eof hdl)   = Eof hdl
+    imap _ (Open file) = Open file
+    imap _ (Close hdl) = Close hdl
+    imap _ (Put hdl a) = Put hdl a
+    imap _ (Get hdl)   = Get hdl
+    imap _ (Eof hdl)   = Eof hdl
 
 data ConsoleCMD exp (prog :: * -> *) a
   where
@@ -143,7 +143,7 @@ data ConsoleCMD exp (prog :: * -> *) a
 
 instance MapInstr (ConsoleCMD exp)
   where
-    imap f (Printf form a) = Printf form a
+    imap _ (Printf form a) = Printf form a
 
 data TimeCMD exp (prog :: * -> *) a
   where
@@ -151,7 +151,7 @@ data TimeCMD exp (prog :: * -> *) a
 
 instance MapInstr (TimeCMD exp)
   where
-    imap f GetTime = GetTime
+    imap _ GetTime = GetTime
 
 
 
