@@ -15,6 +15,7 @@ library
   exposed-modules:
     Control.Monad.Operational.Compositional
     Data.ALaCarte
+    Data.TypePredicates
     Language.C.Monad
     Language.Embedded.Interpretation
     Language.Embedded.Expr

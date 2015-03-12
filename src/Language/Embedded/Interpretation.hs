@@ -6,8 +6,6 @@ module Language.Embedded.Interpretation
   , VarPred
   , EvalExp(..)
   , CompExp(..)
-  , Any
-  , (:/\:)
   )
   where
 
@@ -43,14 +41,4 @@ class CompExp exp
 
 -- | Variable identifier
 type VarId = String
-
--- | Universal predicate
-class    Any a
-instance Any a
-
--- | Predicate conjunction
-class    (p1 a, p2 a) => (p1 :/\: p2) a
-instance (p1 a, p2 a) => (p1 :/\: p2) a
-
-
 

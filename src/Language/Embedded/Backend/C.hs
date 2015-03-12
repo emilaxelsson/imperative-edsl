@@ -5,6 +5,7 @@
 module Language.Embedded.Backend.C where
 
 import Data.Typeable
+import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Imperative
 import Language.Embedded.Interpretation
