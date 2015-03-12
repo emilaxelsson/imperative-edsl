@@ -3,6 +3,11 @@
 
 module Imperative where
 
+
+
+import Data.Typeable
+
+import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.C.Monad
 import Language.Embedded.Expr
@@ -12,7 +17,9 @@ import Language.Embedded.Backend.C ()
 
 
 
-refProg :: pred Int => Program (Tag pred Expr (RefCMD pred Expr)) (Expr Int)
+type Pred = Typeable :/\: VarPred Expr
+
+refProg :: Pred Int => Program (Tag Pred Expr (RefCMD Pred Expr)) (Expr Int)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
@@ -22,12 +29,12 @@ refProg = do
     setRef r2 c
     return c
 
-type CMD1 pred
-    =   RefCMD pred Expr
-    :+: ArrCMD pred Expr
+type CMD1
+    =   RefCMD Pred Expr
+    :+: ArrCMD Pred Expr
     :+: ControlCMD Expr
 
-arrProg :: pred Int => Program (Tag pred Expr (CMD1 pred)) (Expr Int)
+arrProg :: Pred Int => Program (Tag Pred Expr CMD1) (Expr Int)
 arrProg = do
     ref <- initRef 4
     arr <- newArr 10 6
@@ -51,13 +58,13 @@ compArr = prettyCGen $ wrapMain $ interpret arrProg
 
 
 
-type CMD2 pred
-    =   RefCMD pred Expr
+type CMD2
+    =   RefCMD Pred Expr
     :+: ControlCMD Expr
     :+: FileCMD Expr
     :+: ConsoleCMD Expr
 
-summer :: pred Float => Program (Tag pred Expr (CMD2 pred)) ()
+summer :: Pred Float => Program (Tag Pred Expr CMD2) ()
 summer = do
     inp <- open "input"
     let cont = fmap Not $ feof inp
