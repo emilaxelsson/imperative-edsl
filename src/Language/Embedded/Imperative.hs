@@ -30,7 +30,7 @@ import Language.Embedded.Interpretation
 
 -- | Tag an instruction with a predicate and expression. This is needed to avoid types like
 -- @(`RefCMD` pred exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @pred@ and
--- @exp@ by constraining @i@, so the instrance search will always fail. The solution is to change
+-- @exp@ by constraining @i@, so the instance search will always fail. The solution is to change
 -- the type to @(`RefCMD` pred exp `:<:` i) => `Program` (`Tag` pred exp i) ()@.
 newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
     Tag {unTag :: instr prog a}
