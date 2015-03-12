@@ -8,7 +8,6 @@ import Data.Typeable
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Imperative
-import Language.Embedded.Interpretation
 import Language.C.Monad
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C

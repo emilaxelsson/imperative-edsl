@@ -7,12 +7,9 @@ module Imperative where
 
 import Data.Typeable
 
-import Data.TypePredicates
-import Control.Monad.Operational.Compositional
 import Language.C.Monad
 import Language.Embedded.Expr
 import Language.Embedded.Imperative
-import Language.Embedded.Interpretation
 import Language.Embedded.Backend.C ()
 
 
