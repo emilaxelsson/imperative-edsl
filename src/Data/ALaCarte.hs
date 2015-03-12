@@ -24,16 +24,22 @@ infixr :+:
 class f :<: g
   where
     inj :: f a b -> g a b
+    prj :: g a b -> Maybe (f a b)
 
 instance (f :<: f)
   where
     inj = id
+    prj = Just
 
 instance (f :<: (f :+: g))
   where
     inj = Inl
+    prj (Inl f) = Just f
+    prj _       = Nothing
 
 instance (f :<: h) => (f :<: (g :+: h))
   where
     inj = Inr . inj
+    prj (Inr h) = prj h
+    prj _       = Nothing
 
