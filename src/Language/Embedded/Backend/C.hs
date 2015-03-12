@@ -6,6 +6,7 @@ module Language.Embedded.Backend.C where
 import Data.Typeable
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Imperative
+import Language.Embedded.Interpretation
 import Language.C.Monad
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C

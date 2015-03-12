@@ -5,9 +5,10 @@ module Imperative where
 
 import Control.Monad.Operational.Compositional
 import Language.C.Monad
-import Language.Embedded.Imperative
 import Language.Embedded.Expr
-import Language.Embedded.Backend.C
+import Language.Embedded.Imperative
+import Language.Embedded.Interpretation
+import Language.Embedded.Backend.C ()
 
 
 

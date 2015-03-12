@@ -16,6 +16,7 @@ library
     Control.Monad.Operational.Compositional
     Data.ALaCarte
     Language.C.Monad
+    Language.Embedded.Interpretation
     Language.Embedded.Expr
     Language.Embedded.Imperative
     Language.Embedded.Backend.C
