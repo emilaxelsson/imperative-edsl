@@ -91,6 +91,7 @@ newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
 instance (i :<: j) => i :<: Tag pred exp j
   where
     inj = Tag . inj
+    prj = prj . unTag
 
 instance MapInstr i => MapInstr (Tag pred exp i)
   where
