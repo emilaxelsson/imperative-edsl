@@ -3,11 +3,61 @@
 -- | Deep embedding of imperative programs. The embedding is parameterized on the expression
 -- language.
 
-module Language.Embedded.Imperative where
-  -- TODO Should export PrintfArg
-  -- TODO Should export module Data.TypePredicates
+module Language.Embedded.Imperative
+  ( module Data.TypePredicates
+  , module Control.Monad.Operational.Compositional
+  , module Language.Embedded.Interpretation
+
+    -- * Working with instruction sets
+  , Tag (..)
+  , singlePE
+  , singleE
+
+    -- * Commands
+  , Ref (..)
+  , RefCMD (..)
+  , Arr (..)
+  , ArrCMD (..)
+  , ControlCMD (..)
+  , Handle (..)
+  , FileCMD (..)
+  , ConsoleCMD (..)
+  , TimeCMD (..)
+
+    -- * Running commands
+  , runRefCMD
+  , runArrCMD
+  , runControlCMD
+  , runFileCMD
+  , runConsoleCMD
+  , runTimeCMD
+
+    -- * User interface
+  , newRef
+  , initRef
+  , getRef
+  , setRef
+  , modifyRef
+  , unsafeFreezeRef
+  , newArr
+  , getArr
+  , setArr
+  , iff
+  , while
+  , break
+  , open
+  , close
+  , fput
+  , fget
+  , feof
+  , PrintfArg
+  , printf
+  , getTime
+  ) where
 
 
+
+import Prelude hiding (break)
 
 import Control.Monad (when)
 import Data.Array.IO
@@ -19,13 +69,15 @@ import qualified Text.Printf as Printf
 
 import Data.Constraint
 
+import Data.ALaCarte
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Interpretation
 
 
+
 ----------------------------------------------------------------------------------------------------
--- * Composing instruction sets
+-- * Working with instruction sets
 ----------------------------------------------------------------------------------------------------
 
 -- | Tag an instruction with a predicate and expression. This is needed to avoid types like
