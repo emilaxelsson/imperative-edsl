@@ -31,25 +31,27 @@ typeOfP2 _ = typeOf (undefined :: a)
 compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     let t = compTypeRep (typeOfP2 cmd)
-    sym <- gensym "r"
-    addLocal [cdecl| $ty:t $id:sym; |]
-    return $ RefComp sym
+    i <- freshId
+    addLocal [cdecl| $ty:t $id:('r':show i); |]
+    return $ RefComp i
 compRefCMD cmd@(InitRef exp) = do
     let t = compTypeRep (typeOfP2 cmd)
-    sym <- gensym "r"
+    i <- freshId
+    let sym = 'r':show i
     v   <- compExp exp
     addLocal [cdecl| $ty:t $id:sym; |]
     addStm   [cstm| $id:sym = $v; |]
-    return $ RefComp sym
+    return $ RefComp i
 compRefCMD cmd@(GetRef (RefComp ref)) = do
     let t = compTypeRep (typeOfP2 cmd)
-    sym <- gensym "r"
+    i <- freshId
+    let sym = 'v':show i
     addLocal [cdecl| $ty:t $id:sym; |]
-    addStm   [cstm| $id:sym = $id:ref; |]
-    return $ varExp sym
+    addStm   [cstm| $id:sym = $id:('r':show ref); |]
+    return $ varExp i
 compRefCMD (SetRef (RefComp ref) exp) = do
     v <- compExp exp
-    addStm [cstm| $id:ref = $v; |]
+    addStm [cstm| $id:('r':show ref) = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
 -- | Compile `ArrCMD`
@@ -72,11 +74,12 @@ compArrCMD (NewArr size init) = do
 --     addInclude "<stdlib.h>"
 --     return $ ArrComp sym
 compArrCMD (GetArr expi (ArrComp arr)) = do
-    sym <- gensym "a"
-    i   <- compExp expi
+    v <- freshId
+    let sym = 'v': show v
+    i <- compExp expi
     addLocal [cdecl| float $id:sym; |] -- todo: get real type
     addStm   [cstm| $id:sym = $id:arr[ $i ]; |]
-    return $ varExp sym
+    return $ varExp v
 compArrCMD (SetArr expi expv (ArrComp arr)) = do
     v <- compExp expv
     i <- compExp expi
@@ -118,16 +121,18 @@ compFileCMD (Put (HandleComp h) exp) = do
     v <- compExp exp
     addStm [cstm| fprintf($id:h, "%f ", $v); |]
 compFileCMD (Get (HandleComp h)) = do
-    sym <- gensym "v"
+    i <- freshId
+    let sym = 'v':show i
     addLocal [cdecl| float $id:sym; |]
     addStm   [cstm| fscanf($id:h, "%f", &$id:sym); |]
-    return $ varExp sym
+    return $ varExp i
 compFileCMD (Eof (HandleComp h)) = do
     addInclude "<stdbool.h>"
-    sym <- gensym "v"
+    i <- freshId
+    let sym = 'v':show i
     addLocal [cdecl| int $id:sym; |]
     addStm   [cstm| $id:sym = feof($id:h); |]
-    return $ varExp sym
+    return $ varExp i
 
 -- | Compile `ConsoleCMD`
 compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
@@ -156,10 +161,11 @@ compTimeCMD GetTime = do
     addInclude "<sys/time.h>"
     addInclude "<sys/resource.h>"
     addGlobal getTimeDef
-    sym <- gensym "t"
+    i <- freshId
+    let sym = 't': show i
     addLocal [cdecl| double $id:sym; |]
     addStm   [cstm| $id:sym = get_time(); |]
-    return $ varExp sym
+    return $ varExp i
 
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
 instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD

@@ -37,5 +37,5 @@ class CompExp exp
     compExp :: (MonadC m) => exp a -> m Exp
 
 -- | Variable identifier
-type VarId = String
+type VarId = Integer
 

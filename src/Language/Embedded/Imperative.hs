@@ -138,7 +138,7 @@ singleE = singleton . injE
 ----------------------------------------------------------------------------------------------------
 
 data Ref a
-    = RefComp String
+    = RefComp VarId
     | RefEval (IORef a)
   deriving Typeable
 
