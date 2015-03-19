@@ -331,18 +331,18 @@ unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
 unsafeFreezeRef = singlePE . UnsafeFreezeRef
 
 -- | Create an uninitialized an array
-newArr :: (pred a, ArrCMD pred exp :<: instr) =>
-    exp Int -> exp a -> ProgramT (Tag pred exp instr) m (Arr a)
+newArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
+    exp i -> exp a -> ProgramT (Tag pred exp instr) m (Arr a)
 newArr n a = singlePE $ NewArr n a
 
 -- | Set the contents of an array
-getArr :: (pred a, ArrCMD pred exp :<: instr) =>
-    exp Int -> Arr a -> ProgramT (Tag pred exp instr) m (exp a)
+getArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
+    exp i -> Arr a -> ProgramT (Tag pred exp instr) m (exp a)
 getArr i arr = singlePE (GetArr i arr)
 
 -- | Set the contents of an array
-setArr :: (pred a, ArrCMD pred exp :<: instr) =>
-    exp Int -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
+setArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
+    exp i -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
 setArr i a arr = singlePE (SetArr i a arr)
 
 iff :: (ControlCMD exp :<: instr)
