@@ -234,22 +234,21 @@ instance MapInstr (TimeCMD exp)
 -- * Running commands
 ----------------------------------------------------------------------------------------------------
 
-runRefCMD :: forall pred exp prog a . (VarPred exp :< pred) => EvalExp exp => RefCMD pred exp prog a -> IO a
+runRefCMD :: forall pred exp prog a . (VarPred exp ~ pred)
+          => EvalExp exp => RefCMD pred exp prog a -> IO a
 runRefCMD (InitRef a)            = fmap RefEval $ newIORef $ evalExp a
 runRefCMD NewRef                 = fmap RefEval $ newIORef (error "Reading uninitialized reference")
 runRefCMD (SetRef (RefEval r) a) = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b)))
-    | Dict :: Dict (VarPred exp b) <- sub (Dict :: Dict (pred b))
     = fmap litExp $ readIORef r
 runRefCMD (UnsafeFreezeRef (RefEval (r :: IORef b)))
-    | Dict :: Dict (VarPred exp b) <- sub (Dict :: Dict (pred b))
     = fmap litExp $ readIORef r
 
-runArrCMD :: forall pred exp prog a . (EvalExp exp, VarPred exp :< pred) => ArrCMD pred exp prog a -> IO a
+runArrCMD :: forall pred exp prog a . (EvalExp exp, VarPred exp ~ pred)
+          => ArrCMD pred exp prog a -> IO a
 runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
 runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (GetArr i (ArrEval (arr :: IOArray Int b)))
-    | Dict :: Dict (VarPred exp b) <- sub (Dict :: Dict (pred b))
     = fmap litExp $ readArray arr (fromIntegral (evalExp i))
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
@@ -290,8 +289,8 @@ runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
 
-instance (EvalExp exp, VarPred exp :< pred)                 => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, VarPred exp :< pred)                 => Interp (ArrCMD pred exp) IO where interp = runArrCMD
+instance (EvalExp exp, VarPred exp ~ pred)                 => Interp (RefCMD pred exp) IO where interp = runRefCMD
+instance (EvalExp exp, VarPred exp ~ pred)                 => Interp (ArrCMD pred exp) IO where interp = runArrCMD
 instance EvalExp exp                                        => Interp (ControlCMD exp)  IO where interp = runControlCMD
 instance (EvalExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     IO where interp = runFileCMD
 instance EvalExp exp                                        => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD

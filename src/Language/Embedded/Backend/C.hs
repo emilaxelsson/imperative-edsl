@@ -4,83 +4,79 @@
 -- | Generate C code from @Language.Embedded.Imperative@ programs
 module Language.Embedded.Backend.C where
 
-import Data.Typeable
-import Data.TypePredicates
+import Data.Proxy
+import Control.Applicative
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Imperative
 import Language.C.Monad
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
--- | Translate a `TypeRep` into a C type
-compTypeRep :: TypeRep -> C.Type
-compTypeRep trep = case show trep of
-    "Bool"  -> [cty| int   |]
-    "Int"   -> [cty| int   |]  -- todo: should only use fix-width Haskell ints
-    "Float" -> [cty| float |]
-
--- | Extract a `TypeRep` from a proxy
-typeOfP1 :: forall proxy a . Typeable a => proxy a -> TypeRep
-typeOfP1 _ = typeOf (undefined :: a)
-
--- | Extract a `TypeRep` from a nested proxy
-typeOfP2 :: forall proxy1 proxy2 a . Typeable a => proxy1 (proxy2 a) -> TypeRep
-typeOfP2 _ = typeOf (undefined :: a)
+instance ToIdent (Ref a)
+  where
+    toIdent (RefComp r) = C.Id $ 'r':show r
 
 -- | Compile `RefCMD`
-compRefCMD :: CompExp exp => RefCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
+compRefCMD :: forall exp prog a. CompExp exp
+           => RefCMD (VarPred exp) exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
-    let t = compTypeRep (typeOfP2 cmd)
-    i <- freshId
-    addLocal [cdecl| $ty:t $id:('r':show i); |]
-    return $ RefComp i
-compRefCMD cmd@(InitRef exp) = do
-    let t = compTypeRep (typeOfP2 cmd)
-    i <- freshId
-    let sym = 'r':show i
+    t <- compTypePP2 (Proxy :: Proxy exp) cmd
+    r <- RefComp <$> freshId
+    addLocal [cdecl| $ty:t $id:r; |]
+    return r
+compRefCMD (InitRef exp) = do
+    t <- compType exp
+    r <- RefComp <$> freshId
     v   <- compExp exp
-    addLocal [cdecl| $ty:t $id:sym; |]
-    addStm   [cstm| $id:sym = $v; |]
-    return $ RefComp i
-compRefCMD cmd@(GetRef (RefComp ref)) = do
-    let t = compTypeRep (typeOfP2 cmd)
-    i <- freshId
-    let sym = 'v':show i
-    addLocal [cdecl| $ty:t $id:sym; |]
-    addStm   [cstm| $id:sym = $id:('r':show ref); |]
-    return $ varExp i
-compRefCMD (SetRef (RefComp ref) exp) = do
+    addLocal [cdecl| $ty:t $id:r; |]
+    addStm   [cstm| $id:r = $v; |]
+    return r
+compRefCMD cmd@(GetRef ref) = do
+    t <- compTypeP cmd
+    v <- varExp <$> freshId
+    e <- compExp v
+    addLocal [cdecl| $ty:t $id:ref; |]
+    addStm   [cstm| $e = $id:ref; |]
+    return v
+compRefCMD (SetRef ref exp) = do
     v <- compExp exp
-    addStm [cstm| $id:('r':show ref) = $v; |]
+    addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
+instance ToIdent (Arr a)
+  where
+    toIdent (ArrComp arr) = C.Id arr
+
 -- | Compile `ArrCMD`
-compArrCMD :: CompExp exp => ArrCMD (Typeable :/\: VarPred exp) exp prog a -> CGen a
-compArrCMD (NewArr size init) = do
+compArrCMD :: forall exp prog a. CompExp exp
+           => ArrCMD (VarPred exp) exp prog a -> CGen a
+compArrCMD (NewArr size ini) = do
     addInclude "<string.h>"
     sym <- gensym "a"
     v   <- compExp size
-    i   <- compExp init -- todo: use this with memset
-    addLocal [cdecl| float $id:sym[ $v ]; |] -- todo: get real type
+    i   <- compExp ini
+    t   <- compType ini
+    addLocal [cdecl| $ty:t $id:sym[ $v ]; |]
     addStm   [cstm| memset($id:sym, $i, sizeof( $id:sym )); |]
     return $ ArrComp sym
 -- compArrCMD (NewArr size init) = do
 --     addInclude "<string.h>"
 --     sym <- gensym "a"
 --     v   <- compExp size
---     i   <- compExp init -- todo: use this with memset
+--     i   <- compExp init
 --     addLocal [cdecl| float* $id:sym = calloc($v, sizeof(float)); |] -- todo: get real type
 --     addFinalStm [cstm| free($id:sym); |]
 --     addInclude "<stdlib.h>"
 --     return $ ArrComp sym
-compArrCMD (GetArr expi (ArrComp arr)) = do
+compArrCMD (GetArr expi arr) = do
     v <- freshId
     let sym = 'v': show v
     i <- compExp expi
-    addLocal [cdecl| float $id:sym; |] -- todo: get real type
+    t <- compTypePP (Proxy :: Proxy exp) arr
+    addLocal [cdecl| $ty:t $id:sym; |]
     addStm   [cstm| $id:sym = $id:arr[ $i ]; |]
     return $ varExp v
-compArrCMD (SetArr expi expv (ArrComp arr)) = do
+compArrCMD (SetArr expi expv arr) = do
     v <- compExp expv
     i <- compExp expi
     addStm [cstm| $id:arr[ $i ] = $v; |]
@@ -91,9 +87,11 @@ compControlCMD (If c t f) = do
     cc <- compExp c
     ct <- inNewBlock_ t
     cf <- inNewBlock_ f
-    case null cf of
-      True  -> addStm [cstm| if ($cc) {$items:ct} |]
-      False -> addStm [cstm| if ($cc) {$items:ct} else {$items:cf} |]
+    case (ct, cf) of
+      ([],[]) -> return ()
+      (_ ,[]) -> addStm [cstm| if (   $cc) {$items:ct} |]
+      ([],_ ) -> addStm [cstm| if ( ! $cc) {$items:cf} |]
+      (_ ,_ ) -> addStm [cstm| if (   $cc) {$items:ct} else {$items:cf} |]
 compControlCMD (While cont body) = do
     bodyc <- inNewBlock_ $ do
         conte <- cont
@@ -167,9 +165,9 @@ compTimeCMD GetTime = do
     addStm   [cstm| $id:sym = get_time(); |]
     return $ varExp i
 
-instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (Typeable :/\: VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance CompExp exp                                        => Interp (ControlCMD exp)  CGen where interp = compControlCMD
+instance (CompExp exp, pred ~ (VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
+instance (CompExp exp, pred ~ (VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
+instance CompExp exp                          => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     CGen where interp = compFileCMD
 instance CompExp exp                                        => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
 instance (CompExp exp, VarPred exp Double)                  => Interp (TimeCMD exp)     CGen where interp = compTimeCMD

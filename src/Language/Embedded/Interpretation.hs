@@ -9,6 +9,7 @@ module Language.Embedded.Interpretation
   )
   where
 
+import Data.Proxy
 import Data.Constraint
 import Language.C.Monad (MonadC)
 import Language.C.Syntax
@@ -28,13 +29,41 @@ class EvalExp exp
     evalExp :: exp a -> a
 
 -- | General interface for compiling expressions
-class CompExp exp
-  where
+class CompExp exp where
     -- | Variable expressions
     varExp  :: VarPred exp a => VarId -> exp a
 
     -- | Compilation of expressions
     compExp :: (MonadC m) => exp a -> m Exp
+
+    -- | Extract expression type
+    compType :: forall m a
+             .  (MonadC m, VarPred exp a)
+             => exp a -> m Type
+    compType _ = compTypeP (Proxy :: Proxy (exp a))
+    {-# INLINE compType #-}
+
+    -- | Extract expression type from proxy
+    compTypeP :: forall proxy m a
+              .  (MonadC m, VarPred exp a)
+              => proxy (exp a) -> m Type
+    compTypeP _ = compTypePP (Proxy :: Proxy exp) (Proxy :: Proxy a)
+    {-# INLINE compTypeP #-}
+
+    compTypePP :: forall proxy1 proxy2 m a
+               .  (MonadC m, VarPred exp a)
+               => proxy1 exp -> proxy2 a -> m Type
+    compTypePP _ _ = compTypePP2 (Proxy :: Proxy exp) (Proxy :: Proxy (Proxy a))
+    {-# INLINE compTypePP #-}
+
+    -- | Extract expression type
+    compTypePP2 :: forall proxy proxy1 proxy2 m a
+                .  (MonadC m, VarPred exp a)
+                => proxy exp -> proxy1 (proxy2 a) -> m Type
+    compTypePP2 _ _ = compType (undefined :: exp a)
+    {-# INLINE compTypePP2 #-}
+
+    {-# MINIMAL varExp , compExp , (compType | compTypeP | compTypePP | compTypePP2 ) #-}
 
 -- | Variable identifier
 type VarId = Integer

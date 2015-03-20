@@ -7,6 +7,7 @@ module Language.Embedded.Expr where
 
 
 import Data.Typeable
+import Data.TypePredicates
 
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
@@ -38,7 +39,7 @@ data Expr a
     LEq :: Ord a => Expr a -> Expr a -> Expr Bool
   deriving Typeable
 
-type instance VarPred Expr = Show
+type instance VarPred Expr = Typeable :/\: Show
 
 evalExpr :: Expr a -> a
 evalExpr (Val a)   = a
@@ -116,10 +117,19 @@ compExpr (LEq a b) = do
   b' <- compExpr b
   return [cexp| $a' <= $b' |]
 
+-- | Translate an expression into a C type
+compTypeImpl :: forall proxy m a. (Monad m, VarPred Expr a)
+             => proxy (Expr a) -> m C.Type
+compTypeImpl a = return $ case show (typeOf (undefined :: a)) of
+    "Bool"  -> [cty| int   |]
+    "Int"   -> [cty| int   |]  -- todo: should only use fix-width Haskell ints
+    "Float" -> [cty| float |]
+
 instance CompExp Expr
   where
-    varExp  = Var
-    compExp = compExpr
+    varExp    = Var
+    compExp   = compExpr
+    compTypeP = compTypeImpl
 
 instance (Show a, Num a, Eq a) => Num (Expr a)
   where

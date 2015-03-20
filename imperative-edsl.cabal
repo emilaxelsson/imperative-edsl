@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.1
+version:             0.2
 synopsis:            Deep embedding of imperative programs with code generation
 -- description:
 license:             BSD3

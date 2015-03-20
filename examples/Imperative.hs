@@ -14,7 +14,7 @@ import Language.Embedded.Backend.C ()
 
 
 
-type Pred = Typeable :/\: VarPred Expr
+type Pred = VarPred Expr
 
 refProg :: Program (Tag Pred Expr (RefCMD Pred Expr)) (Expr Int)
 refProg = do
