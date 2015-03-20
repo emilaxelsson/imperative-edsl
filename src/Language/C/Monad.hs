@@ -315,7 +315,7 @@ collectArgs = args <<.= mempty
 -- | Declare a C translation unit
 inModule :: MonadC m => String -> m a -> m a
 inModule name prg = do
-    oldUnique <- unique <<.= 10000
+    oldUnique <- unique <<.= 0
     (a, defs) <- collectDefinitions prg
     unique .= oldUnique
     modules %= Map.insertWith (<>) name defs
