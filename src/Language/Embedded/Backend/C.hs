@@ -12,6 +12,7 @@ import Language.C.Monad
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
+-- | Identifiers from references
 instance ToIdent (Ref a)
   where
     toIdent (RefComp r) = C.Id $ 'r':show r
@@ -43,6 +44,7 @@ compRefCMD (SetRef ref exp) = do
     addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
+-- | Identifiers from arrays
 instance ToIdent (Arr a)
   where
     toIdent (ArrComp arr) = C.Id arr

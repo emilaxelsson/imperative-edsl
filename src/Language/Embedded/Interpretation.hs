@@ -12,7 +12,7 @@ module Language.Embedded.Interpretation
 import Data.Proxy
 import Data.Constraint
 import Language.C.Monad (MonadC)
-import Language.C.Syntax
+import Language.C.Syntax (Exp,Type)
 
 
 
@@ -43,13 +43,14 @@ class CompExp exp where
     compType _ = compTypeP (Proxy :: Proxy (exp a))
     {-# INLINE compType #-}
 
-    -- | Extract expression type from proxy
+    -- | Extract expression type
     compTypeP :: forall proxy m a
               .  (MonadC m, VarPred exp a)
               => proxy (exp a) -> m Type
     compTypeP _ = compTypePP (Proxy :: Proxy exp) (Proxy :: Proxy a)
     {-# INLINE compTypeP #-}
 
+    -- | Extract expression type
     compTypePP :: forall proxy1 proxy2 m a
                .  (MonadC m, VarPred exp a)
                => proxy1 exp -> proxy2 a -> m Type
