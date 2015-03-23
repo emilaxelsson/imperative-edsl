@@ -118,12 +118,26 @@ compExpr (LEq a b) = do
   return [cexp| $a' <= $b' |]
 
 -- | Translate an expression into a C type
-compTypeImpl :: forall proxy m a. (Monad m, VarPred Expr a)
+compTypeImpl :: forall proxy m a. (MonadC m, VarPred Expr a)
              => proxy (Expr a) -> m C.Type
-compTypeImpl a = return $ case show (typeOf (undefined :: a)) of
-    "Bool"  -> [cty| int   |]
-    "Int"   -> [cty| int   |]  -- todo: should only use fix-width Haskell ints
-    "Float" -> [cty| float |]
+compTypeImpl a = case show (typeOf (undefined :: a)) of
+    "Bool"  -> return [cty| int   |]
+    "Int"   -> return [cty| int   |]
+    'I':'n':'t':xs -> do
+      addSystemInclude "stdint.h"
+      case xs of
+        "8"  -> return [cty| typename int8_t  |]
+        "16" -> return [cty| typename int16_t |]
+        "32" -> return [cty| typename int32_t |]
+        "64" -> return [cty| typename int64_t |]
+    'W':'o':'r':'d':xs -> do
+      addSystemInclude "stdint.h"
+      case xs of
+        "8"  -> return [cty| typename uint8_t  |]
+        "16" -> return [cty| typename uint16_t |]
+        "32" -> return [cty| typename uint32_t |]
+        "64" -> return [cty| typename uint64_t |]
+    "Float" -> return [cty| float |]
 
 instance CompExp Expr
   where

@@ -45,7 +45,7 @@ compRefCMD (SetRef ref exp) = do
 compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
 -- | Identifiers from arrays
-instance ToIdent (Arr a)
+instance ToIdent (Arr i a)
   where
     toIdent (ArrComp arr) = C.Id arr
 

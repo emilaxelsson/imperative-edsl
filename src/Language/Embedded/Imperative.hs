@@ -160,7 +160,7 @@ instance MapInstr (RefCMD p exp)
     imap _ (SetRef r a)        = SetRef r a
     imap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
-data Arr a
+data Arr n a
     = ArrComp String
     | ArrEval (IOArray Int a)
   deriving Typeable
@@ -168,9 +168,9 @@ data Arr a
 -- | Commands for mutable arrays
 data ArrCMD p exp (prog :: * -> *) a
   where
-    NewArr :: (p a, Integral n) => exp n -> exp a -> ArrCMD p exp prog (Arr a)
-    GetArr :: (p a, Integral n) => exp n -> Arr a -> ArrCMD p exp prog (exp a)
-    SetArr :: Integral n        => exp n -> exp a -> Arr a -> ArrCMD p exp prog ()
+    NewArr :: (p a, p n, Integral n) => exp n -> exp a   -> ArrCMD p exp prog (Arr n a)
+    GetArr :: (p a, Integral n)      => exp n -> Arr n a -> ArrCMD p exp prog (exp a)
+    SetArr :: (Integral n)           => exp n -> exp a   -> Arr n a -> ArrCMD p exp prog ()
   deriving Typeable
 
 instance MapInstr (ArrCMD p exp)
@@ -330,18 +330,18 @@ unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
 unsafeFreezeRef = singlePE . UnsafeFreezeRef
 
 -- | Create an uninitialized an array
-newArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> exp a -> ProgramT (Tag pred exp instr) m (Arr a)
+newArr :: (pred a, pred i, ArrCMD pred exp :<: instr, Integral i) =>
+    exp i -> exp a -> ProgramT (Tag pred exp instr) m (Arr i a)
 newArr n a = singlePE $ NewArr n a
 
 -- | Set the contents of an array
 getArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> Arr a -> ProgramT (Tag pred exp instr) m (exp a)
+    exp i -> Arr i a -> ProgramT (Tag pred exp instr) m (exp a)
 getArr i arr = singlePE (GetArr i arr)
 
 -- | Set the contents of an array
 setArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> exp a -> Arr a -> ProgramT (Tag pred exp instr) m ()
+    exp i -> exp a -> Arr i a -> ProgramT (Tag pred exp instr) m ()
 setArr i a arr = singlePE (SetArr i a arr)
 
 iff :: (ControlCMD exp :<: instr)

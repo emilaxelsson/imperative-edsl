@@ -5,6 +5,7 @@ module Imperative where
 
 
 
+import Data.Word
 import Data.Typeable
 
 import Language.C.Monad
@@ -34,7 +35,7 @@ type CMD1
 arrProg :: Program (Tag Pred Expr CMD1) (Expr Int)
 arrProg = do
     ref <- initRef 4
-    arr <- newArr 10 6
+    arr <- newArr (10:: Expr Word8) 6
     a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
     let c = Add a b
