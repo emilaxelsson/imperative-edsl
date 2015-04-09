@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE PolyKinds #-}
 
@@ -15,7 +16,9 @@ module Data.ALaCarte where
 data (f :+: g) a b
     = Inl (f a b)
     | Inr (g a b)
+#if  __GLASGOW_HASKELL__>=708
   deriving (Functor)
+#endif
 
 infixr :+:
 

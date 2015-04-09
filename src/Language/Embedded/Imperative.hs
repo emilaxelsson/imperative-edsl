@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Deep embedding of imperative programs. The embedding is parameterized on the expression
@@ -90,7 +91,9 @@ import Language.Embedded.Interpretation
 -- the type to @(`RefCMD` pred exp `:<:` i) => `Program` (`Tag` pred exp i) ()@.
 newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
     Tag {unTag :: instr prog a}
+#if  __GLASGOW_HASKELL__>=708
   deriving (Typeable, Functor)
+#endif
 
 instance (i :<: j) => i :<: Tag pred exp j
   where
@@ -150,7 +153,9 @@ data RefCMD p exp (prog :: * -> *) a
     GetRef          :: p a => Ref a -> RefCMD p exp prog (exp a)
     SetRef          ::        Ref a -> exp a -> RefCMD p exp prog ()
     UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp prog (exp a)
+#if  __GLASGOW_HASKELL__>=708
   deriving Typeable
+#endif
 
 instance MapInstr (RefCMD p exp)
   where
@@ -171,7 +176,9 @@ data ArrCMD p exp (prog :: * -> *) a
     NewArr :: (p a, p n, Integral n) => exp n -> exp a   -> ArrCMD p exp prog (Arr n a)
     GetArr :: (p a, Integral n)      => exp n -> Arr n a -> ArrCMD p exp prog (exp a)
     SetArr :: (Integral n)           => exp n -> exp a   -> Arr n a -> ArrCMD p exp prog ()
+#if  __GLASGOW_HASKELL__>=708
   deriving Typeable
+#endif
 
 instance MapInstr (ArrCMD p exp)
   where

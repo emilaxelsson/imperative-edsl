@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- | An alternative to the Operational package \[1\] in which instructions are parameterized on the
 -- program monad that they are part of. This makes it possible to define instruction sets
 -- compositionally using ':+:'. In the normal Operational, this can only be done for simple
@@ -48,7 +50,9 @@ data ProgramT instr m a
     Lift  :: m a -> ProgramT instr m a
     Bind  :: ProgramT instr m a -> (a -> ProgramT instr m b) -> ProgramT instr m b
     Instr :: instr (ProgramT instr m) a -> ProgramT instr m a
+#if  __GLASGOW_HASKELL__>=708
   deriving Typeable
+#endif
 
 -- | Representation of programs parameterized by its primitive instructions
 type Program instr = ProgramT instr Identity
