@@ -47,7 +47,7 @@ library
 
   build-depends:
     array,
-    base >=4 && <4.8,
+    base >=4 && <5,
     constraints,
     containers,
     exception-transformers,

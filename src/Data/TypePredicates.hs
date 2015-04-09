@@ -1,6 +1,16 @@
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+#ifndef MIN_VERSION_GLASGOW_HASKELL
+#define MIN_VERSION_GLASGOW_HASKELL(a,b,c,d) 0
+#endif
+  -- MIN_VERSION_GLASGOW_HASKELL was introduced in GHC 7.10
+
+#if MIN_VERSION_GLASGOW_HASKELL(7,10,0,0)
+#else
+{-# LANGUAGE OverlappingInstances #-}
+#endif
 
 -- | Utilities for working with type predicates (i.e. types of kind @* -> `Constraint`@)
 module Data.TypePredicates
@@ -46,15 +56,15 @@ class p :< q
     -- | Compute evidence that @p@ subsumes @q@
     sub :: Subsumes q p
 
-instance p :< p
+instance {-# OVERLAPPING #-} p :< p
   where
     sub = id
 
-instance p :< (p :/\: ps)
+instance {-# OVERLAPPING #-} p :< (p :/\: ps)
   where
     sub = weakL
 
-instance (p :< qs) => (p :< (q :/\: qs))
+instance {-# OVERLAPPING #-} (p :< qs) => (p :< (q :/\: qs))
   where
     sub = sub . weakR
 

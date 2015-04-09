@@ -1,6 +1,15 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE PolyKinds #-}
+
+#ifndef MIN_VERSION_GLASGOW_HASKELL
+#define MIN_VERSION_GLASGOW_HASKELL(a,b,c,d) 0
+#endif
+  -- MIN_VERSION_GLASGOW_HASKELL was introduced in GHC 7.10
+
+#if MIN_VERSION_GLASGOW_HASKELL(7,10,0,0)
+#else
+{-# LANGUAGE OverlappingInstances #-}
+#endif
 
 -- | Higher-order (and poly-kinded) implementation of Data Types à la Carte [1]
 --
@@ -29,18 +38,18 @@ class f :<: g
     inj :: f a b -> g a b
     prj :: g a b -> Maybe (f a b)
 
-instance (f :<: f)
+instance {-# OVERLAPPING #-} (f :<: f)
   where
     inj = id
     prj = Just
 
-instance (f :<: (f :+: g))
+instance {-# OVERLAPPING #-} (f :<: (f :+: g))
   where
     inj = Inl
     prj (Inl f) = Just f
     prj _       = Nothing
 
-instance (f :<: h) => (f :<: (g :+: h))
+instance {-# OVERLAPPING #-} (f :<: h) => (f :<: (g :+: h))
   where
     inj = Inr . inj
     prj (Inr h) = prj h
