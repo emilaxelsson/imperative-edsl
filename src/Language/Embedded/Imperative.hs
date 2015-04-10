@@ -10,7 +10,8 @@ module Language.Embedded.Imperative
   , module Language.Embedded.Interpretation
 
     -- * Working with instruction sets
-  , Tag (..)
+  , IPred
+  , IExp
   , injPE
   , prjPE
   , injE
@@ -85,54 +86,50 @@ import Language.Embedded.Interpretation
 -- * Working with instruction sets
 ----------------------------------------------------------------------------------------------------
 
--- | Tag an instruction with a predicate and expression. This is needed to avoid types like
--- @(`RefCMD` pred exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @pred@ and
--- @exp@ by constraining @i@, so the instance search will always fail. The solution is to change
--- the type to @(`RefCMD` pred exp `:<:` i) => `Program` (`Tag` pred exp i) ()@.
-newtype Tag (pred :: * -> Constraint) (exp :: * -> *) instr (prog :: * -> *) a =
-    Tag {unTag :: instr prog a}
-#if  __GLASGOW_HASKELL__>=708
-  deriving (Typeable, Functor)
-#endif
+-- | Extract the value predicate from an instruction set
+--
+-- 'IPred' and 'IExp' are needed to avoid types like
+-- @(`SomeInstr` pred exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @pred@
+-- and @exp@ by constraining @i@, so the instance search will always fail. Functions like 'injPE'
+-- solve this by using 'IPred' and 'IExp' to determine @pred@ and @exp@ from @i@. For this to work,
+-- one must use an instruction set @i@ that has an instance of 'IPred' and 'IExp'. By using
+-- instruction sets of the form @(`RefCMD` SomePred SomeExp `:+:` ...)@, such instances are obtained
+-- for free (see the available instances defined in this module). Then functions like 'injPE' will
+-- determine the predicate and expression type from the first summand, which may or may not be the
+-- desired behavior. It is of course also possible to make custom instruction types with custom
+-- instances of 'IPred' and 'IExp'.
+type family IPred (i :: (* -> *) -> * -> *) :: * -> Constraint
 
-instance (i :<: j) => i :<: Tag pred exp j
-  where
-    inj = Tag . inj
-    prj = prj . unTag
+-- | Extract the value predicate from an instruction set. See the documentation of 'IPred' for more
+-- information.
+type family IExp  (i :: (* -> *) -> * -> *) :: * -> *
 
-instance MapInstr i => MapInstr (Tag pred exp i)
-  where
-    imap f = Tag . imap f . unTag
+-- | Inject an instruction that is parameterized by a value predicate and an expression type
+injPE :: (i (IPred instr) (IExp instr) :<: instr) => i (IPred instr) (IExp instr) m a -> instr m a
+injPE = inj
 
-instance Interp i m => Interp (Tag pred exp i) m
-  where
-    interp = interp . unTag
+-- | Project an instruction that is parameterized by a value predicate and an expression type
+prjPE :: (i (IPred instr) (IExp instr) :<: instr) =>
+    instr m a -> Maybe (i (IPred instr) (IExp instr) m a)
+prjPE = prj
 
--- | Inject an instruction in a tagged instruction set
-injPE :: (i pred exp :<: instr) => i pred exp prog a -> Tag pred exp instr prog a
-injPE = Tag . inj
+-- | Inject an instruction that is parameterized by an expression type
+injE :: (i (IExp instr) :<: instr) => i (IExp instr) m a -> instr m a
+injE = inj
 
--- | Project an instruction from a tagged instruction set
-prjPE :: (i pred exp :<: instr) => Tag pred exp instr prog a -> Maybe (i pred exp prog a)
-prjPE = prj . unTag
+-- | Project an instruction that is parameterized by an expression type
+prjE :: (i (IExp instr) :<: instr) => instr m a -> Maybe (i (IExp instr) m a)
+prjE = prj
 
--- | Inject an instruction in a tagged instruction set
-injE :: (i exp :<: instr) => i exp prog a -> Tag pred exp instr prog a
-injE = Tag . inj
+-- | Create a program from an instruction that is parameterized by a value predicate and an
+-- expression type
+singlePE :: (i (IPred instr) (IExp instr) :<: instr) =>
+    i (IPred instr) (IExp instr) (ProgramT instr m) a -> ProgramT instr m a
+singlePE = singleton . inj
 
--- | Project an instruction from a tagged instruction set
-prjE :: (i exp :<: instr) => Tag pred exp instr prog a -> Maybe (i exp prog a)
-prjE = prj . unTag
-
--- | Create a program from an instruction in a tagged instruction set
-singlePE :: (i pred exp :<: instr) =>
-    i pred exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
-singlePE = singleton . injPE
-
--- | Create a program from an instruction in a tagged instruction set
-singleE :: (i exp :<: instr) =>
-    i exp (ProgramT (Tag pred exp instr) m) a -> ProgramT (Tag pred exp instr) m a
-singleE = singleton . injE
+-- | Create a program from an instruction that is parameterized by an expression type
+singleE :: (i (IExp instr) :<: instr) => i (IExp instr) (ProgramT instr m) a -> ProgramT instr m a
+singleE = singleton . inj
 
 
 
@@ -165,6 +162,11 @@ instance MapInstr (RefCMD p exp)
     imap _ (SetRef r a)        = SetRef r a
     imap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
+type instance IPred (RefCMD p e)       = p
+type instance IExp  (RefCMD p e)       = e
+type instance IPred (RefCMD p e :+: i) = p
+type instance IExp  (RefCMD p e :+: i) = e
+
 data Arr n a
     = ArrComp String
     | ArrEval (IOArray Int a)
@@ -186,6 +188,11 @@ instance MapInstr (ArrCMD p exp)
     imap _ (GetArr i arr)   = GetArr i arr
     imap _ (SetArr i a arr) = SetArr i a arr
 
+type instance IPred (ArrCMD p e)       = p
+type instance IExp  (ArrCMD p e)       = e
+type instance IPred (ArrCMD p e :+: i) = p
+type instance IExp  (ArrCMD p e :+: i) = e
+
 data ControlCMD exp prog a
   where
     If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
@@ -197,6 +204,9 @@ instance MapInstr (ControlCMD exp)
     imap g (If c t f)        = If c (g t) (g f)
     imap g (While cont body) = While (g cont) (g body)
     imap _ Break             = Break
+
+type instance IExp (ControlCMD e)       = e
+type instance IExp (ControlCMD e :+: i) = e
 
 data Handle
     = HandleComp String
@@ -219,6 +229,9 @@ instance MapInstr (FileCMD exp)
     imap _ (Get hdl)   = Get hdl
     imap _ (Eof hdl)   = Eof hdl
 
+type instance IExp (FileCMD e)       = e
+type instance IExp (FileCMD e :+: i) = e
+
 data ConsoleCMD exp (prog :: * -> *) a
   where
     Printf :: PrintfArg a => String -> exp a -> ConsoleCMD exp prog ()
@@ -227,6 +240,9 @@ instance MapInstr (ConsoleCMD exp)
   where
     imap _ (Printf form a) = Printf form a
 
+type instance IExp (ConsoleCMD e)       = e
+type instance IExp (ConsoleCMD e :+: i) = e
+
 data TimeCMD exp (prog :: * -> *) a
   where
     GetTime :: TimeCMD exp prog (exp Double)
@@ -234,6 +250,9 @@ data TimeCMD exp (prog :: * -> *) a
 instance MapInstr (TimeCMD exp)
   where
     imap _ GetTime = GetTime
+
+type instance IExp (TimeCMD e)       = e
+type instance IExp (TimeCMD e :+: i) = e
 
 
 
@@ -296,8 +315,8 @@ runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
 
-instance (EvalExp exp, VarPred exp ~ pred)                 => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, VarPred exp ~ pred)                 => Interp (ArrCMD pred exp) IO where interp = runArrCMD
+instance (EvalExp exp, VarPred exp ~ pred)                  => Interp (RefCMD pred exp) IO where interp = runRefCMD
+instance (EvalExp exp, VarPred exp ~ pred)                  => Interp (ArrCMD pred exp) IO where interp = runArrCMD
 instance EvalExp exp                                        => Interp (ControlCMD exp)  IO where interp = runControlCMD
 instance (EvalExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     IO where interp = runFileCMD
 instance EvalExp exp                                        => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
@@ -310,82 +329,84 @@ instance EvalExp exp                                        => Interp (TimeCMD e
 ----------------------------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: (pred a, RefCMD pred exp :<: instr) => ProgramT (Tag pred exp instr) m (Ref a)
+newRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) => ProgramT instr m (Ref a)
 newRef = singlePE NewRef
 
 -- | Create an initialized reference
-initRef :: (pred a, RefCMD pred exp :<: instr) => exp a -> ProgramT (Tag pred exp instr) m (Ref a)
+initRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+    IExp instr a -> ProgramT instr m (Ref a)
 initRef = singlePE . InitRef
 
 -- | Get the contents of a reference
-getRef :: (pred a, RefCMD pred exp :<: instr) => Ref a -> ProgramT (Tag pred exp instr) m (exp a)
+getRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+    Ref a -> ProgramT instr m (IExp instr a)
 getRef = singlePE . GetRef
 
 -- | Set the contents of a reference
-setRef :: (pred a, RefCMD pred exp :<: instr) =>
-    Ref a -> exp a -> ProgramT (Tag pred exp instr) m ()
+setRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+    Ref a -> IExp instr a -> ProgramT instr m ()
 setRef r = singlePE . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (pred a, RefCMD pred exp :<: instr, Monad m) =>
-    Ref a -> (exp a -> exp a) -> ProgramT (Tag pred exp instr) m ()
+modifyRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr, Monad m) =>
+    Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = getRef r >>= setRef r . f
 
 -- | Freeze the contents of reference (only safe if the reference is never accessed again)
-unsafeFreezeRef :: (pred a, RefCMD pred exp :<: instr) =>
-    Ref a -> ProgramT (Tag pred exp instr) m (exp a)
+unsafeFreezeRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+    Ref a -> ProgramT instr m (IExp instr a)
 unsafeFreezeRef = singlePE . UnsafeFreezeRef
 
 -- | Create an uninitialized an array
-newArr :: (pred a, pred i, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> exp a -> ProgramT (Tag pred exp instr) m (Arr i a)
+newArr :: (IPred instr a, IPred instr i, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+    IExp instr i -> IExp instr a -> ProgramT instr m (Arr i a)
 newArr n a = singlePE $ NewArr n a
 
 -- | Set the contents of an array
-getArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> Arr i a -> ProgramT (Tag pred exp instr) m (exp a)
+getArr :: (IPred instr a, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+    IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
 getArr i arr = singlePE (GetArr i arr)
 
 -- | Set the contents of an array
-setArr :: (pred a, ArrCMD pred exp :<: instr, Integral i) =>
-    exp i -> exp a -> Arr i a -> ProgramT (Tag pred exp instr) m ()
+setArr :: (IPred instr a, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+    IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singlePE (SetArr i a arr)
 
-iff :: (ControlCMD exp :<: instr)
-    => exp Bool
-    -> ProgramT (Tag pred exp instr) m ()
-    -> ProgramT (Tag pred exp instr) m ()
-    -> ProgramT (Tag pred exp instr) m ()
+iff :: (ControlCMD (IExp instr) :<: instr)
+    => IExp instr Bool
+    -> ProgramT instr m ()
+    -> ProgramT instr m ()
+    -> ProgramT instr m ()
 iff b t f = singleE $ If b t f
 
-while :: (ControlCMD exp :<: instr)
-    => ProgramT (Tag pred exp instr) m (exp Bool)
-    -> ProgramT (Tag pred exp instr) m ()
-    -> ProgramT (Tag pred exp instr) m ()
+while :: (ControlCMD (IExp instr) :<: instr)
+    => ProgramT instr m (IExp instr Bool)
+    -> ProgramT instr m ()
+    -> ProgramT instr m ()
 while b t = singleE $ While b t
 
-break :: (ControlCMD exp :<: instr) => ProgramT (Tag pred exp instr) m ()
+break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
-open :: (FileCMD exp :<: instr) => FilePath -> ProgramT (Tag pred exp instr) m Handle
+open :: (FileCMD (IExp instr) :<: instr) => FilePath -> ProgramT instr m Handle
 open = singleE . Open
 
-close :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m ()
+close :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 close = singleE . Close
 
-fput :: (FileCMD exp :<: instr) => Handle -> exp Float -> ProgramT (Tag pred exp instr) m ()
+fput :: (FileCMD (IExp instr) :<: instr) => Handle -> IExp instr Float -> ProgramT instr m ()
 fput hdl = singleE . Put hdl
 
-fget :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Float)
+fget :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Float)
 fget = singleE . Get
 
-feof :: (FileCMD exp :<: instr) => Handle -> ProgramT (Tag pred exp instr) m (exp Bool)
+feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
 feof = singleE . Eof
 
-printf :: (PrintfArg a, ConsoleCMD exp :<: instr) =>
-    String -> exp a -> ProgramT (Tag pred exp instr) m ()
+printf :: (PrintfArg a, ConsoleCMD (IExp instr) :<: instr) =>
+    String -> IExp instr a -> ProgramT instr m ()
 printf format = singleE . Printf format
 
-getTime :: (TimeCMD exp :<: instr) => ProgramT (Tag pred exp instr) m (exp Double)
+getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
 getTime = singleE GetTime
 

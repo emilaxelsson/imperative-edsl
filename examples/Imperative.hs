@@ -6,7 +6,6 @@ module Imperative where
 
 
 import Data.Word
-import Data.Typeable
 
 import Language.C.Monad
 import Language.Embedded.Expr
@@ -17,7 +16,7 @@ import Language.Embedded.Backend.C ()
 
 type Pred = VarPred Expr
 
-refProg :: Program (Tag Pred Expr (RefCMD Pred Expr)) (Expr Int)
+refProg :: Program (RefCMD Pred Expr) (Expr Int)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
@@ -32,7 +31,7 @@ type CMD1
     :+: ArrCMD Pred Expr
     :+: ControlCMD Expr
 
-arrProg :: Program (Tag Pred Expr CMD1) (Expr Int)
+arrProg :: Program CMD1 (Expr Int)
 arrProg = do
     ref <- initRef 4
     arr <- newArr (10:: Expr Word8) 6
@@ -62,7 +61,7 @@ type CMD2
     :+: FileCMD Expr
     :+: ConsoleCMD Expr
 
-summer :: Program (Tag Pred Expr CMD2) ()
+summer :: Program CMD2 ()
 summer = do
     inp <- open "input"
     let cont = fmap Not $ feof inp
