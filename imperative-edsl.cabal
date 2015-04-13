@@ -7,9 +7,15 @@ license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson
 maintainer:          emax@chalmers.se
 copyright:           Copyright 2015 Anders Persson, Emil Axelsson, Markus Aronsson
+homepage:            https://github.com/emilaxelsson/imperative-edsl
+bug-reports:         https://github.com/emilaxelsson/imperative-edsl/issues
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
+
+source-repository head
+  type:     git
+  location: git@github.com:emilaxelsson/imperative-edsl.git
 
 library
   exposed-modules:
