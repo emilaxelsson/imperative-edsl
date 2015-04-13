@@ -1,7 +1,7 @@
 name:                imperative-edsl
 version:             0.2
 synopsis:            Deep embedding of imperative programs with code generation
--- description:
+description:         Deep embedding of imperative programs with code generation
 license:             BSD3
 license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson
