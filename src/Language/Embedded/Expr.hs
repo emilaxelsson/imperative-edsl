@@ -6,7 +6,7 @@ module Language.Embedded.Expr where
 
 
 
-import Data.Typeable
+import Data.Dynamic
 import Data.TypePredicates
 
 import Language.C.Quote.C
@@ -19,8 +19,8 @@ import Language.Embedded.Interpretation
 
 data Expr a
   where
-    Val :: Show a => a -> Expr a
-    Var :: VarId -> Expr a
+    Val :: Show a     => a -> Expr a
+    Var :: Typeable a => VarId -> Expr a
 
     Add :: Num a               => Expr a -> Expr a -> Expr a
     Sub :: Num a               => Expr a -> Expr a -> Expr a
@@ -41,25 +41,27 @@ data Expr a
 
 type instance VarPred Expr = Typeable :/\: Show
 
-evalExpr :: Expr a -> a
-evalExpr (Val a)   = a
-evalExpr (Add a b) = evalExpr a + evalExpr b
-evalExpr (Sub a b) = evalExpr a - evalExpr b
-evalExpr (Mul a b) = evalExpr a * evalExpr b
-evalExpr (Div a b) = evalExpr a / evalExpr b
-evalExpr (Mod a b) = evalExpr a `mod` evalExpr b
-evalExpr (Sin a)   = sin $ evalExpr a
-evalExpr (I2N a)   = fromInteger $ fromIntegral $ evalExpr a
-evalExpr (Not   a) = not $ evalExpr a
-evalExpr (And a b) = evalExpr a && evalExpr b
-evalExpr (Or  a b) = evalExpr a || evalExpr b
-evalExpr (Eq  a b) = evalExpr a == evalExpr b
-evalExpr (LEq a b) = evalExpr a <= evalExpr b
+evalExpr :: (VarId -> Dynamic) -> Expr a -> a
+evalExpr env (Val a)   = a
+evalExpr env (Var v)
+    | Just a <- fromDynamic (env v) = a
+evalExpr env (Add a b) = evalExpr env a + evalExpr env b
+evalExpr env (Sub a b) = evalExpr env a - evalExpr env b
+evalExpr env (Mul a b) = evalExpr env a * evalExpr env b
+evalExpr env (Div a b) = evalExpr env a / evalExpr env b
+evalExpr env (Mod a b) = evalExpr env a `mod` evalExpr env b
+evalExpr env (Sin a)   = sin $ evalExpr env a
+evalExpr env (I2N a)   = fromInteger $ fromIntegral $ evalExpr env a
+evalExpr env (Not   a) = not $ evalExpr env a
+evalExpr env (And a b) = evalExpr env a && evalExpr env b
+evalExpr env (Or  a b) = evalExpr env a || evalExpr env b
+evalExpr env (Eq  a b) = evalExpr env a == evalExpr env b
+evalExpr env (LEq a b) = evalExpr env a <= evalExpr env b
 
 instance EvalExp Expr
   where
     litExp  = Val
-    evalExp = evalExpr
+    evalExp = evalExpr (const $ error "eval: free variable")
 
 compExpr :: (MonadC m) => Expr a -> m C.Exp
 compExpr (Var v) = return [cexp| $id:('v':show v) |]
