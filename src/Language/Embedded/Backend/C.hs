@@ -98,7 +98,9 @@ compControlCMD (While cont body) = do
     bodyc <- inNewBlock_ $ do
         conte <- cont
         contc <- compExp conte
-        addStm [cstm| if (! $contc) {break;} |]
+        case contc of
+          C.Var (C.Id "true" _) _ -> return ()
+          _ -> addStm [cstm| if (! $contc) {break;} |]
         body
     addStm [cstm| while (1) {$items:bodyc} |]
       -- TODO The b program should be re-executed at the end of each iteration
