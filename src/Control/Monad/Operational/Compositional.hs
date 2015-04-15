@@ -31,6 +31,11 @@ module Control.Monad.Operational.Compositional
     , Interp (..)
     , interpretT
     , interpret
+    , ProgramViewT (..)
+    , ProgramView (..)
+    , viewT
+    , view
+    , unview
     ) where
 
 
@@ -140,4 +145,30 @@ interpretT = interpretWithMonadT interp
 -- 'MapInstr' class.
 interpret :: (Interp i m, MapInstr i, Monad m) => Program i a -> m a
 interpret = interpretWithMonad interp
+
+-- | View type for inspecting the first instruction
+data ProgramViewT instr m a
+  where
+    Return :: a -> ProgramViewT instr m a
+    (:>>=) :: instr (ProgramT instr m) b -> (b -> ProgramT instr m a) -> ProgramViewT instr m a
+
+-- | View type for inspecting the first instruction
+type ProgramView instr = ProgramViewT instr Identity
+
+-- | View function for inspecting the first instruction
+viewT :: Monad m => ProgramT instr m a -> m (ProgramViewT instr m a)
+viewT (Lift m)                = m >>= return . Return
+viewT (Lift m       `Bind` g) = m >>= viewT . g
+viewT ((m `Bind` g) `Bind` h) = viewT (m `Bind` (\x -> g x `Bind` h))
+viewT (Instr i      `Bind` g) = return (i :>>= g)
+viewT (Instr i)               = return (i :>>= return)
+
+-- | View function for inspecting the first instruction
+view :: MapInstr instr => Program instr a -> ProgramView instr a
+view = runIdentity . viewT
+
+-- | Turn a 'ProgramViewT' back to a 'Program'
+unview :: Monad m => ProgramViewT instr m a -> ProgramT instr m a
+unview (Return a) = return a
+unview (i :>>= k) = singleton i >>= k
 
