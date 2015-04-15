@@ -70,6 +70,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import qualified System.IO as IO
+import System.IO.Unsafe
 import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
@@ -149,7 +150,6 @@ data RefCMD p exp (prog :: * -> *) a
     InitRef         :: p a => exp a -> RefCMD p exp prog (Ref a)
     GetRef          :: p a => Ref a -> RefCMD p exp prog (exp a)
     SetRef          ::        Ref a -> exp a -> RefCMD p exp prog ()
-    UnsafeFreezeRef :: p a => Ref a -> RefCMD p exp prog (exp a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -160,7 +160,6 @@ instance MapInstr (RefCMD p exp)
     imap _ (InitRef a)         = InitRef a
     imap _ (GetRef r)          = GetRef r
     imap _ (SetRef r a)        = SetRef r a
-    imap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
 type instance IPred (RefCMD p e)       = p
 type instance IExp  (RefCMD p e)       = e
@@ -267,8 +266,6 @@ runRefCMD NewRef                 = fmap RefEval $ newIORef (error "Reading unini
 runRefCMD (SetRef (RefEval r) a) = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b)))
     = fmap litExp $ readIORef r
-runRefCMD (UnsafeFreezeRef (RefEval (r :: IORef b)))
-    = fmap litExp $ readIORef r
 
 runArrCMD :: forall pred exp prog a . (EvalExp exp, VarPred exp ~ pred)
           => ArrCMD pred exp prog a -> IO a
@@ -352,10 +349,11 @@ modifyRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr, Monad 
     Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = getRef r >>= setRef r . f
 
--- | Freeze the contents of reference (only safe if the reference is never accessed again)
-unsafeFreezeRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
-    Ref a -> ProgramT instr m (IExp instr a)
-unsafeFreezeRef = singlePE . UnsafeFreezeRef
+-- | Freeze the contents of reference (only safe if the reference is never written to after the
+-- first action that makes use of the resulting expression)
+unsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp) => Ref a -> exp a
+unsafeFreezeRef (RefEval r) = litExp (unsafePerformIO $ readIORef r)
+unsafeFreezeRef (RefComp v) = varExp v
 
 -- | Create an uninitialized an array
 newArr :: (IPred instr a, IPred instr i, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>

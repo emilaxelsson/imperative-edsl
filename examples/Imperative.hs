@@ -20,9 +20,8 @@ refProg :: Program (RefCMD Pred Expr) (Expr Int)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
-    a  <- unsafeFreezeRef r1
     b  <- getRef r2
-    let c = Add a b
+    let c = Add (unsafeFreezeRef r1) b
     setRef r2 c
     return c
 
@@ -35,9 +34,9 @@ arrProg :: Program CMD1 (Expr Int)
 arrProg = do
     ref <- initRef 4
     arr <- newArr (10:: Expr Word8) 6
-    a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
-    let c = Add a b
+    let a = unsafeFreezeRef ref
+        c = Add a b
     iff (Eq a 4)
       (setRef ref c)
       (setRef ref b)

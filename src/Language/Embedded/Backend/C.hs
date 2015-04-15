@@ -42,7 +42,6 @@ compRefCMD cmd@(GetRef ref) = do
 compRefCMD (SetRef ref exp) = do
     v <- compExp exp
     addStm [cstm| $id:ref = $v; |]
-compRefCMD (UnsafeFreezeRef (RefComp ref)) = return $ varExp ref
 
 -- | Identifiers from arrays
 instance ToIdent (Arr i a)
