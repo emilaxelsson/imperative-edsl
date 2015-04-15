@@ -15,6 +15,7 @@ import Control.Monad.Operational.Compositional
 import Data.Typeable
 import Language.Embedded.Imperative
 import qualified Control.Concurrent as CC
+import qualified Control.Concurrent.BoundedChan as Bounded
 
 type TID = Int
 type CID = Int
@@ -24,9 +25,9 @@ data ThreadId
   | TIDComp TID
     deriving (Typeable, Show)
 
--- | Unbounded channel. Mimics the behavior of 'Control.Concurrent.Chan.Chan'.
+-- | A bounded channel.
 data Chan a
-  = ChanEval (CC.Chan a)
+  = ChanEval (Bounded.BoundedChan a)
   | ChanComp CID
 
 data ThreadCMD exp (prog :: * -> *) a where
@@ -34,7 +35,7 @@ data ThreadCMD exp (prog :: * -> *) a where
   Kill :: exp ThreadId -> ThreadCMD exp prog ()
 
 data ChanCMD p exp (prog :: * -> *) a where
-  NewChan   :: ChanCMD p exp prog (Chan a)
+  NewChan   :: exp Int -> ChanCMD p exp prog (Chan a)
   ReadChan  :: p a => Chan a -> ChanCMD p exp prog (exp a)
   WriteChan :: p a => Chan a -> exp a -> ChanCMD p exp prog ()
 
@@ -43,7 +44,7 @@ instance MapInstr (ThreadCMD exp) where
   imap _ (Kill tid) = Kill tid
 
 instance MapInstr (ChanCMD p exp) where
-  imap _ NewChan         = NewChan
+  imap _ (NewChan sz)    = NewChan sz
   imap _ (ReadChan c)    = ReadChan c
   imap _ (WriteChan c x) = WriteChan c x
 
@@ -65,9 +66,12 @@ runThreadCMD (Kill t) =
 
 runChanCMD :: forall pred exp a. (VarPred exp ~ pred, EvalExp exp)
            => ChanCMD pred exp IO a -> IO a
-runChanCMD NewChan                    = ChanEval <$> CC.newChan
-runChanCMD (ReadChan (ChanEval c))    = litExp <$> CC.readChan c
-runChanCMD (WriteChan (ChanEval c) x) = CC.writeChan c (evalExp x)
+runChanCMD (NewChan sz) =
+  ChanEval <$> Bounded.newBoundedChan (evalExp sz)
+runChanCMD (ReadChan (ChanEval c)) =
+  litExp <$> Bounded.readChan c
+runChanCMD (WriteChan (ChanEval c) x) =
+  Bounded.writeChan c (evalExp x)
 
 instance (VarPred exp ThreadId, EvalExp exp) => Interp (ThreadCMD exp) IO where
   interp = runThreadCMD
@@ -88,8 +92,9 @@ killThread = singleE . Kill
 
 -- | Create a new channel.
 newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
-        => ProgramT instr m (Chan a)
-newChan = singlePE NewChan
+        => IExp instr Int
+        -> ProgramT instr m (Chan a)
+newChan = singlePE . NewChan
 
 -- | Read an element from a channel. If channel is empty, blocks until there
 --   is an item available.

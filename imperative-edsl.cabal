@@ -61,6 +61,7 @@ library
     lens,
     mainland-pretty,
     mtl,
-    tagged
+    tagged,
+    BoundedChan
 
   hs-source-dirs: src
