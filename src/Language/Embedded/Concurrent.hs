@@ -45,7 +45,7 @@ data ThreadCMD (exp :: * -> *) (prog :: * -> *) a where
   Kill :: ThreadId -> ThreadCMD exp prog ()
 
 data ChanCMD p exp (prog :: * -> *) a where
-  NewChan   :: exp Int -> ChanCMD p exp prog (Chan a)
+  NewChan   :: p a => exp Int -> ChanCMD p exp prog (Chan a)
   ReadChan  :: p a => Chan a -> ChanCMD p exp prog (exp a)
   WriteChan :: p a => Chan a -> exp a -> ChanCMD p exp prog ()
 
@@ -120,35 +120,42 @@ writeChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
 writeChan c = singlePE . WriteChan c
 
 instance ToIdent ThreadId where
-  toIdent (TIDComp tid) = C.Id $ "tid" ++ show tid
+  toIdent (TIDComp tid) = C.Id $ "t" ++ show tid
 
 instance ToIdent (Chan a) where
   toIdent (ChanComp c) = C.Id $ "chan" ++ show c
 
--- | Compile `ThreadCMD`. TODO: sharing for threads with the same body.
+-- | Compile `ThreadCMD`.
+--   TODO: sharing for threads with the same body; sharing closed-over vars.
 compThreadCMD:: CompExp exp => ThreadCMD exp CGen a -> CGen a
-compThreadCMD (Fork p) = do
+compThreadCMD (Fork body) = do
   tid <- TIDComp <$> freshId
   let funName = threadFun tid
-  _ <- inFunction funName p
-  addStm [cstm| PLACEHOLDER_FORK($id:funName, $id:tid); |]
+  _ <- inFunctionTy [cty|void*|] funName $ do
+    addParam [cparam| void* |]
+    body
+    addStm [cstm| return NULL; |]
+  addSystemInclude "pthread.h"
+  addLocal [cdecl| typename pthread_t $id:tid; |]
+  addStm [cstm| pthread_create(&$id:tid, NULL, $id:funName, NULL); |]
   return tid
 compThreadCMD (Kill tid) = do
-  addStm [cstm| PLACEHOLDER_KILL($id:tid); |]
+  addStm [cstm| pthread_cancel($id:tid); |]
 
 -- | Compile `ChanCMD`.
 compChanCMD :: forall exp prog a. CompExp exp
             => ChanCMD (VarPred exp) exp prog a
             -> CGen a
-compChanCMD (NewChan sz) = do
+compChanCMD cmd@(NewChan sz) = do
+  addLocalInclude "queue.h"
+  t <- compTypePP2 (Proxy :: Proxy exp) cmd
   sz' <- compExp sz
   c <- ChanComp <$> freshId
-  addLocal [cdecl| struct PLACEHOLDER_CHAN_TYPE* $id:c; |]
-  addStm   [cstm|  $id:c = PLACEHOLDER_NEW_CHAN($sz'); |]
+  addGlobal [cedecl| typename chan_t $id:c = chan_new($sz',sizeof($ty:t)); |]
   return c
 compChanCMD (WriteChan c x) = do
   x' <- compExp x
-  addStm [cstm| PLACEHOLDER_WRITE_CHAN($id:c, $x'); |]
+  addStm [cstm| chan_write($id:c, $x'); |]
 compChanCMD cmd@(ReadChan c) = do
   t <- compTypeP cmd
   ident <- freshId
@@ -156,7 +163,7 @@ compChanCMD cmd@(ReadChan c) = do
       var = varExp ident
   e <- compExp var
   addLocal [cdecl| $ty:t $id:name; |]
-  addStm [cstm| $e = PLACEHOLDER_READ_CHAN($id:c); |]
+  addStm [cstm| $e = chan_read($id:c); |]
   return var
 
 instance (VarPred exp ThreadId, CompExp exp) => Interp (ThreadCMD exp) CGen where

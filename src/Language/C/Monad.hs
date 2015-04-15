@@ -285,9 +285,12 @@ inNewFunction comp = do
 
 -- | Declare a function
 inFunction :: MonadC m => String -> m a -> m a
-inFunction fun ma = do
+inFunction = inFunctionTy [cty|void|]
+
+-- | Declare a function with the given return type.
+inFunctionTy :: MonadC m => C.Type -> String -> m a -> m a
+inFunctionTy ty fun ma = do
     (a,ps,items) <- inNewFunction ma
-    let ty = [cty| void |]
     addPrototype [cedecl| $ty:ty $id:fun($params:ps);|]
     addGlobal [cedecl| $ty:ty $id:fun($params:ps){ $items:items }|]
     return a
