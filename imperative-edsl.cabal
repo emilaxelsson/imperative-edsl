@@ -27,6 +27,7 @@ library
     Language.Embedded.Expr
     Language.Embedded.Imperative
     Language.Embedded.Backend.C
+    Language.Embedded.Concurrent
 
   -- other-modules:
 

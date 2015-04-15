@@ -140,6 +140,8 @@ compTypeImpl a = case show (typeOf (undefined :: a)) of
         "32" -> return [cty| typename uint32_t |]
         "64" -> return [cty| typename uint64_t |]
     "Float" -> return [cty| float |]
+    t -> do
+      error $ "compTypeImpl, unsupported type: " ++ t
 
 instance CompExp Expr
   where
