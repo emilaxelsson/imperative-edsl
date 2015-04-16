@@ -204,8 +204,9 @@ instance MapInstr (ControlCMD exp)
     imap g (While cont body) = While (g cont) (g body)
     imap _ Break             = Break
 
-type instance IExp (ControlCMD e)       = e
-type instance IExp (ControlCMD e :+: i) = e
+type instance IExp  (ControlCMD e)       = e
+type instance IExp  (ControlCMD e :+: i) = e
+type instance IPred (ControlCMD e :+: i) = IPred i
 
 data Handle
     = HandleComp String
@@ -228,8 +229,9 @@ instance MapInstr (FileCMD exp)
     imap _ (Get hdl)   = Get hdl
     imap _ (Eof hdl)   = Eof hdl
 
-type instance IExp (FileCMD e)       = e
-type instance IExp (FileCMD e :+: i) = e
+type instance IExp  (FileCMD e)       = e
+type instance IExp  (FileCMD e :+: i) = e
+type instance IPred (FileCMD e :+: i) = IPred i
 
 data ConsoleCMD exp (prog :: * -> *) a
   where
@@ -239,8 +241,9 @@ instance MapInstr (ConsoleCMD exp)
   where
     imap _ (Printf form a) = Printf form a
 
-type instance IExp (ConsoleCMD e)       = e
-type instance IExp (ConsoleCMD e :+: i) = e
+type instance IExp  (ConsoleCMD e)       = e
+type instance IExp  (ConsoleCMD e :+: i) = e
+type instance IPred (ConsoleCMD e :+: i) = IPred i
 
 data TimeCMD exp (prog :: * -> *) a
   where
@@ -250,8 +253,9 @@ instance MapInstr (TimeCMD exp)
   where
     imap _ GetTime = GetTime
 
-type instance IExp (TimeCMD e)       = e
-type instance IExp (TimeCMD e :+: i) = e
+type instance IExp  (TimeCMD e)       = e
+type instance IExp  (TimeCMD e :+: i) = e
+type instance IPred (TimeCMD e :+: i) = IPred i
 
 
 
