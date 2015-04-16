@@ -67,7 +67,7 @@ data Chan a
   = ChanEval (Bounded.BoundedChan a)
   | ChanComp CID
 
-data ThreadCMD (exp :: * -> *) (prog :: * -> *) a where
+data ThreadCMD (prog :: * -> *) a where
   Fork :: prog () -> ThreadCMD prog ThreadId
   Kill :: ThreadId -> ThreadCMD prog ()
   Wait :: ThreadId -> ThreadCMD prog ()
@@ -129,16 +129,12 @@ fork :: (ThreadCMD :<: instr)
 fork = singleton . inj . Fork
 
 -- | Forcibly terminate a thread.
-killThread :: (ThreadCMD :<: instr)
-           => ThreadId
-           -> ProgramT instr m ()
+killThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
 killThread = singleton . inj . Kill
 
 -- | Wait for a thread to terminate.
-waitThread :: (ThreadCMD (IExp instr) :<: instr)
-           => ThreadId
-           -> ProgramT instr m ()
-waitThread = singleE . Wait
+waitThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
+waitThread = singleton . inj . Wait
 
 -- | Create a new channel.
 newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)

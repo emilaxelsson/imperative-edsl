@@ -11,7 +11,7 @@ import Language.C.Monad
 type Pred = VarPred Expr
 
 type L =
-  ThreadCMD Expr :+:
+  ThreadCMD :+:
   ChanCMD Pred Expr :+:
   ControlCMD Expr :+:
   ConsoleCMD Expr :+:
