@@ -169,7 +169,7 @@ compThreadCMD (Fork body) = do
   tid <- TIDComp <$> freshId
   let funName = threadFun tid
   _ <- inFunctionTy [cty|void*|] funName $ do
-    addParam [cparam| void* |]
+    addParam [cparam| void* unused |]
     body
     addStm [cstm| return NULL; |]
   addSystemInclude "pthread.h"
