@@ -5,13 +5,15 @@ module Language.Embedded.Concurrent (
     CID, Chan (..),
     ThreadCMD (..),
     ChanCMD (..),
-    fork, killThread,
+    fork, killThread, waitThread,
     newChan, readChan, writeChan
   ) where
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
+import Control.Monad
 import Control.Monad.Operational.Compositional
+import Data.IORef
 import Data.Proxy
 import Data.Typeable
 import Language.Embedded.Imperative
@@ -24,8 +26,32 @@ import qualified Control.Concurrent.BoundedChan as Bounded
 type TID = VarId
 type CID = VarId
 
+-- | A "flag" which may be waited upon. A flag starts of unset, and can be set
+--   using 'setFlag'. Once set, the flag stays set forever.
+data Flag a = Flag (IORef Bool) (CC.MVar a)
+
+-- | Create a new, unset 'Flag'.
+newFlag :: IO (Flag a)
+newFlag = Flag <$> newIORef False <*> CC.newEmptyMVar
+
+-- | Set a 'Flag'; guaranteed not to block.
+--   If @setFlag@ is called on a flag which was already set, the value of said
+--   flag is not updated.
+--   @setFlag@ returns the status of the flag prior to the call: is the flag
+--   was already set the return value is @True@, otherwise it is @False@.
+setFlag :: Flag a -> a -> IO Bool
+setFlag (Flag flag var) val = do
+  set <- atomicModifyIORef flag $ \set -> (True, set)
+  when (not set) $ CC.putMVar var val
+  return set
+
+-- | Wait until the given flag becomes set, then return its value. If the flag
+--   is already set, return the value immediately.
+waitFlag :: Flag a -> IO a
+waitFlag (Flag _ var) = CC.withMVar var return
+
 data ThreadId
-  = TIDEval CC.ThreadId
+  = TIDEval CC.ThreadId (Flag ())
   | TIDComp TID
     deriving (Typeable)
 
@@ -33,17 +59,18 @@ threadFun :: ThreadId -> String
 threadFun tid = "thread_" ++ show tid
 
 instance Show ThreadId where
-  show (TIDEval tid) = show tid
-  show (TIDComp tid) = show tid
+  show (TIDEval tid _) = show tid
+  show (TIDComp tid)   = show tid
 
 -- | A bounded channel.
 data Chan a
   = ChanEval (Bounded.BoundedChan a)
   | ChanComp CID
 
-data ThreadCMD (prog :: * -> *) a where
+data ThreadCMD (exp :: * -> *) (prog :: * -> *) a where
   Fork :: prog () -> ThreadCMD prog ThreadId
   Kill :: ThreadId -> ThreadCMD prog ()
+  Wait :: ThreadId -> ThreadCMD prog ()
 
 data ChanCMD p exp (prog :: * -> *) a where
   NewChan   :: p a => exp Int -> ChanCMD p exp prog (Chan a)
@@ -53,6 +80,7 @@ data ChanCMD p exp (prog :: * -> *) a where
 instance MapInstr ThreadCMD where
   imap f (Fork p)   = Fork (f p)
   imap _ (Kill tid) = Kill tid
+  imap _ (Wait tid) = Wait tid
 
 instance MapInstr (ChanCMD p exp) where
   imap _ (NewChan sz)    = NewChan sz
@@ -69,8 +97,16 @@ type instance IPred (ChanCMD p e :+: i) = p
 
 runThreadCMD :: ThreadCMD IO a
              -> IO a
-runThreadCMD (Fork p)           = TIDEval <$> CC.forkIO p
-runThreadCMD (Kill (TIDEval t)) = CC.killThread t
+runThreadCMD (Fork p) = do
+  f <- newFlag
+  tid <- CC.forkIO . void $ p >> setFlag f ()
+  return $ TIDEval tid f
+runThreadCMD (Kill (TIDEval t f)) = do
+  CC.killThread t
+  setFlag f ()
+  return ()
+runThreadCMD (Wait (TIDEval _ f)) = do
+  waitFlag f
 
 runChanCMD :: forall pred exp a. (VarPred exp ~ pred, EvalExp exp)
            => ChanCMD pred exp IO a -> IO a
@@ -97,6 +133,12 @@ killThread :: (ThreadCMD :<: instr)
            => ThreadId
            -> ProgramT instr m ()
 killThread = singleton . inj . Kill
+
+-- | Wait for a thread to terminate.
+waitThread :: (ThreadCMD (IExp instr) :<: instr)
+           => ThreadId
+           -> ProgramT instr m ()
+waitThread = singleE . Wait
 
 -- | Create a new channel.
 newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
@@ -140,6 +182,8 @@ compThreadCMD (Fork body) = do
   return tid
 compThreadCMD (Kill tid) = do
   addStm [cstm| pthread_cancel($id:tid); |]
+compThreadCMD (Wait tid) = do
+  addStm [cstm| pthread_join($id:tid, NULL); |]
 
 -- | Compile `ChanCMD`.
 compChanCMD :: forall exp prog a. CompExp exp
