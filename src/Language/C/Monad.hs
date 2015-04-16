@@ -109,23 +109,24 @@ data Flags = Flags
 
 -- | Code generator state.
 data CEnv = CEnv
-    { _flags      :: Flags
+    { _flags       :: Flags
 
-    , _unique     :: !Integer
+    , _unique      :: !Integer
 
-    , _modules    :: Map.Map String [C.Definition]
-    , _includes   :: Set.Set String
-    , _typedefs   :: [C.Definition]
-    , _prototypes :: [C.Definition]
-    , _globals    :: [C.Definition]
+    , _modules     :: Map.Map String [C.Definition]
+    , _includes    :: Set.Set String
+    , _typedefs    :: [C.Definition]
+    , _prototypes  :: [C.Definition]
+    , _globals     :: [C.Definition]
 
-    , _params     :: [C.Param]
-    , _args       :: [C.Exp]
-    , _locals     :: [C.InitGroup]
-    , _stms       :: [C.Stm]
-    , _finalStms  :: [C.Stm]
+    , _params      :: [C.Param]
+    , _args        :: [C.Exp]
+    , _locals      :: [C.InitGroup]
+    , _stms        :: [C.Stm]
+    , _finalStms   :: [C.Stm]
 
-    , _usedVars   :: Set.Set C.Id
+    , _usedVars    :: Set.Set C.Id
+    , _funUsedVars :: Map.Map String (Set.Set C.Id)
     }
 
 makeLenses ''CEnv
@@ -133,19 +134,20 @@ makeLenses ''CEnv
 -- | Default code generator state
 defaultCEnv :: Flags -> CEnv
 defaultCEnv fl = CEnv
-    { _flags      = fl
-    , _unique     = 0
-    , _modules    = mempty
-    , _includes   = mempty
-    , _typedefs   = mempty
-    , _prototypes = mempty
-    , _globals    = mempty
-    , _params     = mempty
-    , _args       = mempty
-    , _locals     = mempty
-    , _stms       = mempty
-    , _finalStms  = mempty
-    , _usedVars   = mempty
+    { _flags       = fl
+    , _unique      = 0
+    , _modules     = mempty
+    , _includes    = mempty
+    , _typedefs    = mempty
+    , _prototypes  = mempty
+    , _globals     = mempty
+    , _params      = mempty
+    , _args        = mempty
+    , _locals      = mempty
+    , _stms        = mempty
+    , _finalStms   = mempty
+    , _usedVars    = mempty
+    , _funUsedVars = mempty
     }
 
 -- | Code generation type constraints
@@ -205,6 +207,10 @@ gensym s = do
 -- | Mark an identifier as used in this context.
 touchVar :: (MonadC m, ToIdent v) => v -> m ()
 touchVar v = usedVars %= Set.insert (toIdent v (SrcLoc NoLoc))
+
+-- | Set the 'Set' of identifers used in the body of the given function.
+setUsedVars :: MonadC m => String -> Set.Set C.Id -> m ()
+setUsedVars fun uvs = funUsedVars %= Map.insert fun uvs
 
 -- | Add an include pre-processor directive. Specify '<>' or '""' around
 -- the file name.
@@ -293,12 +299,14 @@ inNewBlock_ ma = snd <$> inNewBlock ma
 
 -- | Run an action as a function declaration.
 -- Does not create a new function.
-inNewFunction :: MonadC m => m a -> m (a,[C.Param],[C.BlockItem])
+inNewFunction :: MonadC m => m a -> m (a,Set.Set C.Id,[C.Param],[C.BlockItem])
 inNewFunction comp = do
     oldParams <- params <<.= mempty
+    oldUsedVars <- usedVars <<.= mempty
     (a,items)  <- inNewBlock comp
     ps <- params <<.= oldParams
-    return (a, reverse ps, items)
+    uvs <- usedVars <<.= oldUsedVars
+    return (a, uvs, reverse ps, items)
 
 -- | Declare a function
 inFunction :: MonadC m => String -> m a -> m a
@@ -307,7 +315,8 @@ inFunction = inFunctionTy [cty|void|]
 -- | Declare a function with the given return type.
 inFunctionTy :: MonadC m => C.Type -> String -> m a -> m a
 inFunctionTy ty fun ma = do
-    (a,ps,items) <- inNewFunction ma
+    (a,uvs,ps,items) <- inNewFunction ma
+    setUsedVars fun uvs
     addPrototype [cedecl| $ty:ty $id:fun($params:ps);|]
     addGlobal [cedecl| $ty:ty $id:fun($params:ps){ $items:items }|]
     return a
@@ -344,6 +353,5 @@ inModule name prg = do
 -- | Wrap a program in a main function
 wrapMain :: MonadC m => m a -> m ()
 wrapMain prog = do
-    (_,params,items) <- inNewFunction $ prog >> addStm [cstm| return 0; |]
+    (_,_,params,items) <- inNewFunction $ prog >> addStm [cstm| return 0; |]
     addGlobal [cedecl| int main($params:params){ $items:items }|]
-
