@@ -34,9 +34,11 @@ compRefCMD (InitRef exp) = do
     return r
 compRefCMD cmd@(GetRef ref) = do
     t <- compTypeP cmd
-    v <- varExp <$> freshId
+    ident <- freshId
+    let v = varExp ident
+        sym = 'v':show ident
     e <- compExp v
-    addLocal [cdecl| $ty:t $id:ref; |]
+    addLocal [cdecl| $ty:t $id:sym; |]
     addStm   [cstm| $e = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
