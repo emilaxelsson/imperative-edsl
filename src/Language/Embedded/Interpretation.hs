@@ -34,6 +34,9 @@ class CompExp exp where
     varExp  :: VarPred exp a => VarId -> exp a
 
     -- | Compilation of expressions
+    --
+    -- /NOTE: It is assumed that free variables in the expression are rendered as @vIII@, where/
+    -- /      @III@ is the variable identifier./
     compExp :: (MonadC m) => exp a -> m Exp
 
     -- | Extract expression type
