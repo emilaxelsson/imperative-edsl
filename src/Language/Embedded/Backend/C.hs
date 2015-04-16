@@ -15,7 +15,7 @@ import qualified Language.C.Syntax as C
 -- | Identifiers from references
 instance ToIdent (Ref a)
   where
-    toIdent (RefComp r) = C.Id $ 'r':show r
+    toIdent (RefComp r) = C.Id $ 'v':show r
 
 -- | Compile `RefCMD`
 compRefCMD :: forall exp prog a. CompExp exp
