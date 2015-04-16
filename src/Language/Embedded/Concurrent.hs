@@ -40,16 +40,16 @@ data Chan a
   = ChanEval (Bounded.BoundedChan a)
   | ChanComp CID
 
-data ThreadCMD (exp :: * -> *) (prog :: * -> *) a where
-  Fork :: prog () -> ThreadCMD exp prog ThreadId
-  Kill :: ThreadId -> ThreadCMD exp prog ()
+data ThreadCMD (prog :: * -> *) a where
+  Fork :: prog () -> ThreadCMD prog ThreadId
+  Kill :: ThreadId -> ThreadCMD prog ()
 
 data ChanCMD p exp (prog :: * -> *) a where
   NewChan   :: p a => exp Int -> ChanCMD p exp prog (Chan a)
   ReadChan  :: p a => Chan a -> ChanCMD p exp prog (exp a)
   WriteChan :: p a => Chan a -> exp a -> ChanCMD p exp prog ()
 
-instance MapInstr (ThreadCMD exp) where
+instance MapInstr ThreadCMD where
   imap f (Fork p)   = Fork (f p)
   imap _ (Kill tid) = Kill tid
 
@@ -58,17 +58,15 @@ instance MapInstr (ChanCMD p exp) where
   imap _ (ReadChan c)    = ReadChan c
   imap _ (WriteChan c x) = WriteChan c x
 
-type instance IExp (ThreadCMD e)       = e
-type instance IExp (ThreadCMD e :+: i) = e
-type instance IPred (ThreadCMD e :+: i) = IPred i
+type instance IExp (ThreadCMD :+: i)  = IExp i
+type instance IPred (ThreadCMD :+: i) = IPred i
 
 type instance IExp (ChanCMD p e)        = e
 type instance IExp (ChanCMD p e :+: i)  = e
 type instance IPred (ChanCMD p e)       = p
 type instance IPred (ChanCMD p e :+: i) = p
 
-runThreadCMD :: (VarPred exp ThreadId, EvalExp exp)
-             => ThreadCMD exp IO a
+runThreadCMD :: ThreadCMD IO a
              -> IO a
 runThreadCMD (Fork p)           = TIDEval <$> CC.forkIO p
 runThreadCMD (Kill (TIDEval t)) = CC.killThread t
@@ -82,22 +80,22 @@ runChanCMD (ReadChan (ChanEval c)) =
 runChanCMD (WriteChan (ChanEval c) x) =
   Bounded.writeChan c (evalExp x)
 
-instance (VarPred exp ThreadId, EvalExp exp) => Interp (ThreadCMD exp) IO where
+instance Interp ThreadCMD IO where
   interp = runThreadCMD
 instance (VarPred exp ~ p, EvalExp exp) => Interp (ChanCMD p exp) IO where
   interp = runChanCMD
 
 -- | Fork off a computation as a new thread.
-fork :: (ThreadCMD (IExp instr) :<: instr)
+fork :: (ThreadCMD :<: instr)
      => ProgramT instr m ()
      -> ProgramT instr m ThreadId
-fork = singleE . Fork
+fork = singleton . inj . Fork
 
 -- | Forcibly terminate a thread.
-killThread :: (ThreadCMD (IExp instr) :<: instr)
+killThread :: (ThreadCMD :<: instr)
            => ThreadId
            -> ProgramT instr m ()
-killThread = singleE . Kill
+killThread = singleton . inj . Kill
 
 -- | Create a new channel.
 newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
@@ -127,7 +125,7 @@ instance ToIdent (Chan a) where
 
 -- | Compile `ThreadCMD`.
 --   TODO: sharing for threads with the same body; sharing closed-over vars.
-compThreadCMD:: CompExp exp => ThreadCMD exp CGen a -> CGen a
+compThreadCMD:: ThreadCMD CGen a -> CGen a
 compThreadCMD (Fork body) = do
   tid <- TIDComp <$> freshId
   let funName = threadFun tid
@@ -166,7 +164,7 @@ compChanCMD cmd@(ReadChan c) = do
   addStm [cstm| $e = chan_read($id:c); |]
   return var
 
-instance (VarPred exp ThreadId, CompExp exp) => Interp (ThreadCMD exp) CGen where
+instance Interp ThreadCMD CGen where
   interp = compThreadCMD
 instance (VarPred exp ~ p, CompExp exp) => Interp (ChanCMD p exp) CGen where
   interp = compChanCMD
