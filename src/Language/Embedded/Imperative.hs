@@ -382,6 +382,21 @@ iff :: (ControlCMD (IExp instr) :<: instr)
     -> ProgramT instr m ()
 iff b t f = singleE $ If b t f
 
+ifE
+    :: ( IPred instr a
+       , ControlCMD (IExp instr)           :<: instr
+       , RefCMD (IPred instr) (IExp instr) :<: instr
+       , Monad m
+       )
+    => IExp instr Bool
+    -> ProgramT instr m (IExp instr a)
+    -> ProgramT instr m (IExp instr a)
+    -> ProgramT instr m (IExp instr a)
+ifE b t f = do
+    r <- newRef
+    iff b (t >>= setRef r) (f >>= setRef r)
+    getRef r
+
 while :: (ControlCMD (IExp instr) :<: instr)
     => ProgramT instr m (IExp instr Bool)
     -> ProgramT instr m ()
