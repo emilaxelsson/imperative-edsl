@@ -38,11 +38,13 @@ compRefCMD cmd@(GetRef ref) = do
     let v = varExp ident
         sym = 'v':show ident
     e <- compExp v
+    touchVar sym
     addLocal [cdecl| $ty:t $id:sym; |]
     addStm   [cstm| $e = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
     v <- compExp exp
+    touchVar ref
     addStm [cstm| $id:ref = $v; |]
 
 -- | Identifiers from arrays
@@ -76,12 +78,14 @@ compArrCMD (GetArr expi arr) = do
     let sym = 'v': show v
     i <- compExp expi
     t <- compTypePP (Proxy :: Proxy exp) arr
+    touchVar arr
     addLocal [cdecl| $ty:t $id:sym; |]
     addStm   [cstm| $id:sym = $id:arr[ $i ]; |]
     return $ varExp v
 compArrCMD (SetArr expi expv arr) = do
     v <- compExp expv
     i <- compExp expi
+    touchVar arr
     addStm [cstm| $id:arr[ $i ] = $v; |]
 
 -- | Compile `ControlCMD`
@@ -119,13 +123,16 @@ compFileCMD (Open path) = do
   where
     path' = show path
 compFileCMD (Close (HandleComp h)) = do
+    touchVar h
     addStm [cstm| fclose($id:h); |]
 compFileCMD (Put (HandleComp h) exp) = do
     v <- compExp exp
+    touchVar h
     addStm [cstm| fprintf($id:h, "%f ", $v); |]
 compFileCMD (Get (HandleComp h)) = do
     i <- freshId
     let sym = 'v':show i
+    touchVar h
     addLocal [cdecl| float $id:sym; |]
     addStm   [cstm| fscanf($id:h, "%f", &$id:sym); |]
     return $ varExp i
@@ -133,6 +140,7 @@ compFileCMD (Eof (HandleComp h)) = do
     addInclude "<stdbool.h>"
     i <- freshId
     let sym = 'v':show i
+    touchVar h
     addLocal [cdecl| int $id:sym; |]
     addStm   [cstm| $id:sym = feof($id:h); |]
     return $ varExp i

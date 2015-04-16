@@ -63,6 +63,7 @@ library
     mainland-pretty,
     mtl,
     tagged,
-    BoundedChan
+    BoundedChan,
+    srcloc
 
   hs-source-dirs: src

@@ -102,6 +102,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Monoid
 import Text.PrettyPrint.Mainland
+import Data.Loc
 
 -- | Code generation flags
 data Flags = Flags
@@ -123,6 +124,8 @@ data CEnv = CEnv
     , _locals     :: [C.InitGroup]
     , _stms       :: [C.Stm]
     , _finalStms  :: [C.Stm]
+
+    , _usedVars   :: Set.Set C.Id
     }
 
 makeLenses ''CEnv
@@ -142,6 +145,7 @@ defaultCEnv fl = CEnv
     , _locals     = mempty
     , _stms       = mempty
     , _finalStms  = mempty
+    , _usedVars   = mempty
     }
 
 -- | Code generation type constraints
@@ -197,6 +201,10 @@ gensym :: MonadC m => String -> m String
 gensym s = do
     u <- freshId
     return $ s ++ show u
+
+-- | Mark an identifier as used in this context.
+touchVar :: (MonadC m, ToIdent v) => v -> m ()
+touchVar v = usedVars %= Set.insert (toIdent v (SrcLoc NoLoc))
 
 -- | Add an include pre-processor directive. Specify '<>' or '""' around
 -- the file name.
