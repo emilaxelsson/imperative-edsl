@@ -12,6 +12,7 @@ module Language.Embedded.Concurrent (
 import Control.Applicative
 #endif
 import Control.Monad.Operational.Compositional
+import Data.Proxy
 import Data.Typeable
 import Language.Embedded.Imperative
 import Language.C.Quote.C
