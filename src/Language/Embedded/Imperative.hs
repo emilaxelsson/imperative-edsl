@@ -81,6 +81,7 @@ import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Interpretation
 
+import Data.Char (isSpace)
 
 
 ----------------------------------------------------------------------------------------------------
@@ -293,7 +294,7 @@ readWord h = do
     then return ""
     else do
       c  <- IO.hGetChar h
-      if c == ' '
+      if isSpace c
       then return ""
       else do
         cs <- readWord h
