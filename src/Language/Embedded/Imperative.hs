@@ -49,7 +49,9 @@ module Language.Embedded.Imperative
   , getArr
   , setArr
   , iff
+  , ifE
   , while
+  , whileE
   , break
   , open
   , close
@@ -402,6 +404,20 @@ while :: (ControlCMD (IExp instr) :<: instr)
     -> ProgramT instr m ()
     -> ProgramT instr m ()
 while b t = singleE $ While b t
+
+whileE
+    :: ( IPred instr a
+       , ControlCMD (IExp instr)           :<: instr
+       , RefCMD (IPred instr) (IExp instr) :<: instr
+       , Monad m
+       )
+    => ProgramT instr m (IExp instr Bool)
+    -> ProgramT instr m (IExp instr a)
+    -> ProgramT instr m (IExp instr a)
+whileE b t = do
+    r <- newRef
+    while b (t >>= setRef r)
+    getRef r
 
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
