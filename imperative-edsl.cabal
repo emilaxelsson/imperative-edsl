@@ -35,6 +35,7 @@ library
 
   default-extensions:
     ConstraintKinds
+    DefaultSignatures
     DeriveDataTypeable
     DeriveFunctor
     FlexibleContexts

@@ -72,7 +72,7 @@ module Language.Embedded.Imperative
 
 import Prelude hiding (break)
 
-import Control.Monad (when)
+import Control.Monad
 import Data.Array.IO
 import Data.Char (isSpace)
 import Data.IORef
@@ -162,6 +162,13 @@ instance MapInstr (RefCMD exp)
     imap _ (GetRef r)          = GetRef r
     imap _ (SetRef r a)        = SetRef r a
 
+instance CompExp exp => DryInterp (RefCMD exp)
+  where
+    dryInterp NewRef       = liftM RefComp fresh
+    dryInterp (InitRef _)  = liftM RefComp fresh
+    dryInterp (GetRef _)   = liftM varExp fresh
+    dryInterp (SetRef _ _) = return ()
+
 type instance IExp (RefCMD e)       = e
 type instance IExp (RefCMD e :+: i) = e
 
@@ -186,6 +193,12 @@ instance MapInstr (ArrCMD exp)
     imap _ (GetArr i arr)   = GetArr i arr
     imap _ (SetArr i a arr) = SetArr i a arr
 
+instance CompExp exp => DryInterp (ArrCMD exp)
+  where
+    dryInterp (NewArr _ _)   = liftM ArrComp $ freshStr "a"
+    dryInterp (GetArr _ _)   = liftM varExp fresh
+    dryInterp (SetArr _ _ _) = return ()
+
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
 
@@ -200,6 +213,12 @@ instance MapInstr (ControlCMD exp)
     imap g (If c t f)        = If c (g t) (g f)
     imap g (While cont body) = While (g cont) (g body)
     imap _ Break             = Break
+
+instance DryInterp (ControlCMD exp)
+  where
+    dryInterp (If _ _ _)  = return ()
+    dryInterp (While _ _) = return ()
+    dryInterp Break       = return ()
 
 type instance IExp (ControlCMD e)       = e
 type instance IExp (ControlCMD e :+: i) = e
@@ -236,6 +255,14 @@ instance MapInstr (FileCMD exp)
     imap _ (FGet hdl)            = FGet hdl
     imap _ (FEof hdl)            = FEof hdl
 
+instance CompExp exp => DryInterp (FileCMD exp)
+  where
+    dryInterp (FOpen _ _)     = liftM HandleComp $ freshStr "h"
+    dryInterp (FClose _)      = return ()
+    dryInterp (FPrintf _ _ _) = return ()
+    dryInterp (FGet _)        = liftM varExp fresh
+    dryInterp (FEof _)        = liftM varExp fresh
+
 type instance IExp (FileCMD e)       = e
 type instance IExp (FileCMD e :+: i) = e
 
@@ -252,6 +279,13 @@ instance MapInstr (CallCMD exp)
     imap _ (AddDefinition def)  = AddDefinition def
     imap _ (CallFun fun args)   = CallFun fun args
     imap _ (CallProc proc args) = CallProc proc args
+
+instance CompExp exp => DryInterp (CallCMD exp)
+  where
+    dryInterp (AddInclude _)    = return ()
+    dryInterp (AddDefinition _) = return ()
+    dryInterp (CallFun _ _)     = liftM varExp fresh
+    dryInterp (CallProc _ _)    = return ()
 
 type instance IExp (CallCMD e)       = e
 type instance IExp (CallCMD e :+: i) = e

@@ -20,10 +20,12 @@
 
 module Control.Monad.Operational.Compositional
     ( module Data.ALaCarte
+      -- * Program monad
     , ProgramT
     , Program
     , singleton
     , singleInj
+      -- * Interpretation
     , MapInstr (..)
     , liftProgram
     , interpretWithMonadT
@@ -36,6 +38,11 @@ module Control.Monad.Operational.Compositional
     , viewT
     , view
     , unview
+      -- * Traversing programs
+    , DryInterp (..)
+    , observe
+    , fresh
+    , freshStr
     ) where
 
 
@@ -43,11 +50,16 @@ module Control.Monad.Operational.Compositional
 import Control.Applicative (Applicative (..))
 import Control.Monad.Identity
 import Control.Monad.Trans
+import Control.Monads
 import Data.Typeable
 
 import Data.ALaCarte
 
 
+
+----------------------------------------------------------------------------------------------------
+-- * Program monad
+----------------------------------------------------------------------------------------------------
 
 -- | Representation of programs parameterized by the primitive instructions
 data ProgramT instr m a
@@ -87,6 +99,12 @@ singleton = Instr
 -- | Make a program from a single primitive instruction
 singleInj :: (i :<: instr) => i (ProgramT instr m) a -> ProgramT instr m a
 singleInj = Instr . inj
+
+
+
+----------------------------------------------------------------------------------------------------
+-- * Interpretation
+----------------------------------------------------------------------------------------------------
 
 -- | Class for mapping over the sub-programs of instructions
 class MapInstr instr
@@ -171,4 +189,33 @@ view = runIdentity . viewT
 unview :: Monad m => ProgramViewT instr m a -> ProgramT instr m a
 unview (Return a) = return a
 unview (i :>>= k) = singleton i >>= k
+
+
+
+----------------------------------------------------------------------------------------------------
+-- * Traversing programs
+----------------------------------------------------------------------------------------------------
+
+-- | Dry (effect-less) interpretation of an instruction. This class is like 'Interp' without the
+-- monad parameter, so it cannot have different instances for different monads.
+class DryInterp instr
+  where
+    -- | Dry interpretation of an instruction. This function is like 'interp' except that it
+    -- interprets in any monad that can supply fresh variables.
+    dryInterp :: MonadSupply m => instr m a -> m a
+
+-- | Interpretation of a program as a combination of dry interpretation and effectful observation
+observe :: (DryInterp instr, MapInstr instr, MonadSupply m)
+    => (forall a . instr m a -> a -> m ())  -- ^ Function for observing instructions
+    -> Program instr a
+    -> m a
+observe obs = interpretWithMonad $ \i -> do
+    a <- dryInterp i
+    obs i a
+    return a
+
+instance (DryInterp i1, DryInterp i2) => DryInterp (i1 :+: i2)
+  where
+    dryInterp (Inl i) = dryInterp i
+    dryInterp (Inr i) = dryInterp i
 
