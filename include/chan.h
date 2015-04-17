@@ -1,4 +1,5 @@
-#ifdef __CHAN_H__
+#ifndef __CHAN_H__
+#define __CHAN_H__
 #include <pthread.h>
 
 typedef struct chan *chan_t;

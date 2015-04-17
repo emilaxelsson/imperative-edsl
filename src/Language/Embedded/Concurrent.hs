@@ -136,7 +136,11 @@ killThread = singleton . inj . Kill
 waitThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
 waitThread = singleton . inj . Wait
 
--- | Create a new channel.
+-- | Create a new channel. Writing a reference type to a channel will copy the
+--   *reference* into the queue, not its contents.
+--
+--   We'll likely want to change this, actually copying arrays and the like
+--   into the queue instead of sharing them across threads.
 newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
         => IExp instr Int
         -> ProgramT instr m (Chan a)
@@ -186,15 +190,21 @@ compChanCMD :: forall exp prog a. CompExp exp
             => ChanCMD (VarPred exp) exp prog a
             -> CGen a
 compChanCMD cmd@(NewChan sz) = do
-  addLocalInclude "queue.h"
+  addLocalInclude "chan.h"
   t <- compTypePP2 (Proxy :: Proxy exp) cmd
   sz' <- compExp sz
   c <- ChanComp <$> freshId
-  addGlobal [cedecl| typename chan_t $id:c = chan_new($sz',sizeof($ty:t)); |]
+  addGlobal [cedecl| typename chan_t $id:c; |]
+  addStm [cstm| $id:c = chan_new(sizeof($ty:t), $sz'); |]
   return c
 compChanCMD (WriteChan c x) = do
   x' <- compExp x
-  addStm [cstm| chan_write($id:c, $x'); |]
+  t <- compType x
+  ident <- freshId
+  let name = 'v':show ident
+  addLocal [cdecl| $ty:t $id:name; |]
+  addStm [cstm| $id:name = $x'; |]
+  addStm [cstm| chan_write($id:c, &$id:name); |]
 compChanCMD cmd@(ReadChan c) = do
   t <- compTypeP cmd
   ident <- freshId
@@ -202,7 +212,7 @@ compChanCMD cmd@(ReadChan c) = do
       var = varExp ident
   e <- compExp var
   addLocal [cdecl| $ty:t $id:name; |]
-  addStm [cstm| $e = chan_read($id:c); |]
+  addStm [cstm| chan_read($id:c, &$id:name); |]
   return var
 
 instance Interp ThreadCMD CGen where
