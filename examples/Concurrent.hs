@@ -52,7 +52,10 @@ waiting = do
   waitThread t
   printf "Main thread printing %d\n" (1 :: Expr Int)
 
--- | Compile a program.
+-- | Compile a program. To compile the resulting C program:
+--
+--       gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+--
 compileProg :: (MapInstr instr, Interp instr CGen)
             => Program instr a
             -> Doc
