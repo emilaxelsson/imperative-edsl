@@ -53,7 +53,7 @@ waiting = do
   printf "Main thread printing %d\n" (1 :: Expr Int)
 
 -- | Compile a program.
-compileProg :: (MapInstr instr, Interp instr (CGenT IO))
+compileProg :: (MapInstr instr, Interp instr CGen)
             => Program instr a
-            -> IO Doc
+            -> Doc
 compileProg = prettyCGen . liftSharedLocals . wrapMain . interpret
