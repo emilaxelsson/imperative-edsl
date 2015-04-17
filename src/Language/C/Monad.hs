@@ -366,11 +366,9 @@ wrapMain prog = do
 --   to the top level. This relies on variable IDs being unique across
 --   programs, not just across the functions in which they are declared.
 --
---   TODO: determining shared vars on the fly is O(n log n) while this is
---         O(m * n) where m is the number of functions and n the number of
---         shared vars - may be more efficient?
-liftSharedVars :: MonadC m => m a -> m ()
-liftSharedVars prog = do
+--   Only affects locally declared vars, not function arguments.
+liftSharedLocals :: MonadC m => m a -> m ()
+liftSharedLocals prog = do
     prog
     uvs <- Set.unions . Map.elems . onlyShared . _funUsedVars <$> get
     -- This could be more efficient by just filtering each function for the
@@ -382,13 +380,14 @@ liftSharedVars prog = do
         sharedDecls = map (\ig -> C.DecDef ig (SrcLoc NoLoc)) sharedList
     void $ globals <<.= (globs ++ sharedDecls)
   where
-    -- Only keep vars shared between functions
+    -- Only keep vars shared between functions by intersecting with the union
+    -- of all other funs' uvs. TODO: optimize.
     onlyShared :: Map.Map String (Set.Set C.Id) -> Map.Map String (Set.Set C.Id)
     onlyShared alluvs =
-      Map.map (\uvs -> foldr Set.intersection uvs uvlist) alluvs
+        Map.mapWithKey funUVSIntersects alluvs
       where
-        uvlist :: [Set.Set C.Id]
-        uvlist = Map.elems alluvs
+        funUVSIntersects fun uvs =
+          Set.intersection uvs $ Set.unions $ Map.elems $ Map.delete fun alluvs
 
 -- | Remove all declarations matching a predicate from the given function
 --   and return them in a separate list.
@@ -399,9 +398,12 @@ extractDecls pred (C.FuncDef (C.Func ds id decl params bis loc') loc) =
   case foldr perBI ([], Set.empty) bis of
     (bis', igs) -> (C.FuncDef (C.Func ds id decl params bis' loc') loc, igs)
   where
-    perBI decl@(C.BlockDecl (C.InitGroup ds attrs is loc)) (bis, igs) =
+    perBI decl@(C.BlockDecl ig@(C.InitGroup ds attrs is loc)) (bis, igs) =
       case partition (\(C.Init id _ _ _ _ _) -> pred id) is of
-        ([], unmach) -> (decl : bis, igs)
+        ([], unmach) ->
+          (decl : bis, igs)
+        (match, []) ->
+          (bis, Set.insert ig igs)
         (match, unmatch) ->
           (C.BlockDecl (C.InitGroup ds attrs unmatch loc) : bis,
            Set.insert (C.InitGroup ds attrs match loc) igs)

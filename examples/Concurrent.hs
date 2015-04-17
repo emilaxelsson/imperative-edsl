@@ -56,4 +56,4 @@ waiting = do
 compileProg :: (MapInstr instr, Interp instr (CGenT IO))
             => Program instr a
             -> IO Doc
-compileProg = prettyCGen . liftSharedVars . wrapMain . interpret
+compileProg = prettyCGen . liftSharedLocals . wrapMain . interpret
