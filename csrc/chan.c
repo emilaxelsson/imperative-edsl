@@ -29,7 +29,6 @@ chan_t chan_new(int elem_size, int max_elems) {
   c->readoff = c->writeoff = 0;
   pthread_mutex_init(&c->mutex, NULL);
   pthread_cond_init(&c->cond, NULL);
-  printf("new chan with elem_size = %d, max_elems = %d\n", elem_size, max_elems);
   return c;
 }
 
