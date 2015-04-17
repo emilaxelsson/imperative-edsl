@@ -148,14 +148,20 @@ defaultCEnv fl = CEnv
 type MonadC m = (Functor m, Applicative m, Monad m, MonadState CEnv m, MonadException m, MonadFix m)
 
 -- | The C code generation monad transformer
-newtype CGenT t a = CGenT { runCGenT :: StateT CEnv (ExceptionT t) a }
+newtype CGenT t a = CGenT { unCGenT :: StateT CEnv (ExceptionT t) a }
   deriving (Functor, Applicative, Monad, MonadException, MonadState CEnv, MonadIO, MonadFix)
 
-type CGen = CGenT IO
+type CGen = CGenT Identity
 
 -- | Run the C code generation monad
-runCGen :: CGen a -> CEnv -> IO (a, CEnv)
-runCGen m s = runExceptionT (runStateT (runCGenT m) s) >>= liftException
+runCGenT :: Monad m => CGenT m a -> CEnv -> m (a, CEnv)
+runCGenT m s = do
+    Right ac <- runExceptionT (runStateT (unCGenT m) s)
+    return ac
+
+-- | Run the C code generation monad
+runCGen :: CGen a -> CEnv -> (a, CEnv)
+runCGen m = runIdentity . runCGenT m
 
 -- | Extract a compilation unit from the 'CEnv' state
 cenvToCUnit :: CEnv -> [C.Definition]
@@ -174,10 +180,13 @@ cenvToCUnit env =
     globs  = reverse $ _globals env
 
 -- | Generate a C document
-prettyCGen :: CGen a -> IO Doc
-prettyCGen ma = do
-    (_,cenv) <- runCGen ma (defaultCEnv Flags)
+prettyCGenT :: Monad m => CGenT m a -> m Doc
+prettyCGenT ma = do
+    (_,cenv) <- runCGenT ma (defaultCEnv Flags)
     return $ ppr $ cenvToCUnit cenv
+
+prettyCGen :: CGen a -> Doc
+prettyCGen = runIdentity . prettyCGenT
 
 -- | Retrieve a fresh identifier
 freshId :: MonadC m => m Integer
