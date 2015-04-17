@@ -7,6 +7,7 @@ import Control.Applicative
 
 -- For compilation
 import Language.C.Monad
+import Text.PrettyPrint.Mainland (Doc)
 
 type Pred = VarPred Expr
 
@@ -28,7 +29,7 @@ deadlock = do
   printf "This never happens: %d\n" (4 :: Expr Int)
 
 -- | Map a function over a file, then print the results. Mapping and printing
---   happen in separate threads. Runs forever.
+--   happen in separate threads.
 mapFile :: (Expr Float -> Expr Float) -> FilePath -> Program L ()
 mapFile f i = do
   c1 <- newChan 5
@@ -38,10 +39,11 @@ mapFile f i = do
   t2 <- fork $ while (pure true) $ do
     readChan c2 >>= printf "%f\n"
   fi <- open i
-  while (Not <$> feof fi) $ do
-    fget fi >>= writeChan c1
-  close fi
-  waitThread t2
+  t3 <- fork $ do
+    while (Not <$> feof fi) $ do
+      fget fi >>= writeChan c1
+    close fi
+  waitThread t3
 
 -- | Waiting for thread completion.
 waiting :: Program L ()
@@ -49,3 +51,9 @@ waiting = do
   t <- fork $ printf "Forked thread printing %d\n" (0 :: Expr Int)
   waitThread t
   printf "Main thread printing %d\n" (1 :: Expr Int)
+
+-- | Compile a program.
+compileProg :: (MapInstr instr, Interp instr (CGenT IO))
+            => Program instr a
+            -> IO Doc
+compileProg = prettyCGen . liftSharedVars . wrapMain . interpret
