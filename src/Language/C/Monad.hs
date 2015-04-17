@@ -103,6 +103,7 @@ import qualified Data.Set as Set
 import Data.Monoid
 import Text.PrettyPrint.Mainland
 import Data.Loc
+import Data.List (partition)
 
 -- | Code generation flags
 data Flags = Flags
@@ -353,5 +354,54 @@ inModule name prg = do
 -- | Wrap a program in a main function
 wrapMain :: MonadC m => m a -> m ()
 wrapMain prog = do
-    (_,_,params,items) <- inNewFunction $ prog >> addStm [cstm| return 0; |]
+    (_,uvs,params,items) <- inNewFunction $ prog >> addStm [cstm| return 0; |]
+    setUsedVars "main" uvs
     addGlobal [cedecl| int main($params:params){ $items:items }|]
+
+-- | Lift the declarations of all variables that are shared between functions
+--   to the top level. This relies on variable IDs being unique across
+--   programs, not just across the functions in which they are declared.
+--
+--   TODO: determining shared vars on the fly is O(n log n) while this is
+--         O(m * n) where m is the number of functions and n the number of
+--         shared vars - may be more efficient?
+liftSharedVars :: MonadC m => m a -> m ()
+liftSharedVars prog = do
+    prog
+    uvs <- Set.unions . Map.elems . onlyShared . _funUsedVars <$> get
+    -- This could be more efficient by just filtering each function for the
+    -- vars we *know* are in there, provided that we had a Map from function
+    -- names to bodies.
+    oldglobs <- _globals <$> get
+    let (globs, shared) = unzip $ map (extractDecls (`Set.member` uvs)) oldglobs
+        sharedList = Set.toList $ Set.unions shared
+        sharedDecls = map (\ig -> C.DecDef ig (SrcLoc NoLoc)) sharedList
+    void $ globals <<.= (globs ++ sharedDecls)
+  where
+    -- Only keep vars shared between functions
+    onlyShared :: Map.Map String (Set.Set C.Id) -> Map.Map String (Set.Set C.Id)
+    onlyShared alluvs =
+      Map.map (\uvs -> foldr Set.intersection uvs uvlist) alluvs
+      where
+        uvlist :: [Set.Set C.Id]
+        uvlist = Map.elems alluvs
+
+-- | Remove all declarations matching a predicate from the given function
+--   and return them in a separate list.
+extractDecls :: (C.Id -> Bool)
+             -> C.Definition
+             -> (C.Definition, Set.Set C.InitGroup)
+extractDecls pred (C.FuncDef (C.Func ds id decl params bis loc') loc) =
+  case foldr perBI ([], Set.empty) bis of
+    (bis', igs) -> (C.FuncDef (C.Func ds id decl params bis' loc') loc, igs)
+  where
+    perBI decl@(C.BlockDecl (C.InitGroup ds attrs is loc)) (bis, igs) =
+      case partition (\(C.Init id _ _ _ _ _) -> pred id) is of
+        ([], unmach) -> (decl : bis, igs)
+        (match, unmatch) ->
+          (C.BlockDecl (C.InitGroup ds attrs unmatch loc) : bis,
+           Set.insert (C.InitGroup ds attrs match loc) igs)
+    perBI bi (bis, igs) =
+      (bi:bis, igs)
+extractDecls _ decl =
+  (decl, Set.empty)
