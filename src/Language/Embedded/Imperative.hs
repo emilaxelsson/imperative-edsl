@@ -7,7 +7,7 @@
 module Language.Embedded.Imperative
   ( module Data.TypePredicates
   , module Control.Monad.Operational.Compositional
-  , module Language.Embedded.Interpretation
+  , module Language.Embedded.Expression
 
     -- * Working with instruction sets
   , IPred
@@ -81,7 +81,7 @@ import Data.Constraint
 import Data.ALaCarte
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
-import Language.Embedded.Interpretation
+import Language.Embedded.Expression
 
 import Data.Char (isSpace)
 

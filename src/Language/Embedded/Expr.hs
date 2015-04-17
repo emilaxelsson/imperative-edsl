@@ -13,7 +13,7 @@ import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
 import Language.C.Monad
-import Language.Embedded.Interpretation
+import Language.Embedded.Expression
 
 
 

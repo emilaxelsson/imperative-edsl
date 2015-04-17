@@ -23,11 +23,11 @@ library
     Data.ALaCarte
     Data.TypePredicates
     Language.C.Monad
-    Language.Embedded.Interpretation
-    Language.Embedded.Expr
+    Language.Embedded.Expression
     Language.Embedded.Imperative
-    Language.Embedded.Backend.C
     Language.Embedded.Concurrent
+    Language.Embedded.Backend.C
+    Language.Embedded.Expr
 
   -- other-modules:
 

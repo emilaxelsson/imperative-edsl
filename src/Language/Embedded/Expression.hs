@@ -1,7 +1,5 @@
-{-# LANGUAGE UndecidableInstances #-}
-
--- | Interpretation of expressions
-module Language.Embedded.Interpretation
+-- | Interface for pure expressions
+module Language.Embedded.Expression
   ( VarId
   , VarPred
   , EvalExp(..)
