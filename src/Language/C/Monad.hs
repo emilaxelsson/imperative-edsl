@@ -252,11 +252,15 @@ addArg arg = args %= (arg:)
 
 -- | Add a local declaration (including initializations)
 addLocal :: MonadC m => C.InitGroup -> m ()
-addLocal def = locals %= (def:)
+addLocal def = do
+  locals %= (def:)
+  case def of
+    C.InitGroup _ _ is _ -> forM_ is $ \(C.Init id _ _ _ _ _) -> touchVar id
+    _                    -> return ()
 
 -- | Add multiple local declarations
 addLocals :: MonadC m => [C.InitGroup] -> m ()
-addLocals defs = locals %= (reverse defs++)
+addLocals defs = mapM_ addLocal defs -- locals %= (reverse defs++)
 
 -- | Add a statement to the current block
 addStm :: MonadC m => C.Stm -> m ()
