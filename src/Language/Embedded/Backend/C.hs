@@ -68,15 +68,6 @@ compArrCMD (NewArr size ini) = do
     addLocal [cdecl| $ty:t $id:sym[ $v ]; |]
     addStm   [cstm| memset($id:sym, $i, sizeof( $id:sym )); |]
     return $ ArrComp sym
--- compArrCMD (NewArr size init) = do
---     addInclude "<string.h>"
---     sym <- gensym "a"
---     v   <- compExp size
---     i   <- compExp init
---     addLocal [cdecl| float* $id:sym = calloc($v, sizeof(float)); |] -- todo: get real type
---     addFinalStm [cstm| free($id:sym); |]
---     addInclude "<stdlib.h>"
---     return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar
     i     <- compExp expi
