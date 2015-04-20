@@ -58,10 +58,11 @@ module Language.Embedded.Imperative
   , while
   , whileE
   , break
-  , PrintfArg
   , fopen
   , fclose
   , feof
+  , PrintfArg
+  , PrintfType
   , fPrintf
   , fput
   , fget
@@ -153,13 +154,6 @@ data FunArg pred exp
   where
     FunArg :: pred a => exp a -> FunArg pred exp
 
-class Typeable a => Scannable a
-  where
-    scanFormatSpecifier :: Proxy a -> String
-
-instance Scannable Int   where scanFormatSpecifier _ = "%d"
-instance Scannable Float where scanFormatSpecifier _ = "%f"
-
 
 
 ----------------------------------------------------------------------------------------------------
@@ -244,6 +238,13 @@ data Handle
 stdin, stdout :: Handle
 stdin  = HandleComp "stdin"
 stdout = HandleComp "stdout"
+
+class Typeable a => Scannable a
+  where
+    scanFormatSpecifier :: Proxy a -> String
+
+instance Scannable Int   where scanFormatSpecifier _ = "%d"
+instance Scannable Float where scanFormatSpecifier _ = "%f"
 
 data FileCMD exp (prog :: * -> *) a
   where
@@ -456,9 +457,23 @@ fclose = singleE . FClose
 feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
 feof = singleE . FEof
 
-fPrintf :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
-    Handle -> String -> IExp instr a -> ProgramT instr m ()
-fPrintf h format a = singleE $ FPrintf h format $ [FunArg a]
+class PrintfType r
+  where
+    type PrintfExp r :: * -> *
+    fprf :: Handle -> String -> [FunArg PrintfArg (PrintfExp r)] -> r
+
+instance (FileCMD (IExp instr) :<: instr) => PrintfType (ProgramT instr m ())
+  where
+    type PrintfExp (ProgramT instr m ()) = IExp instr
+    fprf h form as = singleE $ FPrintf h form (reverse as)
+
+instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
+  where
+    type PrintfExp (exp a -> r) = exp
+    fprf h form as = \a -> fprf h form (FunArg a : as)
+
+fPrintf :: PrintfType r => Handle -> String -> r
+fPrintf h format = fprf h format []
 
 fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()
@@ -468,8 +483,7 @@ fget :: (Read a, Scannable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: i
     Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
-printf :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
-    String -> IExp instr a -> ProgramT instr m ()
+printf :: PrintfType r => String -> r
 printf = fPrintf stdout
 
 getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
