@@ -344,7 +344,7 @@ runFileCMD (FGet h)   = do
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
-runTimeCMD GetTime | False = undefined
+runTimeCMD GetTime = error "runTimeCMD not implemented for GetTime"
 
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp) IO where interp = runRefCMD
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
