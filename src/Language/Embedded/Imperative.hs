@@ -25,6 +25,7 @@ module Language.Embedded.Imperative
   , Arr (..)
   , ArrCMD (..)
   , ControlCMD (..)
+  , IOMode (..)
   , Handle (..)
   , FileCMD (..)
   , ConsoleCMD (..)
@@ -71,6 +72,7 @@ import Control.Monad (when)
 import Data.Array.IO
 import Data.IORef
 import Data.Typeable
+import System.IO (IOMode (..))
 import qualified System.IO as IO
 import System.IO.Unsafe
 import Text.Printf (PrintfArg)
@@ -216,9 +218,11 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
+
+
 data FileCMD exp (prog :: * -> *) a
   where
-    Open  :: FilePath            -> FileCMD exp prog Handle -- todo: allow specifying read/write mode
+    Open  :: FilePath  -> IOMode -> FileCMD exp prog Handle
     Close :: Handle              -> FileCMD exp prog ()
     Put   :: Handle -> exp Float -> FileCMD exp prog ()
     Get   :: Handle              -> FileCMD exp prog (exp Float) -- todo: generalize to arbitrary types
@@ -226,11 +230,11 @@ data FileCMD exp (prog :: * -> *) a
 
 instance MapInstr (FileCMD exp)
   where
-    imap _ (Open file) = Open file
-    imap _ (Close hdl) = Close hdl
-    imap _ (Put hdl a) = Put hdl a
-    imap _ (Get hdl)   = Get hdl
-    imap _ (Eof hdl)   = Eof hdl
+    imap _ (Open file mode) = Open file mode
+    imap _ (Close hdl)      = Close hdl
+    imap _ (Put hdl a)      = Put hdl a
+    imap _ (Get hdl)        = Get hdl
+    imap _ (Eof hdl)        = Eof hdl
 
 type instance IExp  (FileCMD e)       = e
 type instance IExp  (FileCMD e :+: i) = e
@@ -303,7 +307,7 @@ readWord h = do
         return (c:cs)
 
 runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
-runFileCMD (Open path)            = fmap HandleEval $ IO.openFile path IO.ReadWriteMode
+runFileCMD (Open file mode)       = fmap HandleEval $ IO.openFile file mode
 runFileCMD (Close (HandleEval h)) = IO.hClose h
 runFileCMD (Put (HandleEval h) a) = IO.hPrint h (evalExp a)
 runFileCMD (Get (HandleEval h))   = do
@@ -422,8 +426,8 @@ whileE b t = do
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
-open :: (FileCMD (IExp instr) :<: instr) => FilePath -> ProgramT instr m Handle
-open = singleE . Open
+open :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
+open file = singleE . Open file
 
 close :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 close = singleE . Close

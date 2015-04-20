@@ -102,17 +102,24 @@ compControlCMD (While cont body) = do
     addStm [cstm| while (1) {$items:bodyc} |]
 compControlCMD Break = addStm [cstm| break; |]
 
+compIOMode :: IOMode -> String
+compIOMode ReadMode      = "r"
+compIOMode WriteMode     = "w"
+compIOMode AppendMode    = "a"
+compIOMode ReadWriteMode = "r+"
+
 -- | Compile `FileCMD`
 compFileCMD :: (CompExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp CGen a -> CGen a
-compFileCMD (Open path) = do
+compFileCMD (Open path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
     sym <- gensym "v"
     addLocal [cdecl| typename FILE * $id:sym; |]
-    addStm   [cstm| $id:sym = fopen($id:path', "r+"); |]
+    addStm   [cstm| $id:sym = fopen($id:path',$string:mode'); |]
     return $ HandleComp sym
   where
     path' = show path
+    mode' = compIOMode mode
 compFileCMD (Close (HandleComp h)) = do
     touchVar h
     addStm [cstm| fclose($id:h); |]

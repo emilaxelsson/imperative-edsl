@@ -38,7 +38,7 @@ mapFile f i = do
     readChan c1 >>= writeChan c2 . f
   t2 <- fork $ while (pure true) $ do
     readChan c2 >>= printf "%f\n"
-  fi <- open i
+  fi <- open i ReadMode
   t3 <- fork $ do
     while (Not <$> feof fi) $ do
       fget fi >>= writeChan c1
