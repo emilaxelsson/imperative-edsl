@@ -27,6 +27,8 @@ module Language.Embedded.Imperative
   , ControlCMD (..)
   , IOMode (..)
   , Handle (..)
+  , stdin
+  , stdout
   , FileCMD (..)
   , ConsoleCMD (..)
   , TimeCMD (..)
@@ -218,7 +220,9 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
-
+stdin, stdout :: Handle
+stdin  = HandleComp "stdin"
+stdout = HandleComp "stdout"
 
 data FileCMD exp (prog :: * -> *) a
   where
@@ -306,16 +310,23 @@ readWord h = do
         cs <- readWord h
         return (c:cs)
 
+evalHandle :: Handle -> IO.Handle
+evalHandle (HandleEval h)        = h
+evalHandle (HandleComp "stdin")  = IO.stdin
+evalHandle (HandleComp "stdout") = IO.stdout
+
 runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
-runFileCMD (FOpen file mode)       = fmap HandleEval $ IO.openFile file mode
-runFileCMD (FClose (HandleEval h)) = IO.hClose h
-runFileCMD (FPut (HandleEval h) a) = IO.hPrint h (evalExp a)
-runFileCMD (FGet (HandleEval h))   = do
-    w <- readWord h
+runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
+runFileCMD (FClose (HandleEval h))        = IO.hClose h
+runFileCMD (FClose (HandleComp "stdin"))  = return ()
+runFileCMD (FClose (HandleComp "stdout")) = return ()
+runFileCMD (FPut h a)        = IO.hPrint (evalHandle h) (evalExp a)
+runFileCMD (FGet h)          = do
+    w <- readWord $ evalHandle h
     case reads w of
         [(f,"")] -> return $ litExp f
         _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
-runFileCMD (FEof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
+runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
 runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
