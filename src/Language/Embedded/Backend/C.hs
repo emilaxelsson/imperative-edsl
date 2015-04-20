@@ -100,7 +100,6 @@ compControlCMD (While cont body) = do
           _ -> addStm [cstm| if (! $contc) {break;} |]
         body
     addStm [cstm| while (1) {$items:bodyc} |]
-      -- TODO The b program should be re-executed at the end of each iteration
 compControlCMD Break = addStm [cstm| break; |]
 
 -- | Compile `FileCMD`
