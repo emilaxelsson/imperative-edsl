@@ -17,6 +17,15 @@ instance ToIdent (Ref a)
   where
     toIdent (RefComp r) = C.Id $ 'v':show r
 
+freshVar :: forall exp a. (CompExp exp, VarPred exp a) => CGen (exp a)
+freshVar = do
+    v <- varExp <$> freshId
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    C.Var n _ <- compExp v
+    touchVar n
+    addLocal [cdecl| $ty:t $id:n; |]
+    return v
+
 -- | Compile `RefCMD`
 compRefCMD :: forall exp prog a. CompExp exp
            => RefCMD (VarPred exp) exp prog a -> CGen a
@@ -32,15 +41,10 @@ compRefCMD (InitRef exp) = do
     addLocal [cdecl| $ty:t $id:r; |]
     addStm   [cstm| $id:r = $v; |]
     return r
-compRefCMD cmd@(GetRef ref) = do
-    t <- compTypeP cmd
-    ident <- freshId
-    let v = varExp ident
-        sym = 'v':show ident
+compRefCMD (GetRef ref) = do
+    v <- freshVar
     e <- compExp v
-    touchVar sym
-    addLocal [cdecl| $ty:t $id:sym; |]
-    addStm   [cstm| $e = $id:ref; |]
+    addStm [cstm| $e = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
     v <- compExp exp
