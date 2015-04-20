@@ -123,10 +123,13 @@ compFileCMD (FOpen path mode) = do
 compFileCMD (FClose (HandleComp h)) = do
     touchVar h
     addStm [cstm| fclose($id:h); |]
-compFileCMD (FPut (HandleComp h) exp) = do
-    v <- compExp exp
+compFileCMD (FPrintf (HandleComp h) form as) = do
+    addInclude "<stdio.h>"
     touchVar h
-    addStm [cstm| fprintf($id:h, "%f ", $v); |]
+    let h'    = [cexp| $id:h |]
+        form' = [cexp| $id:form |]
+    as' <- fmap ([h',form']++) $ sequence [compExp a | FunArg a <- as]
+    addStm [cstm| fprintf($args:as'); |]
 compFileCMD (FGet (HandleComp h)) = do
     (v,n) <- freshVar
     touchVar h
@@ -138,14 +141,6 @@ compFileCMD (FEof (HandleComp h)) = do
     touchVar h
     addStm [cstm| $id:n = feof($id:h); |]
     return v
-
--- | Compile `ConsoleCMD`
-compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
-compConsoleCMD (Printf format as) = do
-    addInclude "<stdio.h>"
-    let format' = show format
-    as' <- fmap ([cexp| $id:format' |] :) $ sequence [compExp a | FunArg a <- as]
-    addStm [cstm| printf($args:as'); |]
 
 -- | Generate a time sampling function
 getTimeDef :: C.Definition
@@ -176,6 +171,5 @@ instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen wh
 instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
 instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
-instance CompExp exp                         => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
 instance (CompExp exp, VarPred exp Double)   => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
 

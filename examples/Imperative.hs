@@ -58,7 +58,6 @@ type CMD2
     =   RefCMD Pred Expr
     :+: ControlCMD Expr
     :+: FileCMD Expr
-    :+: ConsoleCMD Expr
 
 summer :: Program CMD2 ()
 summer = do

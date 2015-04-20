@@ -15,7 +15,6 @@ type L =
   ThreadCMD :+:
   ChanCMD Pred Expr :+:
   ControlCMD Expr :+:
-  ConsoleCMD Expr :+:
   FileCMD Expr
 
 -- | Deadlocks due to channel becoming full.

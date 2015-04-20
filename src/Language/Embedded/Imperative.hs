@@ -33,7 +33,6 @@ module Language.Embedded.Imperative
   , stdin
   , stdout
   , FileCMD (..)
-  , ConsoleCMD (..)
   , TimeCMD (..)
 
     -- * Running commands
@@ -41,7 +40,6 @@ module Language.Embedded.Imperative
   , runArrCMD
   , runControlCMD
   , runFileCMD
-  , runConsoleCMD
   , runTimeCMD
 
     -- * User interface
@@ -59,12 +57,13 @@ module Language.Embedded.Imperative
   , while
   , whileE
   , break
+  , PrintfArg
   , fopen
   , fclose
+  , feof
+  , fPrintf
   , fput
   , fget
-  , feof
-  , PrintfArg
   , printf
   , getTime
   ) where
@@ -247,35 +246,23 @@ instance SimpleType Float
 
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen  :: FilePath -> IOMode -> FileCMD exp prog Handle
-    FClose :: Handle             -> FileCMD exp prog ()
-    FEof   :: Handle             -> FileCMD exp prog (exp Bool)
-    FPut   :: (Show a, SimpleType a)                => Handle -> exp a -> FileCMD exp prog ()
-    FGet   :: (Read a, SimpleType a, VarPred exp a) => Handle          -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                              -> FileCMD exp prog Handle
+    FClose  :: Handle                                          -> FileCMD exp prog ()
+    FEof    :: Handle                                          -> FileCMD exp prog (exp Bool)
+    FPrintf :: Handle -> String -> [FunArg PrintfArg exp]      -> FileCMD exp prog ()
+    FGet    :: (Read a, SimpleType a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
 
 instance MapInstr (FileCMD exp)
   where
-    imap _ (FOpen file mode) = FOpen file mode
-    imap _ (FClose hdl)      = FClose hdl
-    imap _ (FPut hdl a)      = FPut hdl a
-    imap _ (FGet hdl)        = FGet hdl
-    imap _ (FEof hdl)        = FEof hdl
+    imap _ (FOpen file mode)     = FOpen file mode
+    imap _ (FClose hdl)          = FClose hdl
+    imap _ (FPrintf hdl form as) = FPrintf hdl form as
+    imap _ (FGet hdl)            = FGet hdl
+    imap _ (FEof hdl)            = FEof hdl
 
 type instance IExp  (FileCMD e)       = e
 type instance IExp  (FileCMD e :+: i) = e
 type instance IPred (FileCMD e :+: i) = IPred i
-
-data ConsoleCMD (exp :: * -> *) (prog :: * -> *) a
-  where
-    Printf :: String -> [FunArg PrintfArg exp] -> ConsoleCMD exp prog ()
-
-instance MapInstr (ConsoleCMD exp)
-  where
-    imap _ (Printf form a) = Printf form a
-
-type instance IExp  (ConsoleCMD e)       = e
-type instance IExp  (ConsoleCMD e :+: i) = e
-type instance IPred (ConsoleCMD e :+: i) = IPred i
 
 data TimeCMD exp (prog :: * -> *) a
   where
@@ -318,6 +305,11 @@ runControlCMD (While cont body) = loop
           when (evalExp c) $ body >> loop
 runControlCMD Break = error "runControlCMD not implemented for Break"
 
+evalHandle :: Handle -> IO.Handle
+evalHandle (HandleEval h)        = h
+evalHandle (HandleComp "stdin")  = IO.stdin
+evalHandle (HandleComp "stdout") = IO.stdout
+
 readWord :: IO.Handle -> IO String
 readWord h = do
     eof <- IO.hIsEOF h
@@ -331,31 +323,23 @@ readWord h = do
         cs <- readWord h
         return (c:cs)
 
-evalHandle :: Handle -> IO.Handle
-evalHandle (HandleEval h)        = h
-evalHandle (HandleComp "stdin")  = IO.stdin
-evalHandle (HandleComp "stdout") = IO.stdout
+evalFPrintf :: EvalExp exp =>
+    [FunArg PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+evalFPrintf []            pf = pf
+evalFPrintf (FunArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 
 runFileCMD :: (EvalExp exp, VarPred exp Bool) => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
 runFileCMD (FClose (HandleComp "stdout")) = return ()
-runFileCMD (FPut h a) = IO.hPrint (evalHandle h) (evalExp a)
+runFileCMD (FPrintf h format as)          = evalFPrintf as (Printf.hPrintf (evalHandle h) format)
 runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
         [(f,"")] -> return $ litExp f
         _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
-
-evalPrintf :: EvalExp exp =>
-    [FunArg PrintfArg exp] -> (forall r . Printf.PrintfType r => r) -> IO ()
-evalPrintf []            pf = pf
-evalPrintf (FunArg a:as) pf = evalPrintf as (pf $ evalExp a)
-
-runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
-runConsoleCMD (Printf format as) = evalPrintf as (Printf.printf format)
 
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
@@ -364,7 +348,6 @@ instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp) IO where 
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
 instance EvalExp exp                       => Interp (ControlCMD exp)  IO where interp = runControlCMD
 instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)     IO where interp = runFileCMD
-instance EvalExp exp                       => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
 instance EvalExp exp                       => Interp (TimeCMD exp)     IO where interp = runTimeCMD
 
 
@@ -469,20 +452,24 @@ fopen file = singleE . FOpen file
 fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 fclose = singleE . FClose
 
-fput :: (Show a, SimpleType a, FileCMD (IExp instr) :<: instr) =>
+feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
+feof = singleE . FEof
+
+fPrintf :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
+    Handle -> String -> IExp instr a -> ProgramT instr m ()
+fPrintf h format a = singleE $ FPrintf h format $ [FunArg a]
+
+fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl = singleE . FPut hdl
+fput hdl a = fPrintf hdl "%f" a
 
 fget :: (Read a, SimpleType a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
     Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
-feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
-feof = singleE . FEof
-
-printf :: (PrintfArg a, ConsoleCMD (IExp instr) :<: instr) =>
+printf :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     String -> IExp instr a -> ProgramT instr m ()
-printf format a = singleE $ Printf format $ [FunArg a]
+printf = fPrintf stdout
 
 getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
 getTime = singleE GetTime
