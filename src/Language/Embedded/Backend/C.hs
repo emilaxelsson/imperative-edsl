@@ -109,7 +109,7 @@ compIOMode AppendMode    = "a"
 compIOMode ReadWriteMode = "r+"
 
 -- | Compile `FileCMD`
-compFileCMD :: (CompExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp CGen a -> CGen a
+compFileCMD :: (CompExp exp, VarPred exp Bool) => FileCMD exp CGen a -> CGen a
 compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
@@ -172,10 +172,10 @@ compTimeCMD GetTime = do
     addStm   [cstm| $id:sym = get_time(); |]
     return $ varExp i
 
-instance (CompExp exp, pred ~ (VarPred exp))                => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (VarPred exp))                => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance CompExp exp                                        => Interp (ControlCMD exp)  CGen where interp = compControlCMD
-instance (CompExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     CGen where interp = compFileCMD
-instance CompExp exp                                        => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
-instance (CompExp exp, VarPred exp Double)                  => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
+instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
+instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
+instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
+instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
+instance CompExp exp                         => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
+instance (CompExp exp, VarPred exp Double)   => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
 

@@ -64,7 +64,7 @@ summer :: Program CMD2 ()
 summer = do
     inp <- open "input" ReadMode
     let cont = fmap Not $ feof inp
-    sum <- initRef 0
+    sum <- initRef (0 :: Expr Float)
     while cont $ do
         f <- fget inp
         s <- getRef sum

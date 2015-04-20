@@ -224,13 +224,20 @@ stdin, stdout :: Handle
 stdin  = HandleComp "stdin"
 stdout = HandleComp "stdout"
 
+class Typeable a => SimpleType a
+
+instance SimpleType ()
+instance SimpleType Int
+instance SimpleType Bool
+instance SimpleType Float
+
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen  :: FilePath  -> IOMode -> FileCMD exp prog Handle
-    FClose :: Handle              -> FileCMD exp prog ()
-    FPut   :: Handle -> exp Float -> FileCMD exp prog ()
-    FGet   :: Handle              -> FileCMD exp prog (exp Float) -- todo: generalize to arbitrary types
-    FEof   :: Handle              -> FileCMD exp prog (exp Bool)
+    FOpen  :: FilePath -> IOMode -> FileCMD exp prog Handle
+    FClose :: Handle             -> FileCMD exp prog ()
+    FEof   :: Handle             -> FileCMD exp prog (exp Bool)
+    FPut   :: (Show a, SimpleType a)                => Handle -> exp a -> FileCMD exp prog ()
+    FGet   :: (Read a, SimpleType a, VarPred exp a) => Handle          -> FileCMD exp prog (exp a)
 
 instance MapInstr (FileCMD exp)
   where
@@ -315,7 +322,7 @@ evalHandle (HandleEval h)        = h
 evalHandle (HandleComp "stdin")  = IO.stdin
 evalHandle (HandleComp "stdout") = IO.stdout
 
-runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
+runFileCMD :: (EvalExp exp, VarPred exp Bool) => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
@@ -334,12 +341,12 @@ runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
 
-instance (EvalExp exp, VarPred exp ~ pred)                  => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, VarPred exp ~ pred)                  => Interp (ArrCMD pred exp) IO where interp = runArrCMD
-instance EvalExp exp                                        => Interp (ControlCMD exp)  IO where interp = runControlCMD
-instance (EvalExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     IO where interp = runFileCMD
-instance EvalExp exp                                        => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
-instance EvalExp exp                                        => Interp (TimeCMD exp)     IO where interp = runTimeCMD
+instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp) IO where interp = runRefCMD
+instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
+instance EvalExp exp                       => Interp (ControlCMD exp)  IO where interp = runControlCMD
+instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)     IO where interp = runFileCMD
+instance EvalExp exp                       => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
+instance EvalExp exp                       => Interp (TimeCMD exp)     IO where interp = runTimeCMD
 
 
 
@@ -443,10 +450,12 @@ open file = singleE . FOpen file
 close :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 close = singleE . FClose
 
-fput :: (FileCMD (IExp instr) :<: instr) => Handle -> IExp instr Float -> ProgramT instr m ()
+fput :: (Show a, SimpleType a, FileCMD (IExp instr) :<: instr) =>
+    Handle -> IExp instr a -> ProgramT instr m ()
 fput hdl = singleE . FPut hdl
 
-fget :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Float)
+fget :: (Read a, SimpleType a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
+    Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
 feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
