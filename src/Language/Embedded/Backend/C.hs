@@ -17,14 +17,14 @@ instance ToIdent (Ref a)
   where
     toIdent (RefComp r) = C.Id $ 'v':show r
 
-freshVar :: forall exp a. (CompExp exp, VarPred exp a) => CGen (exp a)
+freshVar :: forall exp a. (CompExp exp, VarPred exp a) => CGen (exp a, C.Id)
 freshVar = do
     v <- varExp <$> freshId
     t <- compTypeP (Proxy :: Proxy (exp a))
     C.Var n _ <- compExp v
     touchVar n
     addLocal [cdecl| $ty:t $id:n; |]
-    return v
+    return (v,n)
 
 -- | Compile `RefCMD`
 compRefCMD :: forall exp prog a. CompExp exp
@@ -37,12 +37,12 @@ compRefCMD cmd@NewRef = do
 compRefCMD (InitRef exp) = do
     t <- compType exp
     r <- RefComp <$> freshId
-    v   <- compExp exp
+    v <- compExp exp
     addLocal [cdecl| $ty:t $id:r; |]
     addStm   [cstm| $id:r = $v; |]
     return r
 compRefCMD (GetRef ref) = do
-    v <- freshVar
+    (v,_) <- freshVar
     e <- compExp v
     addStm [cstm| $e = $id:ref; |]
     return v
@@ -78,14 +78,11 @@ compArrCMD (NewArr size ini) = do
 --     addInclude "<stdlib.h>"
 --     return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
-    v <- freshId
-    let sym = 'v': show v
-    i <- compExp expi
-    t <- compTypePP (Proxy :: Proxy exp) arr
+    (v,n) <- freshVar
+    i     <- compExp expi
     touchVar arr
-    addLocal [cdecl| $ty:t $id:sym; |]
-    addStm   [cstm| $id:sym = $id:arr[ $i ]; |]
-    return $ varExp v
+    addStm [cstm| $id:n = $id:arr[ $i ]; |]
+    return v
 compArrCMD (SetArr expi expv arr) = do
     v <- compExp expv
     i <- compExp expi
@@ -134,20 +131,16 @@ compFileCMD (Put (HandleComp h) exp) = do
     touchVar h
     addStm [cstm| fprintf($id:h, "%f ", $v); |]
 compFileCMD (Get (HandleComp h)) = do
-    i <- freshId
-    let sym = 'v':show i
+    (v,n) <- freshVar
     touchVar h
-    addLocal [cdecl| float $id:sym; |]
-    addStm   [cstm| fscanf($id:h, "%f", &$id:sym); |]
-    return $ varExp i
+    addStm [cstm| fscanf($id:h, "%f", &$id:n); |]
+    return v
 compFileCMD (Eof (HandleComp h)) = do
     addInclude "<stdbool.h>"
-    i <- freshId
-    let sym = 'v':show i
+    (v,n) <- freshVar
     touchVar h
-    addLocal [cdecl| int $id:sym; |]
-    addStm   [cstm| $id:sym = feof($id:h); |]
-    return $ varExp i
+    addStm [cstm| $id:n = feof($id:h); |]
+    return v
 
 -- | Compile `ConsoleCMD`
 compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
