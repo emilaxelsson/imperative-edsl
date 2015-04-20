@@ -21,6 +21,7 @@ module Language.Embedded.Imperative
 
     -- * Types
   , FunArg (..)
+  , Scannable (..)
 
     -- * Commands
   , Ref (..)
@@ -152,6 +153,13 @@ data FunArg pred exp
   where
     FunArg :: pred a => exp a -> FunArg pred exp
 
+class Typeable a => Scannable a
+  where
+    scanFormatSpecifier :: Proxy a -> String
+
+instance Scannable Int   where scanFormatSpecifier _ = "%d"
+instance Scannable Float where scanFormatSpecifier _ = "%f"
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -237,20 +245,13 @@ stdin, stdout :: Handle
 stdin  = HandleComp "stdin"
 stdout = HandleComp "stdout"
 
-class Typeable a => SimpleType a
-
-instance SimpleType ()
-instance SimpleType Int
-instance SimpleType Bool
-instance SimpleType Float
-
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen   :: FilePath -> IOMode                              -> FileCMD exp prog Handle
-    FClose  :: Handle                                          -> FileCMD exp prog ()
-    FEof    :: Handle                                          -> FileCMD exp prog (exp Bool)
-    FPrintf :: Handle -> String -> [FunArg PrintfArg exp]      -> FileCMD exp prog ()
-    FGet    :: (Read a, SimpleType a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                             -> FileCMD exp prog Handle
+    FClose  :: Handle                                         -> FileCMD exp prog ()
+    FEof    :: Handle                                         -> FileCMD exp prog (exp Bool)
+    FPrintf :: Handle -> String -> [FunArg PrintfArg exp]     -> FileCMD exp prog ()
+    FGet    :: (Read a, Scannable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
 
 instance MapInstr (FileCMD exp)
   where
@@ -463,7 +464,7 @@ fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()
 fput hdl a = fPrintf hdl "%f" a
 
-fget :: (Read a, SimpleType a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
+fget :: (Read a, Scannable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
     Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 

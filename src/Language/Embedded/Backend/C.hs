@@ -130,10 +130,13 @@ compFileCMD (FPrintf (HandleComp h) form as) = do
         form' = [cexp| $id:form |]
     as' <- fmap ([h',form']++) $ sequence [compExp a | FunArg a <- as]
     addStm [cstm| fprintf($args:as'); |]
-compFileCMD (FGet (HandleComp h)) = do
+compFileCMD cmd@(FGet (HandleComp h)) = do
     (v,n) <- freshVar
     touchVar h
-    addStm [cstm| fscanf($id:h, "%f", &$id:n); |]
+    let mkProxy :: FileCMD exp prog (exp a) -> Proxy a
+        mkProxy _ = Proxy
+        form = scanFormatSpecifier (mkProxy cmd)
+    addStm [cstm| fscanf($id:h, $string:form, &$id:n); |]
     return v
 compFileCMD (FEof (HandleComp h)) = do
     addInclude "<stdbool.h>"
