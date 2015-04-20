@@ -141,11 +141,11 @@ compFileCMD (FEof (HandleComp h)) = do
 
 -- | Compile `ConsoleCMD`
 compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
-compConsoleCMD (Printf format a) = do
+compConsoleCMD (Printf format as) = do
     addInclude "<stdio.h>"
     let format' = show format
-    a' <- compExp a
-    addStm [cstm| printf($id:format', $exp:a'); |]
+    as' <- fmap ([cexp| $id:format' |] :) $ sequence [compExp a | FunArg a <- as]
+    addStm [cstm| printf($args:as'); |]
 
 -- | Generate a time sampling function
 getTimeDef :: C.Definition

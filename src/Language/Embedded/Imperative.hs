@@ -19,6 +19,9 @@ module Language.Embedded.Imperative
   , singlePE
   , singleE
 
+    -- * Types
+  , FunArg (..)
+
     -- * Commands
   , Ref (..)
   , RefCMD (..)
@@ -142,6 +145,17 @@ singleE = singleton . inj
 
 
 ----------------------------------------------------------------------------------------------------
+-- * Types
+----------------------------------------------------------------------------------------------------
+
+-- | A function argument with constrained existentially quantified type
+data FunArg pred exp
+  where
+    FunArg :: pred a => exp a -> FunArg pred exp
+
+
+
+----------------------------------------------------------------------------------------------------
 -- * Commands
 ----------------------------------------------------------------------------------------------------
 
@@ -251,9 +265,9 @@ type instance IExp  (FileCMD e)       = e
 type instance IExp  (FileCMD e :+: i) = e
 type instance IPred (FileCMD e :+: i) = IPred i
 
-data ConsoleCMD exp (prog :: * -> *) a
+data ConsoleCMD (exp :: * -> *) (prog :: * -> *) a
   where
-    Printf :: PrintfArg a => String -> exp a -> ConsoleCMD exp prog ()
+    Printf :: String -> [FunArg PrintfArg exp] -> ConsoleCMD exp prog ()
 
 instance MapInstr (ConsoleCMD exp)
   where
@@ -335,8 +349,13 @@ runFileCMD (FGet h)   = do
         _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
+evalPrintf :: EvalExp exp =>
+    [FunArg PrintfArg exp] -> (forall r . Printf.PrintfType r => r) -> IO ()
+evalPrintf []            pf = pf
+evalPrintf (FunArg a:as) pf = evalPrintf as (pf $ evalExp a)
+
 runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
-runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
+runConsoleCMD (Printf format as) = evalPrintf as (Printf.printf format)
 
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime | False = undefined
@@ -463,7 +482,7 @@ feof = singleE . FEof
 
 printf :: (PrintfArg a, ConsoleCMD (IExp instr) :<: instr) =>
     String -> IExp instr a -> ProgramT instr m ()
-printf format = singleE . Printf format
+printf format a = singleE $ Printf format $ [FunArg a]
 
 getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
 getTime = singleE GetTime
