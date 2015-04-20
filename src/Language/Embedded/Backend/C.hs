@@ -165,12 +165,10 @@ compTimeCMD GetTime = do
     addStm   [cstm| $id:sym = get_time(); |]
     return $ varExp i
 
-instance (CompExp exp, pred ~ (VarPred exp))  => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (VarPred exp))  => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance CompExp exp                          => Interp (ControlCMD exp)  CGen where interp = compControlCMD
+instance (CompExp exp, pred ~ (VarPred exp))                => Interp (RefCMD pred exp) CGen where interp = compRefCMD
+instance (CompExp exp, pred ~ (VarPred exp))                => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
+instance CompExp exp                                        => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool, VarPred exp Float) => Interp (FileCMD exp)     CGen where interp = compFileCMD
 instance CompExp exp                                        => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
 instance (CompExp exp, VarPred exp Double)                  => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
-
-
 
