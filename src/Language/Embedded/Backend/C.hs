@@ -126,9 +126,10 @@ compFileCMD (FClose (HandleComp h)) = do
 compFileCMD (FPrintf (HandleComp h) form as) = do
     addInclude "<stdio.h>"
     touchVar h
-    let h'    = [cexp| $id:h |]
-        form' = [cexp| $id:form |]
-    as' <- fmap ([h',form']++) $ sequence [compExp a | FunArg a <- as]
+    let h'     = [cexp| $id:h |]
+        form'  = show form
+        form'' = [cexp| $id:form' |]
+    as' <- fmap ([h',form'']++) $ sequence [compExp a | FunArg a <- as]
     addStm [cstm| fprintf($args:as'); |]
 compFileCMD cmd@(FGet (HandleComp h)) = do
     (v,n) <- freshVar
