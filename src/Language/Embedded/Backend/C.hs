@@ -110,7 +110,7 @@ compIOMode ReadWriteMode = "r+"
 
 -- | Compile `FileCMD`
 compFileCMD :: (CompExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp CGen a -> CGen a
-compFileCMD (Open path mode) = do
+compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
     sym <- gensym "v"
@@ -120,19 +120,19 @@ compFileCMD (Open path mode) = do
   where
     path' = show path
     mode' = compIOMode mode
-compFileCMD (Close (HandleComp h)) = do
+compFileCMD (FClose (HandleComp h)) = do
     touchVar h
     addStm [cstm| fclose($id:h); |]
-compFileCMD (Put (HandleComp h) exp) = do
+compFileCMD (FPut (HandleComp h) exp) = do
     v <- compExp exp
     touchVar h
     addStm [cstm| fprintf($id:h, "%f ", $v); |]
-compFileCMD (Get (HandleComp h)) = do
+compFileCMD (FGet (HandleComp h)) = do
     (v,n) <- freshVar
     touchVar h
     addStm [cstm| fscanf($id:h, "%f", &$id:n); |]
     return v
-compFileCMD (Eof (HandleComp h)) = do
+compFileCMD (FEof (HandleComp h)) = do
     addInclude "<stdbool.h>"
     (v,n) <- freshVar
     touchVar h

@@ -222,19 +222,19 @@ data Handle
 
 data FileCMD exp (prog :: * -> *) a
   where
-    Open  :: FilePath  -> IOMode -> FileCMD exp prog Handle
-    Close :: Handle              -> FileCMD exp prog ()
-    Put   :: Handle -> exp Float -> FileCMD exp prog ()
-    Get   :: Handle              -> FileCMD exp prog (exp Float) -- todo: generalize to arbitrary types
-    Eof   :: Handle              -> FileCMD exp prog (exp Bool)
+    FOpen  :: FilePath  -> IOMode -> FileCMD exp prog Handle
+    FClose :: Handle              -> FileCMD exp prog ()
+    FPut   :: Handle -> exp Float -> FileCMD exp prog ()
+    FGet   :: Handle              -> FileCMD exp prog (exp Float) -- todo: generalize to arbitrary types
+    FEof   :: Handle              -> FileCMD exp prog (exp Bool)
 
 instance MapInstr (FileCMD exp)
   where
-    imap _ (Open file mode) = Open file mode
-    imap _ (Close hdl)      = Close hdl
-    imap _ (Put hdl a)      = Put hdl a
-    imap _ (Get hdl)        = Get hdl
-    imap _ (Eof hdl)        = Eof hdl
+    imap _ (FOpen file mode) = FOpen file mode
+    imap _ (FClose hdl)      = FClose hdl
+    imap _ (FPut hdl a)      = FPut hdl a
+    imap _ (FGet hdl)        = FGet hdl
+    imap _ (FEof hdl)        = FEof hdl
 
 type instance IExp  (FileCMD e)       = e
 type instance IExp  (FileCMD e :+: i) = e
@@ -307,15 +307,15 @@ readWord h = do
         return (c:cs)
 
 runFileCMD :: (EvalExp exp, VarPred exp Bool, VarPred exp Float) => FileCMD exp IO a -> IO a
-runFileCMD (Open file mode)       = fmap HandleEval $ IO.openFile file mode
-runFileCMD (Close (HandleEval h)) = IO.hClose h
-runFileCMD (Put (HandleEval h) a) = IO.hPrint h (evalExp a)
-runFileCMD (Get (HandleEval h))   = do
+runFileCMD (FOpen file mode)       = fmap HandleEval $ IO.openFile file mode
+runFileCMD (FClose (HandleEval h)) = IO.hClose h
+runFileCMD (FPut (HandleEval h) a) = IO.hPrint h (evalExp a)
+runFileCMD (FGet (HandleEval h))   = do
     w <- readWord h
     case reads w of
         [(f,"")] -> return $ litExp f
         _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
-runFileCMD (Eof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
+runFileCMD (FEof (HandleEval h)) = fmap litExp $ IO.hIsEOF h
 
 runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
 runConsoleCMD (Printf format a) = Printf.printf format (evalExp a)
@@ -427,19 +427,19 @@ break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
 open :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
-open file = singleE . Open file
+open file = singleE . FOpen file
 
 close :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
-close = singleE . Close
+close = singleE . FClose
 
 fput :: (FileCMD (IExp instr) :<: instr) => Handle -> IExp instr Float -> ProgramT instr m ()
-fput hdl = singleE . Put hdl
+fput hdl = singleE . FPut hdl
 
 fget :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Float)
-fget = singleE . Get
+fget = singleE . FGet
 
 feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
-feof = singleE . Eof
+feof = singleE . FEof
 
 printf :: (PrintfArg a, ConsoleCMD (IExp instr) :<: instr) =>
     String -> IExp instr a -> ProgramT instr m ()
