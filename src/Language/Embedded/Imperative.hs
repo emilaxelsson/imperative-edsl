@@ -56,8 +56,8 @@ module Language.Embedded.Imperative
   , while
   , whileE
   , break
-  , open
-  , close
+  , fopen
+  , fclose
   , fput
   , fget
   , feof
@@ -327,8 +327,8 @@ runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file m
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
 runFileCMD (FClose (HandleComp "stdout")) = return ()
-runFileCMD (FPut h a)        = IO.hPrint (evalHandle h) (evalExp a)
-runFileCMD (FGet h)          = do
+runFileCMD (FPut h a) = IO.hPrint (evalHandle h) (evalExp a)
+runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
         [(f,"")] -> return $ litExp f
@@ -444,11 +444,11 @@ whileE b t = do
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
-open :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
-open file = singleE . FOpen file
+fopen :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
+fopen file = singleE . FOpen file
 
-close :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
-close = singleE . FClose
+fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
+fclose = singleE . FClose
 
 fput :: (Show a, SimpleType a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()

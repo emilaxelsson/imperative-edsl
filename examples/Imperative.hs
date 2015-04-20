@@ -62,7 +62,7 @@ type CMD2
 
 summer :: Program CMD2 ()
 summer = do
-    inp <- open "input" ReadMode
+    inp <- fopen "input" ReadMode
     let cont = fmap Not $ feof inp
     sum <- initRef (0 :: Expr Float)
     while cont $ do
