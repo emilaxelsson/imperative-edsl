@@ -64,7 +64,7 @@ module Language.Embedded.Imperative
   , feof
   , PrintfArg
   , PrintfType
-  , fPrintf
+  , fprintf
   , fput
   , fget
   , printf
@@ -494,19 +494,19 @@ instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> 
     type PrintfExp (exp a -> r) = exp
     fprf h form as = \a -> fprf h form (FunArg a : as)
 
-fPrintf :: PrintfType r => Handle -> String -> r
-fPrintf h format = fprf h format []
+fprintf :: PrintfType r => Handle -> String -> r
+fprintf h format = fprf h format []
 
 fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl a = fPrintf hdl "%f" a
+fput hdl a = fprintf hdl "%f" a
 
 fget :: (Read a, Scannable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
     Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
 printf :: PrintfType r => String -> r
-printf = fPrintf stdout
+printf = fprintf stdout
 
 getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
 getTime = singleE GetTime
