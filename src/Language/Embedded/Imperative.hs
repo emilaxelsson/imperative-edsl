@@ -35,6 +35,7 @@ module Language.Embedded.Imperative
   , stdout
   , FileCMD (..)
   , TimeCMD (..)
+  , CallCMD (..)
 
     -- * Running commands
   , runRefCMD
@@ -278,6 +279,23 @@ type instance IExp  (TimeCMD e)       = e
 type instance IExp  (TimeCMD e :+: i) = e
 type instance IPred (TimeCMD e :+: i) = IPred i
 
+data CallCMD pred exp (prog :: * -> *) a
+  where
+    Call :: pred a
+         => [String]         -- Extra includes
+         -> String           -- Function name
+         -> [FunArg Any exp] -- Arguments
+         -> CallCMD pred exp prog (exp a)
+
+instance MapInstr (CallCMD pred exp)
+  where
+    imap _ (Call incs fun as) = Call incs fun as
+
+type instance IPred (CallCMD p e)       = p
+type instance IExp  (CallCMD p e)       = e
+type instance IPred (CallCMD p e :+: i) = p
+type instance IExp  (CallCMD p e :+: i) = e
+
 
 
 ----------------------------------------------------------------------------------------------------
@@ -346,11 +364,15 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime = error "runTimeCMD not implemented for GetTime"
 
-instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
-instance EvalExp exp                       => Interp (ControlCMD exp)  IO where interp = runControlCMD
-instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)     IO where interp = runFileCMD
-instance EvalExp exp                       => Interp (TimeCMD exp)     IO where interp = runTimeCMD
+runCallCMD :: EvalExp exp => CallCMD pred exp IO a -> IO a
+runCallCMD (Call _ _ _) = error "cannot run programs involving function calls"
+
+instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp)  IO where interp = runRefCMD
+instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp)  IO where interp = runArrCMD
+instance EvalExp exp                       => Interp (ControlCMD exp)   IO where interp = runControlCMD
+instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)      IO where interp = runFileCMD
+instance EvalExp exp                       => Interp (TimeCMD exp)      IO where interp = runTimeCMD
+instance EvalExp exp                       => Interp (CallCMD pred exp) IO where interp = runCallCMD
 
 
 

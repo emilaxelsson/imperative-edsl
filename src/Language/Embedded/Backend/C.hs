@@ -170,9 +170,18 @@ compTimeCMD GetTime = do
     addStm   [cstm| $id:sym = get_time(); |]
     return $ varExp i
 
+compCallCMD :: (CompExp exp, pred ~ VarPred exp) => CallCMD pred exp CGen a -> CGen a
+compCallCMD (Call incs fun as) = do
+    mapM_ addInclude incs
+    as'   <- sequence [compExp a | FunArg a <- as]
+    (v,n) <- freshVar
+    addStm [cstm| $id:n = $id:fun($args:as'); |]
+    return v
+
 instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
 instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
 instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
 instance (CompExp exp, VarPred exp Double)   => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
+instance (CompExp exp, pred ~ VarPred exp, VarPred exp Double) => Interp (CallCMD pred exp) CGen where interp = compCallCMD
 
