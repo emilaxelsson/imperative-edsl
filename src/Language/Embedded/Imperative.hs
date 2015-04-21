@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Deep embedding of imperative programs. The embedding is parameterized on the expression
@@ -34,7 +35,6 @@ module Language.Embedded.Imperative
   , stdin
   , stdout
   , FileCMD (..)
-  , TimeCMD (..)
   , CallCMD (..)
 
     -- * Running commands
@@ -42,7 +42,6 @@ module Language.Embedded.Imperative
   , runArrCMD
   , runControlCMD
   , runFileCMD
-  , runTimeCMD
 
     -- * User interface
   , newRef
@@ -92,6 +91,7 @@ import Data.ALaCarte
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Expression
+import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
 
@@ -268,18 +268,6 @@ type instance IExp  (FileCMD e)       = e
 type instance IExp  (FileCMD e :+: i) = e
 type instance IPred (FileCMD e :+: i) = IPred i
 
-data TimeCMD exp (prog :: * -> *) a
-  where
-    GetTime :: TimeCMD exp prog (exp Double)
-
-instance MapInstr (TimeCMD exp)
-  where
-    imap _ GetTime = GetTime
-
-type instance IExp  (TimeCMD e)       = e
-type instance IExp  (TimeCMD e :+: i) = e
-type instance IPred (TimeCMD e :+: i) = IPred i
-
 data CallCMD pred exp (prog :: * -> *) a
   where
     Call :: pred a
@@ -363,9 +351,6 @@ runFileCMD (FGet h)   = do
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
-runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
-runTimeCMD GetTime = error "cannot run programs involving getTime"
-
 runCallCMD :: EvalExp exp => CallCMD pred exp IO a -> IO a
 runCallCMD (Call _ _ _ _) = error "cannot run programs involving function calls"
 
@@ -373,7 +358,6 @@ instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp)  IO where
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp)  IO where interp = runArrCMD
 instance EvalExp exp                       => Interp (ControlCMD exp)   IO where interp = runControlCMD
 instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)      IO where interp = runFileCMD
-instance EvalExp exp                       => Interp (TimeCMD exp)      IO where interp = runTimeCMD
 instance EvalExp exp                       => Interp (CallCMD pred exp) IO where interp = runCallCMD
 
 
@@ -510,6 +494,20 @@ fget = singleE . FGet
 printf :: PrintfType r => String -> r
 printf = fprintf stdout
 
-getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
-getTime = singleE GetTime
+getTime :: (IPred instr Double, CallCMD (IPred instr) (IExp instr) :<: instr) =>
+    ProgramT instr m (IExp instr Double)
+getTime = singlePE $ Call incs [getTimeDef] "get_time" []
+  where
+    incs = ["<sys/time.h>", "<sys/resource.h>"]
+
+    getTimeDef = [cedecl|
+      double get_time()
+      {
+          struct timeval t;
+          struct timezone tzp;
+          gettimeofday(&t, &tzp);
+          return t.tv_sec + t.tv_usec*1e-6;
+      }
+      |]
+      -- From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
 

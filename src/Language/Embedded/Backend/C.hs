@@ -158,18 +158,6 @@ double get_time()
 }
 |]
 
--- | Compile `TimeCMD`
-compTimeCMD :: (CompExp exp, VarPred exp Double) => TimeCMD exp CGen a -> CGen a
-compTimeCMD GetTime = do
-    addInclude "<sys/time.h>"
-    addInclude "<sys/resource.h>"
-    addGlobal getTimeDef
-    i <- freshId
-    let sym = 't': show i
-    addLocal [cdecl| double $id:sym; |]
-    addStm   [cstm| $id:sym = get_time(); |]
-    return $ varExp i
-
 compCallCMD :: (CompExp exp, pred ~ VarPred exp) => CallCMD pred exp CGen a -> CGen a
 compCallCMD (Call incs defs fun as) = do
     mapM_ addInclude incs
@@ -183,6 +171,5 @@ instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen wh
 instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
 instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
 instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
-instance (CompExp exp, VarPred exp Double)   => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
 instance (CompExp exp, pred ~ VarPred exp, VarPred exp Double) => Interp (CallCMD pred exp) CGen where interp = compCallCMD
 
