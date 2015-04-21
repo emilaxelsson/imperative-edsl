@@ -139,7 +139,8 @@ compTypeImpl a = case show (typeOf (undefined :: a)) of
         "16" -> return [cty| typename uint16_t |]
         "32" -> return [cty| typename uint32_t |]
         "64" -> return [cty| typename uint64_t |]
-    "Float" -> return [cty| float |]
+    "Float"  -> return [cty| float |]
+    "Double" -> return [cty| double |]
     t -> do
       error $ "compTypeImpl, unsupported type: " ++ t
 

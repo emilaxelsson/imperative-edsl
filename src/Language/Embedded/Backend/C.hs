@@ -28,7 +28,7 @@ freshVar = do
 
 -- | Compile `RefCMD`
 compRefCMD :: forall exp prog a. CompExp exp
-           => RefCMD (VarPred exp) exp prog a -> CGen a
+           => RefCMD exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     t <- compTypePP2 (Proxy :: Proxy exp) cmd
     r <- RefComp <$> freshId
@@ -58,7 +58,7 @@ instance ToIdent (Arr i a)
 
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. CompExp exp
-           => ArrCMD (VarPred exp) exp prog a -> CGen a
+           => ArrCMD exp prog a -> CGen a
 compArrCMD (NewArr size ini) = do
     addInclude "<string.h>"
     sym <- gensym "a"
@@ -109,7 +109,7 @@ compIOMode AppendMode    = "a"
 compIOMode ReadWriteMode = "r+"
 
 -- | Compile `FileCMD`
-compFileCMD :: (CompExp exp, VarPred exp Bool) => FileCMD exp CGen a -> CGen a
+compFileCMD :: CompExp exp => FileCMD exp CGen a -> CGen a
 compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
@@ -123,14 +123,20 @@ compFileCMD (FOpen path mode) = do
 compFileCMD (FClose (HandleComp h)) = do
     touchVar h
     addStm [cstm| fclose($id:h); |]
-compFileCMD (FPut (HandleComp h) exp) = do
-    v <- compExp exp
+compFileCMD (FPrintf (HandleComp h) form as) = do
+    addInclude "<stdio.h>"
     touchVar h
-    addStm [cstm| fprintf($id:h, "%f ", $v); |]
-compFileCMD (FGet (HandleComp h)) = do
+    let h'     = [cexp| $id:h |]
+        form'  = show form
+        form'' = [cexp| $id:form' |]
+    as' <- fmap ([h',form'']++) $ sequence [compExp a | FunArg a <- as]
+    addStm [cstm| fprintf($args:as'); |]
+compFileCMD cmd@(FGet (HandleComp h)) = do
     (v,n) <- freshVar
     touchVar h
-    addStm [cstm| fscanf($id:h, "%f", &$id:n); |]
+    let mkProxy = (\_ -> Proxy) :: FileCMD exp prog (exp a) -> Proxy a
+        form    = scanFormatSpecifier (mkProxy cmd)
+    addStm [cstm| fscanf($id:h, $string:form, &$id:n); |]
     return v
 compFileCMD (FEof (HandleComp h)) = do
     addInclude "<stdbool.h>"
@@ -139,43 +145,21 @@ compFileCMD (FEof (HandleComp h)) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
--- | Compile `ConsoleCMD`
-compConsoleCMD :: CompExp exp => ConsoleCMD exp CGen a -> CGen a
-compConsoleCMD (Printf format as) = do
-    addInclude "<stdio.h>"
-    let format' = show format
-    as' <- fmap ([cexp| $id:format' |] :) $ sequence [compExp a | FunArg a <- as]
-    addStm [cstm| printf($args:as'); |]
+compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
+compCallCMD (AddInclude inc)    = addInclude inc
+compCallCMD (AddDefinition def) = addGlobal def
+compCallCMD (CallFun fun as)    = do
+    as'   <- sequence [compExp a | FunArg a <- as]
+    (v,n) <- freshVar
+    addStm [cstm| $id:n = $id:fun($args:as'); |]
+    return v
+compCallCMD (CallProc fun as) = do
+    as' <- sequence [compExp a | FunArg a <- as]
+    addStm [cstm| $id:fun($args:as'); |]
 
--- | Generate a time sampling function
-getTimeDef :: C.Definition
-getTimeDef = [cedecl|
-// From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
-double get_time()
-{
-    struct timeval t;
-    struct timezone tzp;
-    gettimeofday(&t, &tzp);
-    return t.tv_sec + t.tv_usec*1e-6;
-}
-|]
-
--- | Compile `TimeCMD`
-compTimeCMD :: (CompExp exp, VarPred exp Double) => TimeCMD exp CGen a -> CGen a
-compTimeCMD GetTime = do
-    addInclude "<sys/time.h>"
-    addInclude "<sys/resource.h>"
-    addGlobal getTimeDef
-    i <- freshId
-    let sym = 't': show i
-    addLocal [cdecl| double $id:sym; |]
-    addStm   [cstm| $id:sym = get_time(); |]
-    return $ varExp i
-
-instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
-instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
-instance CompExp exp                         => Interp (ConsoleCMD exp)  CGen where interp = compConsoleCMD
-instance (CompExp exp, VarPred exp Double)   => Interp (TimeCMD exp)     CGen where interp = compTimeCMD
+instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
+instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
+instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 

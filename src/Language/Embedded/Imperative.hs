@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Deep embedding of imperative programs. The embedding is parameterized on the expression
@@ -10,17 +11,14 @@ module Language.Embedded.Imperative
   , module Language.Embedded.Expression
 
     -- * Working with instruction sets
-  , IPred
   , IExp
-  , injPE
-  , prjPE
   , injE
   , prjE
-  , singlePE
   , singleE
 
     -- * Types
   , FunArg (..)
+  , Scannable (..)
 
     -- * Commands
   , Ref (..)
@@ -33,16 +31,13 @@ module Language.Embedded.Imperative
   , stdin
   , stdout
   , FileCMD (..)
-  , ConsoleCMD (..)
-  , TimeCMD (..)
+  , CallCMD (..)
 
     -- * Running commands
   , runRefCMD
   , runArrCMD
   , runControlCMD
   , runFileCMD
-  , runConsoleCMD
-  , runTimeCMD
 
     -- * User interface
   , newRef
@@ -61,11 +56,15 @@ module Language.Embedded.Imperative
   , break
   , fopen
   , fclose
-  , fput
-  , fget
   , feof
   , PrintfArg
+  , PrintfType
+  , fprintf
+  , fput
+  , fget
   , printf
+  , callFun
+  , callProc
   , getTime
   ) where
 
@@ -75,6 +74,7 @@ import Prelude hiding (break)
 
 import Control.Monad (when)
 import Data.Array.IO
+import Data.Char (isSpace)
 import Data.IORef
 import Data.Typeable
 import System.IO (IOMode (..))
@@ -84,45 +84,31 @@ import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
 import Data.Constraint
+import Data.Proxy
 
 import Data.ALaCarte
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Expression
+import Language.C.Quote.C
+import qualified Language.C.Syntax as C
 
-import Data.Char (isSpace)
 
 
 ----------------------------------------------------------------------------------------------------
 -- * Working with instruction sets
 ----------------------------------------------------------------------------------------------------
 
--- | Extract the value predicate from an instruction set
---
--- 'IPred' and 'IExp' are needed to avoid types like
--- @(`SomeInstr` pred exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @pred@
--- and @exp@ by constraining @i@, so the instance search will always fail. Functions like 'injPE'
--- solve this by using 'IPred' and 'IExp' to determine @pred@ and @exp@ from @i@. For this to work,
--- one must use an instruction set @i@ that has an instance of 'IPred' and 'IExp'. By using
--- instruction sets of the form @(`RefCMD` SomePred SomeExp `:+:` ...)@, such instances are obtained
--- for free (see the available instances defined in this module). Then functions like 'injPE' will
--- determine the predicate and expression type from the first summand, which may or may not be the
--- desired behavior. It is of course also possible to make custom instruction types with custom
--- instances of 'IPred' and 'IExp'.
-type family IPred (i :: (* -> *) -> * -> *) :: * -> Constraint
-
--- | Extract the value predicate from an instruction set. See the documentation of 'IPred' for more
--- information.
-type family IExp  (i :: (* -> *) -> * -> *) :: * -> *
-
--- | Inject an instruction that is parameterized by a value predicate and an expression type
-injPE :: (i (IPred instr) (IExp instr) :<: instr) => i (IPred instr) (IExp instr) m a -> instr m a
-injPE = inj
-
--- | Project an instruction that is parameterized by a value predicate and an expression type
-prjPE :: (i (IPred instr) (IExp instr) :<: instr) =>
-    instr m a -> Maybe (i (IPred instr) (IExp instr) m a)
-prjPE = prj
+-- | Extract the expression type from an instruction set. 'IExp' is needed to avoid types like
+-- @(`SomeInstr` exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @exp@ by
+-- constraining @i@, so the instance search will always fail. Functions like 'injE' solve this by
+-- using 'IExp' to determine @exp@ from @i@. For this to work, one must use an instruction set @i@
+-- that has an instance of 'IExp'. By using instruction sets of the form
+-- @(`RefCMD` SomeExp `:+:` ...)@, such instances are obtained for free (see the available instances
+-- defined in this module). Then functions like 'injE' will determine the predicate and expression
+-- type from the first summand, which may or may not be the desired behavior. It is of course also
+-- possible to make custom instruction types with custom instances of 'IExp'.
+type family IExp (i :: (* -> *) -> * -> *) :: * -> *
 
 -- | Inject an instruction that is parameterized by an expression type
 injE :: (i (IExp instr) :<: instr) => i (IExp instr) m a -> instr m a
@@ -131,12 +117,6 @@ injE = inj
 -- | Project an instruction that is parameterized by an expression type
 prjE :: (i (IExp instr) :<: instr) => instr m a -> Maybe (i (IExp instr) m a)
 prjE = prj
-
--- | Create a program from an instruction that is parameterized by a value predicate and an
--- expression type
-singlePE :: (i (IPred instr) (IExp instr) :<: instr) =>
-    i (IPred instr) (IExp instr) (ProgramT instr m) a -> ProgramT instr m a
-singlePE = singleton . inj
 
 -- | Create a program from an instruction that is parameterized by an expression type
 singleE :: (i (IExp instr) :<: instr) => i (IExp instr) (ProgramT instr m) a -> ProgramT instr m a
@@ -165,27 +145,25 @@ data Ref a
   deriving Typeable
 
 -- | Commands for mutable references
-data RefCMD p exp (prog :: * -> *) a
+data RefCMD exp (prog :: * -> *) a
   where
-    NewRef          :: p a => RefCMD p exp prog (Ref a)
-    InitRef         :: p a => exp a -> RefCMD p exp prog (Ref a)
-    GetRef          :: p a => Ref a -> RefCMD p exp prog (exp a)
-    SetRef          ::        Ref a -> exp a -> RefCMD p exp prog ()
+    NewRef          :: VarPred exp a => RefCMD exp prog (Ref a)
+    InitRef         :: VarPred exp a => exp a -> RefCMD exp prog (Ref a)
+    GetRef          :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
+    SetRef          ::                  Ref a -> exp a -> RefCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
 
-instance MapInstr (RefCMD p exp)
+instance MapInstr (RefCMD exp)
   where
     imap _ NewRef              = NewRef
     imap _ (InitRef a)         = InitRef a
     imap _ (GetRef r)          = GetRef r
     imap _ (SetRef r a)        = SetRef r a
 
-type instance IPred (RefCMD p e)       = p
-type instance IExp  (RefCMD p e)       = e
-type instance IPred (RefCMD p e :+: i) = p
-type instance IExp  (RefCMD p e :+: i) = e
+type instance IExp (RefCMD e)       = e
+type instance IExp (RefCMD e :+: i) = e
 
 data Arr n a
     = ArrComp String
@@ -193,25 +171,23 @@ data Arr n a
   deriving Typeable
 
 -- | Commands for mutable arrays
-data ArrCMD p exp (prog :: * -> *) a
+data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr :: (p a, p n, Integral n) => exp n -> exp a   -> ArrCMD p exp prog (Arr n a)
-    GetArr :: (p a, Integral n)      => exp n -> Arr n a -> ArrCMD p exp prog (exp a)
-    SetArr :: (Integral n)           => exp n -> exp a   -> Arr n a -> ArrCMD p exp prog ()
+    NewArr :: (VarPred exp a, VarPred exp n, Integral n) => exp n -> exp a -> ArrCMD exp prog (Arr n a)
+    GetArr :: (VarPred exp a, Integral n)                => exp n -> Arr n a -> ArrCMD exp prog (exp a)
+    SetArr :: Integral n                                 => exp n -> exp a -> Arr n a -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
 
-instance MapInstr (ArrCMD p exp)
+instance MapInstr (ArrCMD exp)
   where
     imap _ (NewArr n a)     = NewArr n a
     imap _ (GetArr i arr)   = GetArr i arr
     imap _ (SetArr i a arr) = SetArr i a arr
 
-type instance IPred (ArrCMD p e)       = p
-type instance IExp  (ArrCMD p e)       = e
-type instance IPred (ArrCMD p e :+: i) = p
-type instance IExp  (ArrCMD p e :+: i) = e
+type instance IExp (ArrCMD e)       = e
+type instance IExp (ArrCMD e :+: i) = e
 
 data ControlCMD exp prog a
   where
@@ -225,9 +201,8 @@ instance MapInstr (ControlCMD exp)
     imap g (While cont body) = While (g cont) (g body)
     imap _ Break             = Break
 
-type instance IExp  (ControlCMD e)       = e
-type instance IExp  (ControlCMD e :+: i) = e
-type instance IPred (ControlCMD e :+: i) = IPred i
+type instance IExp (ControlCMD e)       = e
+type instance IExp (ControlCMD e :+: i) = e
 
 data Handle
     = HandleComp String
@@ -238,56 +213,48 @@ stdin, stdout :: Handle
 stdin  = HandleComp "stdin"
 stdout = HandleComp "stdout"
 
-class Typeable a => SimpleType a
+class Typeable a => Scannable a
+  where
+    scanFormatSpecifier :: Proxy a -> String
 
-instance SimpleType ()
-instance SimpleType Int
-instance SimpleType Bool
-instance SimpleType Float
+instance Scannable Int   where scanFormatSpecifier _ = "%d"
+instance Scannable Float where scanFormatSpecifier _ = "%f"
 
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen  :: FilePath -> IOMode -> FileCMD exp prog Handle
-    FClose :: Handle             -> FileCMD exp prog ()
-    FEof   :: Handle             -> FileCMD exp prog (exp Bool)
-    FPut   :: (Show a, SimpleType a)                => Handle -> exp a -> FileCMD exp prog ()
-    FGet   :: (Read a, SimpleType a, VarPred exp a) => Handle          -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                             -> FileCMD exp prog Handle
+    FClose  :: Handle                                         -> FileCMD exp prog ()
+    FEof    :: VarPred exp Bool => Handle                     -> FileCMD exp prog (exp Bool)
+    FPrintf :: Handle -> String -> [FunArg PrintfArg exp]     -> FileCMD exp prog ()
+    FGet    :: (Read a, Scannable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
 
 instance MapInstr (FileCMD exp)
   where
-    imap _ (FOpen file mode) = FOpen file mode
-    imap _ (FClose hdl)      = FClose hdl
-    imap _ (FPut hdl a)      = FPut hdl a
-    imap _ (FGet hdl)        = FGet hdl
-    imap _ (FEof hdl)        = FEof hdl
+    imap _ (FOpen file mode)     = FOpen file mode
+    imap _ (FClose hdl)          = FClose hdl
+    imap _ (FPrintf hdl form as) = FPrintf hdl form as
+    imap _ (FGet hdl)            = FGet hdl
+    imap _ (FEof hdl)            = FEof hdl
 
-type instance IExp  (FileCMD e)       = e
-type instance IExp  (FileCMD e :+: i) = e
-type instance IPred (FileCMD e :+: i) = IPred i
+type instance IExp (FileCMD e)       = e
+type instance IExp (FileCMD e :+: i) = e
 
-data ConsoleCMD (exp :: * -> *) (prog :: * -> *) a
+data CallCMD exp (prog :: * -> *) a
   where
-    Printf :: String -> [FunArg PrintfArg exp] -> ConsoleCMD exp prog ()
+    AddInclude    :: String       -> CallCMD exp prog ()
+    AddDefinition :: C.Definition -> CallCMD exp prog ()
+    CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
+    CallProc      ::                  String -> [FunArg Any exp] -> CallCMD exp prog ()
 
-instance MapInstr (ConsoleCMD exp)
+instance MapInstr (CallCMD exp)
   where
-    imap _ (Printf form a) = Printf form a
+    imap _ (AddInclude incl)    = AddInclude incl
+    imap _ (AddDefinition def)  = AddDefinition def
+    imap _ (CallFun fun args)   = CallFun fun args
+    imap _ (CallProc proc args) = CallProc proc args
 
-type instance IExp  (ConsoleCMD e)       = e
-type instance IExp  (ConsoleCMD e :+: i) = e
-type instance IPred (ConsoleCMD e :+: i) = IPred i
-
-data TimeCMD exp (prog :: * -> *) a
-  where
-    GetTime :: TimeCMD exp prog (exp Double)
-
-instance MapInstr (TimeCMD exp)
-  where
-    imap _ GetTime = GetTime
-
-type instance IExp  (TimeCMD e)       = e
-type instance IExp  (TimeCMD e :+: i) = e
-type instance IPred (TimeCMD e :+: i) = IPred i
+type instance IExp (CallCMD e)       = e
+type instance IExp (CallCMD e :+: i) = e
 
 
 
@@ -295,16 +262,13 @@ type instance IPred (TimeCMD e :+: i) = IPred i
 -- * Running commands
 ----------------------------------------------------------------------------------------------------
 
-runRefCMD :: forall pred exp prog a . (VarPred exp ~ pred)
-          => EvalExp exp => RefCMD pred exp prog a -> IO a
-runRefCMD (InitRef a)            = fmap RefEval $ newIORef $ evalExp a
-runRefCMD NewRef                 = fmap RefEval $ newIORef (error "Reading uninitialized reference")
-runRefCMD (SetRef (RefEval r) a) = writeIORef r $ evalExp a
-runRefCMD (GetRef (RefEval (r :: IORef b)))
-    = fmap litExp $ readIORef r
+runRefCMD :: forall exp prog a . EvalExp exp => RefCMD exp prog a -> IO a
+runRefCMD (InitRef a)                       = fmap RefEval $ newIORef $ evalExp a
+runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "reading uninitialized reference"
+runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
+runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 
-runArrCMD :: forall pred exp prog a . (EvalExp exp, VarPred exp ~ pred)
-          => ArrCMD pred exp prog a -> IO a
+runArrCMD :: forall exp prog a . EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
 runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (GetArr i (ArrEval (arr :: IOArray Int b)))
@@ -316,7 +280,12 @@ runControlCMD (While cont body) = loop
   where loop = do
           c <- cont
           when (evalExp c) $ body >> loop
-runControlCMD Break = error "runControlCMD not implemented for Break"
+runControlCMD Break = error "cannot run programs involving break"
+
+evalHandle :: Handle -> IO.Handle
+evalHandle (HandleEval h)        = h
+evalHandle (HandleComp "stdin")  = IO.stdin
+evalHandle (HandleComp "stdout") = IO.stdout
 
 readWord :: IO.Handle -> IO String
 readWord h = do
@@ -331,41 +300,35 @@ readWord h = do
         cs <- readWord h
         return (c:cs)
 
-evalHandle :: Handle -> IO.Handle
-evalHandle (HandleEval h)        = h
-evalHandle (HandleComp "stdin")  = IO.stdin
-evalHandle (HandleComp "stdout") = IO.stdout
+evalFPrintf :: EvalExp exp =>
+    [FunArg PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+evalFPrintf []            pf = pf
+evalFPrintf (FunArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 
-runFileCMD :: (EvalExp exp, VarPred exp Bool) => FileCMD exp IO a -> IO a
+runFileCMD :: EvalExp exp => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
 runFileCMD (FClose (HandleComp "stdout")) = return ()
-runFileCMD (FPut h a) = IO.hPrint (evalHandle h) (evalExp a)
+runFileCMD (FPrintf h format as)          = evalFPrintf as (Printf.hPrintf (evalHandle h) format)
 runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
         [(f,"")] -> return $ litExp f
-        _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
+        _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
-evalPrintf :: EvalExp exp =>
-    [FunArg PrintfArg exp] -> (forall r . Printf.PrintfType r => r) -> IO ()
-evalPrintf []            pf = pf
-evalPrintf (FunArg a:as) pf = evalPrintf as (pf $ evalExp a)
+runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
+runCallCMD (AddInclude _)    = return ()
+runCallCMD (AddDefinition _) = return ()
+runCallCMD (CallFun _ _)     = error "cannot run programs involving callFun"
+runCallCMD (CallProc _ _)    = error "cannot run programs involving callProc"
 
-runConsoleCMD :: EvalExp exp => ConsoleCMD exp IO a -> IO a
-runConsoleCMD (Printf format as) = evalPrintf as (Printf.printf format)
-
-runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
-runTimeCMD GetTime | False = undefined
-
-instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp) IO where interp = runRefCMD
-instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp) IO where interp = runArrCMD
-instance EvalExp exp                       => Interp (ControlCMD exp)  IO where interp = runControlCMD
-instance (EvalExp exp, VarPred exp Bool)   => Interp (FileCMD exp)     IO where interp = runFileCMD
-instance EvalExp exp                       => Interp (ConsoleCMD exp)  IO where interp = runConsoleCMD
-instance EvalExp exp                       => Interp (TimeCMD exp)     IO where interp = runTimeCMD
+instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
+instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
+instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
+instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
+instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
 
 
 
@@ -374,26 +337,26 @@ instance EvalExp exp                       => Interp (TimeCMD exp)     IO where 
 ----------------------------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) => ProgramT instr m (Ref a)
-newRef = singlePE NewRef
+newRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) => ProgramT instr m (Ref a)
+newRef = singleE NewRef
 
 -- | Create an initialized reference
-initRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+initRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
     IExp instr a -> ProgramT instr m (Ref a)
-initRef = singlePE . InitRef
+initRef = singleE . InitRef
 
 -- | Get the contents of a reference
-getRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+getRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
     Ref a -> ProgramT instr m (IExp instr a)
-getRef = singlePE . GetRef
+getRef = singleE . GetRef
 
 -- | Set the contents of a reference
-setRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr) =>
+setRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
     Ref a -> IExp instr a -> ProgramT instr m ()
-setRef r = singlePE . SetRef r
+setRef r = singleE . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (IPred instr a, RefCMD (IPred instr) (IExp instr) :<: instr, Monad m) =>
+modifyRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr, Monad m) =>
     Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = getRef r >>= setRef r . f
 
@@ -404,19 +367,19 @@ unsafeFreezeRef (RefEval r) = litExp (unsafePerformIO $ readIORef r)
 unsafeFreezeRef (RefComp v) = varExp v
 
 -- | Create an uninitialized an array
-newArr :: (IPred instr a, IPred instr i, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+newArr :: (pred a, pred i, Integral i, ArrCMD (IExp instr) :<: instr, pred ~ VarPred (IExp instr)) =>
     IExp instr i -> IExp instr a -> ProgramT instr m (Arr i a)
-newArr n a = singlePE $ NewArr n a
+newArr n a = singleE $ NewArr n a
 
 -- | Set the contents of an array
-getArr :: (IPred instr a, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+getArr :: (VarPred (IExp instr) a, ArrCMD (IExp instr) :<: instr, Integral i) =>
     IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
-getArr i arr = singlePE (GetArr i arr)
+getArr i arr = singleE (GetArr i arr)
 
 -- | Set the contents of an array
-setArr :: (IPred instr a, ArrCMD (IPred instr) (IExp instr) :<: instr, Integral i) =>
+setArr :: (VarPred (IExp instr) a, ArrCMD (IExp instr) :<: instr, Integral i) =>
     IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
-setArr i a arr = singlePE (SetArr i a arr)
+setArr i a arr = singleE (SetArr i a arr)
 
 iff :: (ControlCMD (IExp instr) :<: instr)
     => IExp instr Bool
@@ -426,9 +389,9 @@ iff :: (ControlCMD (IExp instr) :<: instr)
 iff b t f = singleE $ If b t f
 
 ifE
-    :: ( IPred instr a
-       , ControlCMD (IExp instr)           :<: instr
-       , RefCMD (IPred instr) (IExp instr) :<: instr
+    :: ( VarPred (IExp instr) a
+       , ControlCMD (IExp instr) :<: instr
+       , RefCMD (IExp instr)     :<: instr
        , Monad m
        )
     => IExp instr Bool
@@ -447,9 +410,9 @@ while :: (ControlCMD (IExp instr) :<: instr)
 while b t = singleE $ While b t
 
 whileE
-    :: ( IPred instr a
-       , ControlCMD (IExp instr)           :<: instr
-       , RefCMD (IPred instr) (IExp instr) :<: instr
+    :: ( VarPred (IExp instr) a
+       , ControlCMD (IExp instr) :<: instr
+       , RefCMD (IExp instr)     :<: instr
        , Monad m
        )
     => ProgramT instr m (IExp instr Bool)
@@ -469,21 +432,73 @@ fopen file = singleE . FOpen file
 fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 fclose = singleE . FClose
 
-fput :: (Show a, SimpleType a, FileCMD (IExp instr) :<: instr) =>
-    Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl = singleE . FPut hdl
+feof :: (VarPred (IExp instr) Bool, FileCMD (IExp instr) :<: instr) =>
+    Handle -> ProgramT instr m (IExp instr Bool)
+feof = singleE . FEof
 
-fget :: (Read a, SimpleType a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
+class PrintfType r
+  where
+    type PrintfExp r :: * -> *
+    fprf :: Handle -> String -> [FunArg PrintfArg (PrintfExp r)] -> r
+
+instance (FileCMD (IExp instr) :<: instr) => PrintfType (ProgramT instr m ())
+  where
+    type PrintfExp (ProgramT instr m ()) = IExp instr
+    fprf h form as = singleE $ FPrintf h form (reverse as)
+
+instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
+  where
+    type PrintfExp (exp a -> r) = exp
+    fprf h form as = \a -> fprf h form (FunArg a : as)
+
+fprintf :: PrintfType r => Handle -> String -> r
+fprintf h format = fprf h format []
+
+fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
+    Handle -> IExp instr a -> ProgramT instr m ()
+fput hdl a = fprintf hdl "%f" a
+
+fget :: (Read a, Scannable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
     Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
-feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
-feof = singleE . FEof
+printf :: PrintfType r => String -> r
+printf = fprintf stdout
 
-printf :: (PrintfArg a, ConsoleCMD (IExp instr) :<: instr) =>
-    String -> IExp instr a -> ProgramT instr m ()
-printf format a = singleE $ Printf format $ [FunArg a]
+addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
+addInclude = singleE . AddInclude
 
-getTime :: (TimeCMD (IExp instr) :<: instr) => ProgramT instr m (IExp instr Double)
-getTime = singleE GetTime
+addDefinition :: (CallCMD (IExp instr) :<: instr) => C.Definition -> ProgramT instr m ()
+addDefinition = singleE . AddDefinition
+
+callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
+    => String                     -- ^ Function name
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m (IExp instr a)
+callFun fun as = singleE $ CallFun fun as
+
+callProc :: (CallCMD (IExp instr) :<: instr)
+    => String                     -- ^ Function name
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m ()
+callProc fun as = singleE $ CallProc fun as
+
+getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
+    ProgramT instr m (IExp instr Double)
+getTime = do
+    addInclude "<sys/time.h>"
+    addInclude "<sys/resource.h>"
+    addDefinition getTimeDef
+    callFun "get_time" []
+  where
+    getTimeDef = [cedecl|
+      double get_time()
+      {
+          struct timeval t;
+          struct timezone tzp;
+          gettimeofday(&t, &tzp);
+          return t.tv_sec + t.tv_usec*1e-6;
+      }
+      |]
+      -- From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
 

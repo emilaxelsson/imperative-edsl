@@ -17,6 +17,7 @@ import Data.IORef
 import Data.Proxy
 import Data.Typeable
 import Language.Embedded.Imperative
+import Language.Embedded.Backend.C (freshVar)
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C
@@ -72,28 +73,25 @@ data ThreadCMD (prog :: * -> *) a where
   Kill :: ThreadId -> ThreadCMD prog ()
   Wait :: ThreadId -> ThreadCMD prog ()
 
-data ChanCMD p exp (prog :: * -> *) a where
-  NewChan   :: p a => exp Int -> ChanCMD p exp prog (Chan a)
-  ReadChan  :: p a => Chan a -> ChanCMD p exp prog (exp a)
-  WriteChan :: p a => Chan a -> exp a -> ChanCMD p exp prog ()
+data ChanCMD exp (prog :: * -> *) a where
+  NewChan   :: VarPred exp a => exp Int -> ChanCMD exp prog (Chan a)
+  ReadChan  :: VarPred exp a => Chan a -> ChanCMD exp prog (exp a)
+  WriteChan :: VarPred exp a => Chan a -> exp a -> ChanCMD exp prog ()
 
 instance MapInstr ThreadCMD where
   imap f (Fork p)   = Fork (f p)
   imap _ (Kill tid) = Kill tid
   imap _ (Wait tid) = Wait tid
 
-instance MapInstr (ChanCMD p exp) where
+instance MapInstr (ChanCMD exp) where
   imap _ (NewChan sz)    = NewChan sz
   imap _ (ReadChan c)    = ReadChan c
   imap _ (WriteChan c x) = WriteChan c x
 
-type instance IExp (ThreadCMD :+: i)  = IExp i
-type instance IPred (ThreadCMD :+: i) = IPred i
+type instance IExp (ThreadCMD :+: i) = IExp i
 
-type instance IExp (ChanCMD p e)        = e
-type instance IExp (ChanCMD p e :+: i)  = e
-type instance IPred (ChanCMD p e)       = p
-type instance IPred (ChanCMD p e :+: i) = p
+type instance IExp (ChanCMD e)       = e
+type instance IExp (ChanCMD e :+: i) = e
 
 runThreadCMD :: ThreadCMD IO a
              -> IO a
@@ -108,8 +106,8 @@ runThreadCMD (Kill (TIDEval t f)) = do
 runThreadCMD (Wait (TIDEval _ f)) = do
   waitFlag f
 
-runChanCMD :: forall pred exp a. (VarPred exp ~ pred, EvalExp exp)
-           => ChanCMD pred exp IO a -> IO a
+runChanCMD :: forall exp a. EvalExp exp
+           => ChanCMD exp IO a -> IO a
 runChanCMD (NewChan sz) =
   ChanEval <$> Bounded.newBoundedChan (evalExp sz)
 runChanCMD (ReadChan (ChanEval c)) =
@@ -119,7 +117,7 @@ runChanCMD (WriteChan (ChanEval c) x) =
 
 instance Interp ThreadCMD IO where
   interp = runThreadCMD
-instance (VarPred exp ~ p, EvalExp exp) => Interp (ChanCMD p exp) IO where
+instance EvalExp exp => Interp (ChanCMD exp) IO where
   interp = runChanCMD
 
 -- | Fork off a computation as a new thread.
@@ -141,24 +139,24 @@ waitThread = singleton . inj . Wait
 --
 --   We'll likely want to change this, actually copying arrays and the like
 --   into the queue instead of sharing them across threads.
-newChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
+newChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
         => IExp instr Int
         -> ProgramT instr m (Chan a)
-newChan = singlePE . NewChan
+newChan = singleE . NewChan
 
 -- | Read an element from a channel. If channel is empty, blocks until there
 --   is an item available.
-readChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
+readChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
          => Chan a
          -> ProgramT instr m (IExp instr a)
-readChan = singlePE . ReadChan
+readChan = singleE . ReadChan
 
 -- | Write a data element to a channel.
-writeChan :: (IPred instr a, ChanCMD (IPred instr) (IExp instr) :<: instr)
+writeChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
         => Chan a
         -> IExp instr a
         -> ProgramT instr m ()
-writeChan c = singlePE . WriteChan c
+writeChan c = singleE . WriteChan c
 
 instance ToIdent ThreadId where
   toIdent (TIDComp tid) = C.Id $ "t" ++ show tid
@@ -187,7 +185,7 @@ compThreadCMD (Wait tid) = do
 
 -- | Compile `ChanCMD`.
 compChanCMD :: forall exp prog a. CompExp exp
-            => ChanCMD (VarPred exp) exp prog a
+            => ChanCMD exp prog a
             -> CGen a
 compChanCMD cmd@(NewChan sz) = do
   addLocalInclude "chan.h"
@@ -199,23 +197,16 @@ compChanCMD cmd@(NewChan sz) = do
   return c
 compChanCMD (WriteChan c x) = do
   x' <- compExp x
-  t <- compType x
-  ident <- freshId
-  let name = 'v':show ident
-  addLocal [cdecl| $ty:t $id:name; |]
+  (v,name) <- freshVar
+  let _ = v `asTypeOf` x
   addStm [cstm| $id:name = $x'; |]
   addStm [cstm| chan_write($id:c, &$id:name); |]
-compChanCMD cmd@(ReadChan c) = do
-  t <- compTypeP cmd
-  ident <- freshId
-  let name = 'v':show ident
-      var = varExp ident
-  e <- compExp var
-  addLocal [cdecl| $ty:t $id:name; |]
+compChanCMD (ReadChan c) = do
+  (var,name) <- freshVar
   addStm [cstm| chan_read($id:c, &$id:name); |]
   return var
 
 instance Interp ThreadCMD CGen where
   interp = compThreadCMD
-instance (VarPred exp ~ p, CompExp exp) => Interp (ChanCMD p exp) CGen where
+instance CompExp exp => Interp (ChanCMD exp) CGen where
   interp = compChanCMD
