@@ -239,16 +239,15 @@ type instance IExp (FileCMD e :+: i) = e
 
 data CallCMD exp (prog :: * -> *) a
   where
-    Call :: VarPred exp a
-         => [String]         -- Extra includes
-         -> [C.Definition]
-         -> String           -- Function name
-         -> [FunArg Any exp] -- Arguments
-         -> CallCMD exp prog (exp a)
+    AddInclude    :: String       -> CallCMD exp prog ()
+    AddDefinition :: C.Definition -> CallCMD exp prog ()
+    CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
 
 instance MapInstr (CallCMD exp)
   where
-    imap _ (Call incs defs fun as) = Call incs defs fun as
+    imap _ (AddInclude incl)   = AddInclude incl
+    imap _ (AddDefinition def) = AddDefinition def
+    imap _ (CallFun fun args)  = CallFun fun args
 
 type instance IExp (CallCMD e)       = e
 type instance IExp (CallCMD e :+: i) = e
@@ -316,7 +315,9 @@ runFileCMD (FGet h)   = do
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
-runCallCMD (Call _ _ _ _) = error "cannot run programs involving function calls"
+runCallCMD (AddInclude _)    = return ()
+runCallCMD (AddDefinition _) = return ()
+runCallCMD (CallFun _ _)     = error "cannot run programs involving callFun"
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
@@ -459,12 +460,26 @@ fget = singleE . FGet
 printf :: PrintfType r => String -> r
 printf = fprintf stdout
 
-getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr) =>
-    ProgramT instr m (IExp instr Double)
-getTime = singleE $ Call incs [getTimeDef] "get_time" []
-  where
-    incs = ["<sys/time.h>", "<sys/resource.h>"]
+addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
+addInclude = singleE . AddInclude
 
+addDefinition :: (CallCMD (IExp instr) :<: instr) => C.Definition -> ProgramT instr m ()
+addDefinition = singleE . AddDefinition
+
+callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
+    => String                     -- ^ Function name
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m (IExp instr a)
+callFun fun as = singleE $ CallFun fun as
+
+getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
+    ProgramT instr m (IExp instr Double)
+getTime = do
+    addInclude "<sys/time.h>"
+    addInclude "<sys/resource.h>"
+    addDefinition getTimeDef
+    callFun "get_time" []
+  where
     getTimeDef = [cedecl|
       double get_time()
       {

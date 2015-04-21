@@ -145,23 +145,10 @@ compFileCMD (FEof (HandleComp h)) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
--- | Generate a time sampling function
-getTimeDef :: C.Definition
-getTimeDef = [cedecl|
-// From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
-double get_time()
-{
-    struct timeval t;
-    struct timezone tzp;
-    gettimeofday(&t, &tzp);
-    return t.tv_sec + t.tv_usec*1e-6;
-}
-|]
-
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
-compCallCMD (Call incs defs fun as) = do
-    mapM_ addInclude incs
-    addGlobals defs
+compCallCMD (AddInclude inc)    = addInclude inc
+compCallCMD (AddDefinition def) = addGlobal def
+compCallCMD (CallFun fun as)    = do
     as'   <- sequence [compExp a | FunArg a <- as]
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
