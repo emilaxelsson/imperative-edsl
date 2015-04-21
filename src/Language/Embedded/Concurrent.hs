@@ -17,6 +17,7 @@ import Data.IORef
 import Data.Proxy
 import Data.Typeable
 import Language.Embedded.Imperative
+import Language.Embedded.Backend.C (freshVar)
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C
@@ -196,19 +197,12 @@ compChanCMD cmd@(NewChan sz) = do
   return c
 compChanCMD (WriteChan c x) = do
   x' <- compExp x
-  t <- compType x
-  ident <- freshId
-  let name = 'v':show ident
-  addLocal [cdecl| $ty:t $id:name; |]
+  (v,name) <- freshVar
+  let _ = v `asTypeOf` x
   addStm [cstm| $id:name = $x'; |]
   addStm [cstm| chan_write($id:c, &$id:name); |]
-compChanCMD cmd@(ReadChan c) = do
-  t <- compTypeP cmd
-  ident <- freshId
-  let name = 'v':show ident
-      var = varExp ident
-  e <- compExp var
-  addLocal [cdecl| $ty:t $id:name; |]
+compChanCMD (ReadChan c) = do
+  (var,name) <- freshVar
   addStm [cstm| chan_read($id:c, &$id:name); |]
   return var
 
