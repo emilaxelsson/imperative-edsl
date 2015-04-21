@@ -77,6 +77,7 @@ import Prelude hiding (break)
 
 import Control.Monad (when)
 import Data.Array.IO
+import Data.Char (isSpace)
 import Data.IORef
 import Data.Typeable
 import System.IO (IOMode (..))
@@ -92,7 +93,6 @@ import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Expression
 
-import Data.Char (isSpace)
 
 
 ----------------------------------------------------------------------------------------------------
