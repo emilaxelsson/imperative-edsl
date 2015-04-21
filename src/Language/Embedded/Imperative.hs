@@ -82,6 +82,7 @@ import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
 import Data.Constraint
+import Data.Proxy
 
 import Data.ALaCarte
 import Data.TypePredicates
