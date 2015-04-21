@@ -92,6 +92,7 @@ import Data.ALaCarte
 import Data.TypePredicates
 import Control.Monad.Operational.Compositional
 import Language.Embedded.Expression
+import qualified Language.C.Syntax as C
 
 
 
@@ -283,13 +284,14 @@ data CallCMD pred exp (prog :: * -> *) a
   where
     Call :: pred a
          => [String]         -- Extra includes
+         -> [C.Definition]
          -> String           -- Function name
          -> [FunArg Any exp] -- Arguments
          -> CallCMD pred exp prog (exp a)
 
 instance MapInstr (CallCMD pred exp)
   where
-    imap _ (Call incs fun as) = Call incs fun as
+    imap _ (Call incs defs fun as) = Call incs defs fun as
 
 type instance IPred (CallCMD p e)       = p
 type instance IExp  (CallCMD p e)       = e
@@ -365,7 +367,7 @@ runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
 runTimeCMD GetTime = error "cannot run programs involving getTime"
 
 runCallCMD :: EvalExp exp => CallCMD pred exp IO a -> IO a
-runCallCMD (Call _ _ _) = error "cannot run programs involving function calls"
+runCallCMD (Call _ _ _ _) = error "cannot run programs involving function calls"
 
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (RefCMD pred exp)  IO where interp = runRefCMD
 instance (EvalExp exp, VarPred exp ~ pred) => Interp (ArrCMD pred exp)  IO where interp = runArrCMD

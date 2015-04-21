@@ -171,8 +171,9 @@ compTimeCMD GetTime = do
     return $ varExp i
 
 compCallCMD :: (CompExp exp, pred ~ VarPred exp) => CallCMD pred exp CGen a -> CGen a
-compCallCMD (Call incs fun as) = do
+compCallCMD (Call incs defs fun as) = do
     mapM_ addInclude incs
+    addGlobals defs
     as'   <- sequence [compExp a | FunArg a <- as]
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
