@@ -109,7 +109,7 @@ compIOMode AppendMode    = "a"
 compIOMode ReadWriteMode = "r+"
 
 -- | Compile `FileCMD`
-compFileCMD :: (CompExp exp, VarPred exp Bool) => FileCMD exp CGen a -> CGen a
+compFileCMD :: CompExp exp => FileCMD exp CGen a -> CGen a
 compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
@@ -167,9 +167,9 @@ compCallCMD (Call incs defs fun as) = do
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
 
-instance CompExp exp                     => Interp (RefCMD exp)     CGen where interp = compRefCMD
-instance CompExp exp                     => Interp (ArrCMD exp)     CGen where interp = compArrCMD
-instance CompExp exp                     => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance (CompExp exp, VarPred exp Bool) => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp                     => Interp (CallCMD exp)    CGen where interp = compCallCMD
+instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
+instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
+instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 

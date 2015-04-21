@@ -221,7 +221,7 @@ data FileCMD exp (prog :: * -> *) a
   where
     FOpen   :: FilePath -> IOMode                             -> FileCMD exp prog Handle
     FClose  :: Handle                                         -> FileCMD exp prog ()
-    FEof    :: Handle                                         -> FileCMD exp prog (exp Bool)
+    FEof    :: VarPred exp Bool => Handle                     -> FileCMD exp prog (exp Bool)
     FPrintf :: Handle -> String -> [FunArg PrintfArg exp]     -> FileCMD exp prog ()
     FGet    :: (Read a, Scannable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
 
@@ -301,7 +301,7 @@ evalFPrintf :: EvalExp exp =>
 evalFPrintf []            pf = pf
 evalFPrintf (FunArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 
-runFileCMD :: (EvalExp exp, VarPred exp Bool) => FileCMD exp IO a -> IO a
+runFileCMD :: EvalExp exp => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
@@ -317,11 +317,11 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
 runCallCMD (Call _ _ _ _) = error "cannot run programs involving function calls"
 
-instance EvalExp exp                     => Interp (RefCMD exp)     IO where interp = runRefCMD
-instance EvalExp exp                     => Interp (ArrCMD exp)     IO where interp = runArrCMD
-instance EvalExp exp                     => Interp (ControlCMD exp) IO where interp = runControlCMD
-instance (VarPred exp Bool, EvalExp exp) => Interp (FileCMD exp)    IO where interp = runFileCMD
-instance EvalExp exp                     => Interp (CallCMD exp)    IO where interp = runCallCMD
+instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
+instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
+instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
+instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
+instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
 
 
 
@@ -425,7 +425,8 @@ fopen file = singleE . FOpen file
 fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 fclose = singleE . FClose
 
-feof :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m (IExp instr Bool)
+feof :: (VarPred (IExp instr) Bool, FileCMD (IExp instr) :<: instr) =>
+    Handle -> ProgramT instr m (IExp instr Bool)
 feof = singleE . FEof
 
 class PrintfType r
