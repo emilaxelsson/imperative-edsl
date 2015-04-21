@@ -153,6 +153,9 @@ compCallCMD (CallFun fun as)    = do
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
+compCallCMD (CallProc fun as) = do
+    as' <- sequence [compExp a | FunArg a <- as]
+    addStm [cstm| $id:fun($args:as'); |]
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD

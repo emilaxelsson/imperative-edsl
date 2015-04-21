@@ -63,6 +63,8 @@ module Language.Embedded.Imperative
   , fput
   , fget
   , printf
+  , callFun
+  , callProc
   , getTime
   ) where
 
@@ -242,12 +244,14 @@ data CallCMD exp (prog :: * -> *) a
     AddInclude    :: String       -> CallCMD exp prog ()
     AddDefinition :: C.Definition -> CallCMD exp prog ()
     CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
+    CallProc      ::                  String -> [FunArg Any exp] -> CallCMD exp prog ()
 
 instance MapInstr (CallCMD exp)
   where
-    imap _ (AddInclude incl)   = AddInclude incl
-    imap _ (AddDefinition def) = AddDefinition def
-    imap _ (CallFun fun args)  = CallFun fun args
+    imap _ (AddInclude incl)    = AddInclude incl
+    imap _ (AddDefinition def)  = AddDefinition def
+    imap _ (CallFun fun args)   = CallFun fun args
+    imap _ (CallProc proc args) = CallProc proc args
 
 type instance IExp (CallCMD e)       = e
 type instance IExp (CallCMD e :+: i) = e
@@ -318,6 +322,7 @@ runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
 runCallCMD (AddInclude _)    = return ()
 runCallCMD (AddDefinition _) = return ()
 runCallCMD (CallFun _ _)     = error "cannot run programs involving callFun"
+runCallCMD (CallProc _ _)    = error "cannot run programs involving callProc"
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
@@ -471,6 +476,12 @@ callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m (IExp instr a)
 callFun fun as = singleE $ CallFun fun as
+
+callProc :: (CallCMD (IExp instr) :<: instr)
+    => String                     -- ^ Function name
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m ()
+callProc fun as = singleE $ CallProc fun as
 
 getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
     ProgramT instr m (IExp instr Double)
