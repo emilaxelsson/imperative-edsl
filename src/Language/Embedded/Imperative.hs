@@ -305,7 +305,7 @@ type instance IExp  (CallCMD p e :+: i) = e
 runRefCMD :: forall pred exp prog a . (VarPred exp ~ pred)
           => EvalExp exp => RefCMD pred exp prog a -> IO a
 runRefCMD (InitRef a)            = fmap RefEval $ newIORef $ evalExp a
-runRefCMD NewRef                 = fmap RefEval $ newIORef (error "Reading uninitialized reference")
+runRefCMD NewRef                 = fmap RefEval $ newIORef $ error "reading uninitialized reference"
 runRefCMD (SetRef (RefEval r) a) = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b)))
     = fmap litExp $ readIORef r
@@ -323,7 +323,7 @@ runControlCMD (While cont body) = loop
   where loop = do
           c <- cont
           when (evalExp c) $ body >> loop
-runControlCMD Break = error "runControlCMD not implemented for Break"
+runControlCMD Break = error "cannot run programs involving break"
 
 evalHandle :: Handle -> IO.Handle
 evalHandle (HandleEval h)        = h
@@ -358,11 +358,11 @@ runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
         [(f,"")] -> return $ litExp f
-        _        -> error $ "runFileCMD: Get: no parse (input " ++ show w ++ ")"
+        _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runTimeCMD :: EvalExp exp => TimeCMD exp IO a -> IO a
-runTimeCMD GetTime = error "runTimeCMD not implemented for GetTime"
+runTimeCMD GetTime = error "cannot run programs involving getTime"
 
 runCallCMD :: EvalExp exp => CallCMD pred exp IO a -> IO a
 runCallCMD (Call _ _ _) = error "cannot run programs involving function calls"
