@@ -9,11 +9,9 @@ import Control.Applicative
 import Language.C.Monad
 import Text.PrettyPrint.Mainland (Doc)
 
-type Pred = VarPred Expr
-
 type L =
   ThreadCMD :+:
-  ChanCMD Pred Expr :+:
+  ChanCMD Expr :+:
   ControlCMD Expr :+:
   FileCMD Expr
 

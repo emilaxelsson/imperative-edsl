@@ -28,7 +28,7 @@ freshVar = do
 
 -- | Compile `RefCMD`
 compRefCMD :: forall exp prog a. CompExp exp
-           => RefCMD (VarPred exp) exp prog a -> CGen a
+           => RefCMD exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     t <- compTypePP2 (Proxy :: Proxy exp) cmd
     r <- RefComp <$> freshId
@@ -58,7 +58,7 @@ instance ToIdent (Arr i a)
 
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. CompExp exp
-           => ArrCMD (VarPred exp) exp prog a -> CGen a
+           => ArrCMD exp prog a -> CGen a
 compArrCMD (NewArr size ini) = do
     addInclude "<string.h>"
     sym <- gensym "a"
@@ -158,7 +158,7 @@ double get_time()
 }
 |]
 
-compCallCMD :: (CompExp exp, pred ~ VarPred exp) => CallCMD pred exp CGen a -> CGen a
+compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (Call incs defs fun as) = do
     mapM_ addInclude incs
     addGlobals defs
@@ -167,9 +167,9 @@ compCallCMD (Call incs defs fun as) = do
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
 
-instance (CompExp exp, pred ~ (VarPred exp)) => Interp (RefCMD pred exp) CGen where interp = compRefCMD
-instance (CompExp exp, pred ~ (VarPred exp)) => Interp (ArrCMD pred exp) CGen where interp = compArrCMD
-instance CompExp exp                         => Interp (ControlCMD exp)  CGen where interp = compControlCMD
-instance (CompExp exp, VarPred exp Bool)     => Interp (FileCMD exp)     CGen where interp = compFileCMD
-instance (CompExp exp, pred ~ VarPred exp, VarPred exp Double) => Interp (CallCMD pred exp) CGen where interp = compCallCMD
+instance CompExp exp                     => Interp (RefCMD exp)     CGen where interp = compRefCMD
+instance CompExp exp                     => Interp (ArrCMD exp)     CGen where interp = compArrCMD
+instance CompExp exp                     => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance (CompExp exp, VarPred exp Bool) => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance CompExp exp                     => Interp (CallCMD exp)    CGen where interp = compCallCMD
 

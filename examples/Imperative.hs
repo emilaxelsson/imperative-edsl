@@ -14,9 +14,7 @@ import Language.Embedded.Backend.C ()
 
 
 
-type Pred = VarPred Expr
-
-refProg :: Program (RefCMD Pred Expr) (Expr Int)
+refProg :: Program (RefCMD Expr) (Expr Int)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
@@ -26,8 +24,8 @@ refProg = do
     return c
 
 type CMD1
-    =   RefCMD Pred Expr
-    :+: ArrCMD Pred Expr
+    =   RefCMD Expr
+    :+: ArrCMD Expr
     :+: ControlCMD Expr
 
 arrProg :: Program CMD1 (Expr Int)
@@ -55,7 +53,7 @@ compArr = prettyCGen $ wrapMain $ interpret arrProg
 
 
 type CMD2
-    =   RefCMD Pred Expr
+    =   RefCMD Expr
     :+: ControlCMD Expr
     :+: FileCMD Expr
 
