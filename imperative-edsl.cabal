@@ -19,6 +19,7 @@ source-repository head
 
 library
   exposed-modules:
+    Control.Monads
     Control.Monad.Operational.Compositional
     Data.ALaCarte
     Data.TypePredicates
