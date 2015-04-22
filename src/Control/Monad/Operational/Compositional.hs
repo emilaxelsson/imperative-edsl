@@ -40,6 +40,7 @@ module Control.Monad.Operational.Compositional
     , unview
       -- * Traversing programs
     , DryInterp (..)
+    , observe_
     , observe
     , fresh
     , freshStr
@@ -205,14 +206,23 @@ class DryInterp instr
     dryInterp :: MonadSupply m => instr m a -> m a
 
 -- | Interpretation of a program as a combination of dry interpretation and effectful observation
-observe :: (DryInterp instr, MapInstr instr, MonadSupply m)
+observe_ :: (DryInterp instr, MapInstr instr, MonadSupply m)
     => (forall a . instr m a -> a -> m ())  -- ^ Function for observing instructions
+    -> Program instr a
+    -> m a
+observe_ obs = interpretWithMonad $ \i -> do
+    a <- dryInterp i
+    obs i a
+    return a
+
+-- | Interpretation of a program as a combination of dry interpretation and effectful observation
+observe :: (DryInterp instr, MapInstr instr, MonadSupply m)
+    => (forall a . instr m a -> a -> m a)  -- ^ Function for observing instructions
     -> Program instr a
     -> m a
 observe obs = interpretWithMonad $ \i -> do
     a <- dryInterp i
     obs i a
-    return a
 
 instance (DryInterp i1, DryInterp i2) => DryInterp (i1 :+: i2)
   where
