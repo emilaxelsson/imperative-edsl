@@ -147,10 +147,13 @@ data Ref a
 -- | Commands for mutable references
 data RefCMD exp (prog :: * -> *) a
   where
-    NewRef          :: VarPred exp a => RefCMD exp prog (Ref a)
-    InitRef         :: VarPred exp a => exp a -> RefCMD exp prog (Ref a)
-    GetRef          :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
-    SetRef          ::                  Ref a -> exp a -> RefCMD exp prog ()
+    NewRef  :: VarPred exp a => RefCMD exp prog (Ref a)
+    InitRef :: VarPred exp a => exp a -> RefCMD exp prog (Ref a)
+    GetRef  :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
+    SetRef  :: VarPred exp a => Ref a -> exp a -> RefCMD exp prog ()
+      -- `VarPred` for `SetRef` is not needed for code generation, but it can be useful when
+      -- interpreting with a dynamically typed store. `VarPred` can then be used to supply a
+      -- `Typeable` dictionary for casting.
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
