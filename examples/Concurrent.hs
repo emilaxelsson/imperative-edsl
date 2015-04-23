@@ -1,9 +1,11 @@
 module Main where
+import Prelude hiding (break)
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
 import Language.Embedded.Expr
 import Language.Embedded.Backend.C ()
 import Control.Applicative
+import Control.Monad
 
 -- For compilation
 import Language.C.Monad
@@ -29,18 +31,28 @@ deadlock = do
 --   happen in separate threads.
 mapFile :: (Expr Float -> Expr Float) -> FilePath -> Program L ()
 mapFile f i = do
-  c1 <- newChan 5
-  c2 <- newChan 5
-  t1 <- fork $ while (pure true) $ do
-    readChan c1 >>= writeChan c2 . f
-  t2 <- fork $ while (pure true) $ do
-    readChan c2 >>= printf "%f\n"
+  c1 <- newCloseableChan 5
+  c2 <- newCloseableChan 5
   fi <- fopen i ReadMode
+
+  t1 <- fork $ do
+    while (return true) $ do
+      x <- readChan c1
+      readOK <- lastChanReadOK c1
+      iff readOK
+        (void $ writeChan c2 (f x))
+        (closeChan c2 >> break)
+
+  t2 <- fork $ do
+    while (lastChanReadOK c2) $ do
+      readChan c2 >>= printf "%f\n"
+
   t3 <- fork $ do
     while (Not <$> feof fi) $ do
-      fget fi >>= writeChan c1
+      fget fi >>= void . writeChan c1
     fclose fi
-  waitThread t3
+    closeChan c1
+  waitThread t2
 
 -- | Waiting for thread completion.
 waiting :: Program L ()

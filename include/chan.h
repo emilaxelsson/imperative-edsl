@@ -27,23 +27,27 @@ void chan_close(chan_t c);
 
 /* Read an element from a channel into the given buffer.
    In the open state, attempting to read from an empty channel will block.
-   Upon resumption, chan_read will return CHAN_OPEN, to indicate that the
-   channel was open when the read was initiated.
 
-   In the closed state, reading from an empty channel will *not* block, but
-   immediately return CHAN_CLOSED, indicating that the channel has been closed,
-   and that no new data will be written to it. Reading from a non-empty channel
-   will return CHAN_OPEN until the channel becomes empty.
+   In the closed state, reading from an empty channel will *not* block.
+   Consumers should use chan_last_read_ok to check whether a read succeeded
+   or not before using the contents of the buffer.
 */
-chan_state_t chan_read(chan_t c, void *buf);
+void chan_read(chan_t c, void *buf);
 
 /* Write an element from the given buffer into a channel.
    Writing to a full channel in the open state will block until the channel is
-   no longer full, and chan_write will return CHAN_OPEN upon resumption.
+   no longer full, and chan_write will return nonzero upon resumption.
 
    Writing to a channel in the closed state will always be a non-blocking no-op
-   which returns CHAN_CLOSED.
+   which returns 0. If a write is blocking on a full channel when chan_close is
+   called, the write will happen as soon as the channel is not full anymore.
+   Any subsequent writes will still be discarded.
 */
-chan_state_t chan_write(chan_t c, void *buf);
+int chan_write(chan_t c, void *buf);
+
+/* Returns 0 if this channel was closed and empty at the last attempted
+   read, otherwise returns nonzero.
+*/
+int chan_last_read_ok(chan_t c);
 
 #endif /* __CHAN_H__ */
