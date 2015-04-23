@@ -5,8 +5,10 @@ module Language.Embedded.Concurrent (
     CID, Chan (..),
     ThreadCMD (..),
     ChanCMD (..),
+    Closeable, Uncloseable,
     fork, killThread, waitThread,
-    newChan, readChan, writeChan
+    newChan, newCloseableChan, readChan, writeChan,
+    closeChan, lastChanReadOK
   ) where
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -63,9 +65,12 @@ instance Show ThreadId where
   show (TIDEval tid _) = show tid
   show (TIDComp tid)   = show tid
 
+data Closeable
+data Uncloseable
+
 -- | A bounded channel.
-data Chan a
-  = ChanEval (Bounded.BoundedChan a)
+data Chan t a
+  = ChanEval (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
   | ChanComp CID
 
 data ThreadCMD (prog :: * -> *) a where
@@ -74,9 +79,13 @@ data ThreadCMD (prog :: * -> *) a where
   Wait :: ThreadId -> ThreadCMD prog ()
 
 data ChanCMD exp (prog :: * -> *) a where
-  NewChan   :: VarPred exp a => exp Int -> ChanCMD exp prog (Chan a)
-  ReadChan  :: VarPred exp a => Chan a -> ChanCMD exp prog (exp a)
-  WriteChan :: VarPred exp a => Chan a -> exp a -> ChanCMD exp prog ()
+  NewChan   :: VarPred exp a => exp Int -> ChanCMD exp prog (Chan t a)
+  ReadChan  :: VarPred exp a => Chan t a -> ChanCMD exp prog (exp a)
+  WriteChan :: (VarPred exp a, VarPred exp Bool)
+            => Chan t a -> exp a -> ChanCMD exp prog (exp Bool)
+  CloseChan :: Chan Closeable a -> ChanCMD exp prog ()
+  ReadOK    :: VarPred exp Bool
+            => Chan Closeable a -> ChanCMD exp prog (exp Bool)
 
 instance MapInstr ThreadCMD where
   imap f (Fork p)   = Fork (f p)
@@ -87,6 +96,8 @@ instance MapInstr (ChanCMD exp) where
   imap _ (NewChan sz)    = NewChan sz
   imap _ (ReadChan c)    = ReadChan c
   imap _ (WriteChan c x) = WriteChan c x
+  imap _ (CloseChan c)   = CloseChan c
+  imap _ (ReadOK c)      = ReadOK c
 
 type instance IExp (ThreadCMD :+: i) = IExp i
 
@@ -110,10 +121,29 @@ runChanCMD :: forall exp a. EvalExp exp
            => ChanCMD exp IO a -> IO a
 runChanCMD (NewChan sz) =
   ChanEval <$> Bounded.newBoundedChan (evalExp sz)
-runChanCMD (ReadChan (ChanEval c)) =
-  litExp <$> Bounded.readChan c
-runChanCMD (WriteChan (ChanEval c) x) =
-  Bounded.writeChan c (evalExp x)
+           <*> newIORef False
+           <*> newIORef True
+runChanCMD (ReadChan (ChanEval c closedref lastread)) = do
+  closed <- readIORef closedref
+  mval <- Bounded.tryReadChan c
+  case mval of
+    Just x -> do
+        return $ litExp x
+    Nothing
+      | closed -> do
+        writeIORef lastread False
+        return undefined
+      | otherwise -> do
+        litExp <$> Bounded.readChan c
+runChanCMD (WriteChan (ChanEval c closedref _) x) = do
+  closed <- readIORef closedref
+  if closed
+    then return (litExp False)
+    else Bounded.writeChan c (evalExp x) >> return (litExp True)
+runChanCMD (CloseChan (ChanEval _ closedref _)) = do
+  writeIORef closedref True
+runChanCMD (ReadOK (ChanEval _ _ lastread)) = do
+  litExp <$> readIORef lastread
 
 instance Interp ThreadCMD IO where
   interp = runThreadCMD
@@ -141,27 +171,55 @@ waitThread = singleton . inj . Wait
 --   into the queue instead of sharing them across threads.
 newChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
         => IExp instr Int
-        -> ProgramT instr m (Chan a)
+        -> ProgramT instr m (Chan Uncloseable a)
 newChan = singleE . NewChan
+
+newCloseableChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
+        => IExp instr Int
+        -> ProgramT instr m (Chan Closeable a)
+newCloseableChan = singleE . NewChan
 
 -- | Read an element from a channel. If channel is empty, blocks until there
 --   is an item available.
+--   If 'closeChan' has been called on the channel *and* if the channel is
+--   empty, @readChan@ returns an undefined value immediately.
 readChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
-         => Chan a
+         => Chan t a
          -> ProgramT instr m (IExp instr a)
 readChan = singleE . ReadChan
 
 -- | Write a data element to a channel.
-writeChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
-        => Chan a
+--   If 'closeChan' has been called on the channel, all calls to @writeChan@
+--   become non-blocking no-ops and return @False@, otherwise returns @True@.
+writeChan :: (VarPred (IExp instr) a,
+              VarPred (IExp instr) Bool,
+              ChanCMD (IExp instr) :<: instr)
+        => Chan t a
         -> IExp instr a
-        -> ProgramT instr m ()
+        -> ProgramT instr m (IExp instr Bool)
 writeChan c = singleE . WriteChan c
+
+-- | When 'readChan' was last called on the given channel, did the read
+--   succeed?
+--   Always returns @True@ unless 'closeChan' has been called on the channel.
+--   Always returns @True@ if the channel has never been read.
+lastChanReadOK :: (VarPred (IExp instr) Bool, ChanCMD (IExp instr) :<: instr)
+               => Chan Closeable a
+               -> ProgramT instr m (IExp instr Bool)
+lastChanReadOK = singleE . ReadOK
+
+-- | Close a channel. All subsequent write operations will be no-ops.
+--   After the channel is drained, all subsequent read operations will be
+--   no-ops as well.
+closeChan :: (ChanCMD (IExp instr) :<: instr)
+          => Chan Closeable a
+          -> ProgramT instr m ()
+closeChan = singleE . CloseChan
 
 instance ToIdent ThreadId where
   toIdent (TIDComp tid) = C.Id $ "t" ++ show tid
 
-instance ToIdent (Chan a) where
+instance ToIdent (Chan t a) where
   toIdent (ChanComp c) = C.Id $ "chan" ++ show c
 
 -- | Compile `ThreadCMD`.
@@ -198,12 +256,20 @@ compChanCMD cmd@(NewChan sz) = do
 compChanCMD (WriteChan c x) = do
   x' <- compExp x
   (v,name) <- freshVar
+  (ok,okname) <- freshVar
   let _ = v `asTypeOf` x
   addStm [cstm| $id:name = $x'; |]
-  addStm [cstm| chan_write($id:c, &$id:name); |]
+  addStm [cstm| $id:okname = chan_write($id:c, &$id:name); |]
+  return ok
 compChanCMD (ReadChan c) = do
   (var,name) <- freshVar
   addStm [cstm| chan_read($id:c, &$id:name); |]
+  return var
+compChanCMD (CloseChan c) = do
+  addStm [cstm| chan_close($id:c); |]
+compChanCMD (ReadOK c) = do
+  (var,name) <- freshVar
+  addStm [cstm| $id:name = chan_last_read_ok($id:c); |]
   return var
 
 instance Interp ThreadCMD CGen where
