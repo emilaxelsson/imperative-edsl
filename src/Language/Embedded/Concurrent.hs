@@ -2,7 +2,7 @@
 -- | (Very) basic concurrency primitives.
 module Language.Embedded.Concurrent (
     TID, ThreadId (..),
-    CID, Chan (..),
+    CID, ChanBound, Chan (..),
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable,
@@ -25,6 +25,10 @@ import Language.C.Monad
 import qualified Language.C.Syntax as C
 import qualified Control.Concurrent as CC
 import qualified Control.Concurrent.BoundedChan as Bounded
+import Data.Word (Word16)
+
+-- | Maximum number of elements in some bounded channel.
+type ChanBound = Word16
 
 type TID = VarId
 type CID = VarId
@@ -79,7 +83,7 @@ data ThreadCMD (prog :: * -> *) a where
   Wait :: ThreadId -> ThreadCMD prog ()
 
 data ChanCMD exp (prog :: * -> *) a where
-  NewChan   :: VarPred exp a => exp Int -> ChanCMD exp prog (Chan t a)
+  NewChan   :: VarPred exp a => exp ChanBound -> ChanCMD exp prog (Chan t a)
   ReadChan  :: VarPred exp a => Chan t a -> ChanCMD exp prog (exp a)
   WriteChan :: (VarPred exp a, VarPred exp Bool)
             => Chan t a -> exp a -> ChanCMD exp prog (exp Bool)
@@ -120,7 +124,7 @@ runThreadCMD (Wait (TIDEval _ f)) = do
 runChanCMD :: forall exp a. EvalExp exp
            => ChanCMD exp IO a -> IO a
 runChanCMD (NewChan sz) =
-  ChanEval <$> Bounded.newBoundedChan (evalExp sz)
+  ChanEval <$> Bounded.newBoundedChan (fromIntegral $ evalExp sz)
            <*> newIORef False
            <*> newIORef True
 runChanCMD (ReadChan (ChanEval c closedref lastread)) = do
@@ -170,12 +174,12 @@ waitThread = singleton . inj . Wait
 --   We'll likely want to change this, actually copying arrays and the like
 --   into the queue instead of sharing them across threads.
 newChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
-        => IExp instr Int
+        => IExp instr ChanBound
         -> ProgramT instr m (Chan Uncloseable a)
 newChan = singleE . NewChan
 
 newCloseableChan :: (VarPred (IExp instr) a, ChanCMD (IExp instr) :<: instr)
-        => IExp instr Int
+        => IExp instr ChanBound
         -> ProgramT instr m (Chan Closeable a)
 newCloseableChan = singleE . NewChan
 
