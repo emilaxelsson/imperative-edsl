@@ -149,10 +149,14 @@ compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
 compCallCMD (AddDefinition def) = addGlobal def
 compCallCMD (CallFun fun as)    = do
-    as'   <- sequence [compExp a | FunArg a <- as]
+    as'   <- mapM mkArg as
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
+  where
+    mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
+    mkArg (FunArg a) = compExp a
+    mkArg (RefArg r) = return [cexp|&$id:r|]
 compCallCMD (CallProc fun as) = do
     as' <- sequence [compExp a | FunArg a <- as]
     addStm [cstm| $id:fun($args:as'); |]
