@@ -145,6 +145,10 @@ compFileCMD (FEof (HandleComp h)) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
+mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
+mkArg (FunArg a) = compExp a
+mkArg (RefArg r) = return [cexp|&$id:r|]
+
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
 compCallCMD (AddDefinition def) = addGlobal def
@@ -154,11 +158,8 @@ compCallCMD (CallFun fun as)    = do
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
   where
-    mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
-    mkArg (FunArg a) = compExp a
-    mkArg (RefArg r) = return [cexp|&$id:r|]
 compCallCMD (CallProc fun as) = do
-    as' <- sequence [compExp a | FunArg a <- as]
+    as' <- mapM mkArg as
     addStm [cstm| $id:fun($args:as'); |]
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
