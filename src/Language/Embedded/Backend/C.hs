@@ -129,7 +129,7 @@ compFileCMD (FPrintf (HandleComp h) form as) = do
     let h'     = [cexp| $id:h |]
         form'  = show form
         form'' = [cexp| $id:form' |]
-    as' <- fmap ([h',form'']++) $ sequence [compExp a | FunArg a <- as]
+    as' <- fmap ([h',form'']++) $ sequence [compExp a | ValArg a <- as]
     addStm [cstm| fprintf($args:as'); |]
 compFileCMD cmd@(FGet (HandleComp h)) = do
     (v,n) <- freshVar
@@ -146,7 +146,7 @@ compFileCMD (FEof (HandleComp h)) = do
     return v
 
 mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
-mkArg (FunArg a) = compExp a
+mkArg (ValArg a) = compExp a
 mkArg (RefArg r) = return [cexp|&$id:r|]
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a

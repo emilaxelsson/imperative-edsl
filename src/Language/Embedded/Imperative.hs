@@ -131,7 +131,7 @@ singleE = singleton . inj
 -- | A function argument with constrained existentially quantified type
 data FunArg pred exp
   where
-    FunArg :: pred a => exp a -> FunArg pred exp
+    ValArg :: pred a => exp a -> FunArg pred exp
     RefArg :: Ref a -> FunArg pred exp
 
 
@@ -341,7 +341,7 @@ readWord h = do
 evalFPrintf :: EvalExp exp =>
     [FunArg PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
 evalFPrintf []            pf = pf
-evalFPrintf (FunArg a:as) pf = evalFPrintf as (pf $ evalExp a)
+evalFPrintf (ValArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 
 runFileCMD :: EvalExp exp => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
@@ -487,7 +487,7 @@ instance (FileCMD (IExp instr) :<: instr) => PrintfType (ProgramT instr m ())
 instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
   where
     type PrintfExp (exp a -> r) = exp
-    fprf h form as = \a -> fprf h form (FunArg a : as)
+    fprf h form as = \a -> fprf h form (ValArg a : as)
 
 fprintf :: PrintfType r => Handle -> String -> r
 fprintf h format = fprf h format []
