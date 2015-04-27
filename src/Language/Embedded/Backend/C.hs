@@ -157,7 +157,6 @@ compCallCMD (CallFun fun as)    = do
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
-  where
 compCallCMD (CallProc fun as) = do
     as' <- mapM mkArg as
     addStm [cstm| $id:fun($args:as'); |]
