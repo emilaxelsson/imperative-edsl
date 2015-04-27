@@ -78,7 +78,6 @@ data Chan t a
   | ChanComp CID
 
 data ThreadCMD (prog :: * -> *) a where
-  Fork       :: prog () -> ThreadCMD prog ThreadId
   ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD prog ThreadId
   Kill       :: ThreadId -> ThreadCMD prog ()
   Wait       :: ThreadId -> ThreadCMD prog ()
@@ -93,7 +92,6 @@ data ChanCMD exp (prog :: * -> *) a where
             => Chan Closeable a -> ChanCMD exp prog (exp Bool)
 
 instance MapInstr ThreadCMD where
-  imap f (Fork p)       = Fork (f p)
   imap f (ForkWithId p) = ForkWithId $ f . p
   imap _ (Kill tid)     = Kill tid
   imap _ (Wait tid)     = Wait tid
@@ -112,10 +110,6 @@ type instance IExp (ChanCMD e :+: i) = e
 
 runThreadCMD :: ThreadCMD IO a
              -> IO a
-runThreadCMD (Fork p) = do
-  f <- newFlag
-  tid <- CC.forkIO . void $ p >> setFlag f ()
-  return $ TIDEval tid f
 runThreadCMD (ForkWithId p) = do
   f <- newFlag
   tidvar <- CC.newEmptyMVar
@@ -167,7 +161,7 @@ instance EvalExp exp => Interp (ChanCMD exp) IO where
 fork :: (ThreadCMD :<: instr)
      => ProgramT instr m ()
      -> ProgramT instr m ThreadId
-fork = singleton . inj . Fork
+fork = forkWithId . const
 
 -- | Fork off a computation as a new thread, with access to its own thread ID.
 forkWithId :: (ThreadCMD :<: instr)
@@ -250,32 +244,24 @@ instance ToIdent (Chan t a) where
 -- | Compile `ThreadCMD`.
 --   TODO: sharing for threads with the same body
 compThreadCMD :: ThreadCMD CGen a -> CGen a
-compThreadCMD (Fork body) = do
-  tid <- TIDComp <$> freshId
-  compFork tid body
 compThreadCMD (ForkWithId body) = do
   tid <- TIDComp <$> freshId
-  compFork tid (body tid)
-compThreadCMD (Kill tid) = do
-  touchVar tid
-  addStm [cstm| pthread_cancel($id:tid); |]
-compThreadCMD (Wait tid) = do
-  touchVar tid
-  addStm [cstm| pthread_join($id:tid, NULL); |]
-
--- | Compile the forking of a thread with the given thread ID.
-compFork :: ThreadId -> CGen () -> CGen ThreadId
-compFork tid body = do
   let funName = threadFun tid
   _ <- inFunctionTy [cty|void*|] funName $ do
     addParam [cparam| void* unused |]
-    body
+    body tid
     addStm [cstm| return NULL; |]
   addSystemInclude "pthread.h"
   touchVar tid
   addLocal [cdecl| typename pthread_t $id:tid; |]
   addStm [cstm| pthread_create(&$id:tid, NULL, $id:funName, NULL); |]
   return tid
+compThreadCMD (Kill tid) = do
+  touchVar tid
+  addStm [cstm| pthread_cancel($id:tid); |]
+compThreadCMD (Wait tid) = do
+  touchVar tid
+  addStm [cstm| pthread_join($id:tid, NULL); |]
 
 -- | Compile `ChanCMD`.
 compChanCMD :: forall exp prog a. CompExp exp
