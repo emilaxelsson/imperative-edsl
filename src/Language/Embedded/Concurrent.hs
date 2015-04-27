@@ -257,8 +257,10 @@ compThreadCMD (ForkWithId body) = do
   tid <- TIDComp <$> freshId
   compFork tid (body tid)
 compThreadCMD (Kill tid) = do
+  touchVar tid
   addStm [cstm| pthread_cancel($id:tid); |]
 compThreadCMD (Wait tid) = do
+  touchVar tid
   addStm [cstm| pthread_join($id:tid, NULL); |]
 
 -- | Compile the forking of a thread with the given thread ID.
@@ -270,6 +272,7 @@ compFork tid body = do
     body
     addStm [cstm| return NULL; |]
   addSystemInclude "pthread.h"
+  touchVar tid
   addLocal [cdecl| typename pthread_t $id:tid; |]
   addStm [cstm| pthread_create(&$id:tid, NULL, $id:funName, NULL); |]
   return tid
