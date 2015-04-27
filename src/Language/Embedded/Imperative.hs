@@ -479,9 +479,9 @@ class PrintfType r
     type PrintfExp r :: * -> *
     fprf :: Handle -> String -> [FunArg PrintfArg (PrintfExp r)] -> r
 
-instance (FileCMD (IExp instr) :<: instr) => PrintfType (ProgramT instr m ())
+instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr m a)
   where
-    type PrintfExp (ProgramT instr m ()) = IExp instr
+    type PrintfExp (ProgramT instr m a) = IExp instr
     fprf h form as = singleE $ FPrintf h form (reverse as)
 
 instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
