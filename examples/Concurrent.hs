@@ -61,6 +61,16 @@ waiting = do
   waitThread t
   printf "Main thread printing %d\n" (1 :: Expr Int)
 
+-- | A thread kills itself using its own thread ID.
+suicide :: Program L ()
+suicide = do
+  tid <- forkWithId $ \tid -> do
+    () <- printf "This is printed. %d\n" (0 :: Expr Int)
+    killThread tid
+    printf "This is not. %d\n" (0 :: Expr Int)
+  waitThread tid
+  printf "The thread is dead, long live the thread! %d\n" (0 :: Expr Int)
+
 -- | Compile a program. To compile the resulting C program:
 --
 --       gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c

@@ -6,7 +6,7 @@ module Language.Embedded.Concurrent (
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable,
-    fork, killThread, waitThread,
+    fork, forkWithId, killThread, waitThread,
     newChan, newCloseableChan, readChan, writeChan,
     closeChan, lastChanReadOK
   ) where
@@ -78,9 +78,10 @@ data Chan t a
   | ChanComp CID
 
 data ThreadCMD (prog :: * -> *) a where
-  Fork :: prog () -> ThreadCMD prog ThreadId
-  Kill :: ThreadId -> ThreadCMD prog ()
-  Wait :: ThreadId -> ThreadCMD prog ()
+  Fork       :: prog () -> ThreadCMD prog ThreadId
+  ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD prog ThreadId
+  Kill       :: ThreadId -> ThreadCMD prog ()
+  Wait       :: ThreadId -> ThreadCMD prog ()
 
 data ChanCMD exp (prog :: * -> *) a where
   NewChan   :: VarPred exp a => exp ChanBound -> ChanCMD exp prog (Chan t a)
@@ -92,9 +93,10 @@ data ChanCMD exp (prog :: * -> *) a where
             => Chan Closeable a -> ChanCMD exp prog (exp Bool)
 
 instance MapInstr ThreadCMD where
-  imap f (Fork p)   = Fork (f p)
-  imap _ (Kill tid) = Kill tid
-  imap _ (Wait tid) = Wait tid
+  imap f (Fork p)       = Fork (f p)
+  imap f (ForkWithId p) = ForkWithId $ f . p
+  imap _ (Kill tid)     = Kill tid
+  imap _ (Wait tid)     = Wait tid
 
 instance MapInstr (ChanCMD exp) where
   imap _ (NewChan sz)    = NewChan sz
@@ -114,9 +116,16 @@ runThreadCMD (Fork p) = do
   f <- newFlag
   tid <- CC.forkIO . void $ p >> setFlag f ()
   return $ TIDEval tid f
+runThreadCMD (ForkWithId p) = do
+  f <- newFlag
+  tidvar <- CC.newEmptyMVar
+  cctid <- CC.forkIO . void $ CC.takeMVar tidvar >>= p >> setFlag f ()
+  let tid = TIDEval cctid f
+  CC.putMVar tidvar tid
+  return tid
 runThreadCMD (Kill (TIDEval t f)) = do
-  CC.killThread t
   setFlag f ()
+  CC.killThread t
   return ()
 runThreadCMD (Wait (TIDEval _ f)) = do
   waitFlag f
@@ -159,6 +168,12 @@ fork :: (ThreadCMD :<: instr)
      => ProgramT instr m ()
      -> ProgramT instr m ThreadId
 fork = singleton . inj . Fork
+
+-- | Fork off a computation as a new thread, with access to its own thread ID.
+forkWithId :: (ThreadCMD :<: instr)
+           => (ThreadId -> ProgramT instr m ())
+           -> ProgramT instr m ThreadId
+forkWithId = singleton . inj . ForkWithId
 
 -- | Forcibly terminate a thread.
 killThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
@@ -231,6 +246,18 @@ instance ToIdent (Chan t a) where
 compThreadCMD:: ThreadCMD CGen a -> CGen a
 compThreadCMD (Fork body) = do
   tid <- TIDComp <$> freshId
+  compFork tid body
+compThreadCMD (ForkWithId body) = do
+  tid <- TIDComp <$> freshId
+  compFork tid (body tid)
+compThreadCMD (Kill tid) = do
+  addStm [cstm| pthread_cancel($id:tid); |]
+compThreadCMD (Wait tid) = do
+  addStm [cstm| pthread_join($id:tid, NULL); |]
+
+-- | Compile the forking of a thread with the given thread ID.
+compFork :: ThreadId -> CGen () -> CGen ThreadId
+compFork tid body = do
   let funName = threadFun tid
   _ <- inFunctionTy [cty|void*|] funName $ do
     addParam [cparam| void* unused |]
@@ -240,10 +267,6 @@ compThreadCMD (Fork body) = do
   addLocal [cdecl| typename pthread_t $id:tid; |]
   addStm [cstm| pthread_create(&$id:tid, NULL, $id:funName, NULL); |]
   return tid
-compThreadCMD (Kill tid) = do
-  addStm [cstm| pthread_cancel($id:tid); |]
-compThreadCMD (Wait tid) = do
-  addStm [cstm| pthread_join($id:tid, NULL); |]
 
 -- | Compile `ChanCMD`.
 compChanCMD :: forall exp prog a. CompExp exp
