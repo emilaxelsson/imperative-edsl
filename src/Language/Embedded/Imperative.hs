@@ -132,7 +132,7 @@ singleE = singleton . inj
 data FunArg pred exp
   where
     ValArg :: pred a => exp a -> FunArg pred exp
-    RefArg :: Ref a -> FunArg pred exp
+    RefArg :: Typeable a => Ref a -> FunArg pred exp
 
 
 
