@@ -6,7 +6,7 @@ module Language.Embedded.Concurrent (
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable,
-    fork, forkWithId, killThread, waitThread,
+    fork, forkWithId, asyncKillThread, killThread, waitThread,
     newChan, newCloseableChan, readChan, writeChan,
     closeChan, lastChanReadOK
   ) where
@@ -175,9 +175,15 @@ forkWithId :: (ThreadCMD :<: instr)
            -> ProgramT instr m ThreadId
 forkWithId = singleton . inj . ForkWithId
 
--- | Forcibly terminate a thread.
-killThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
-killThread = singleton . inj . Kill
+-- | Forcibly terminate a thread, then continue execution immediately.
+asyncKillThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
+asyncKillThread = singleton . inj . Kill
+
+-- | Forcibly terminate a thread. Blocks until the thread is actually dead.
+killThread :: (ThreadCMD :<: instr, Monad m) => ThreadId -> ProgramT instr m ()
+killThread t = do
+  singleton . inj $ Kill t
+  waitThread t
 
 -- | Wait for a thread to terminate.
 waitThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
@@ -242,8 +248,8 @@ instance ToIdent (Chan t a) where
   toIdent (ChanComp c) = C.Id $ "chan" ++ show c
 
 -- | Compile `ThreadCMD`.
---   TODO: sharing for threads with the same body; sharing closed-over vars.
-compThreadCMD:: ThreadCMD CGen a -> CGen a
+--   TODO: sharing for threads with the same body
+compThreadCMD :: ThreadCMD CGen a -> CGen a
 compThreadCMD (Fork body) = do
   tid <- TIDComp <$> freshId
   compFork tid body
