@@ -65,7 +65,7 @@ waiting = do
 suicide :: Program L ()
 suicide = do
   tid <- forkWithId $ \tid -> do
-    () <- printf "This is printed. %d\n" (0 :: Expr Int)
+    printf "This is printed. %d\n" (0 :: Expr Int)
     killThread tid
     printf "This is not. %d\n" (0 :: Expr Int)
   waitThread tid
