@@ -18,6 +18,7 @@ module Language.Embedded.Imperative
 
     -- * Types
   , FunArg (..)
+  , anyArg
   , Scannable (..)
 
     -- * Commands
@@ -65,8 +66,12 @@ module Language.Embedded.Imperative
   , printf
   , addInclude
   , addDefinition
+  , addExternFun
+  , addExternProc
   , callFun
   , callProc
+  , externFun
+  , externProc
   , getTime
   ) where
 
@@ -133,8 +138,13 @@ singleE = singleton . inj
 -- | A function argument with constrained existentially quantified type
 data FunArg pred exp
   where
-    ValArg :: pred a => exp a -> FunArg pred exp
-    RefArg :: Typeable a => Ref a -> FunArg pred exp
+    ValArg :: pred a               => exp a -> FunArg pred exp
+    RefArg :: (pred a, Typeable a) => Ref a -> FunArg pred exp
+
+-- | Convert the argument predicate to 'Any'
+anyArg :: FunArg pred exp -> FunArg Any exp
+anyArg (ValArg a) = ValArg a
+anyArg (RefArg r) = RefArg r
 
 
 
@@ -276,22 +286,32 @@ data CallCMD exp (prog :: * -> *) a
   where
     AddInclude    :: String       -> CallCMD exp prog ()
     AddDefinition :: C.Definition -> CallCMD exp prog ()
+    AddExternFun  :: VarPred exp res
+                  => String
+                  -> proxy (exp res)
+                  -> [FunArg (VarPred exp) exp]
+                  -> CallCMD exp prog ()
+    AddExternProc :: String -> [FunArg (VarPred exp) exp] -> CallCMD exp prog ()
     CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
     CallProc      ::                  String -> [FunArg Any exp] -> CallCMD exp prog ()
 
 instance MapInstr (CallCMD exp)
   where
-    imap _ (AddInclude incl)    = AddInclude incl
-    imap _ (AddDefinition def)  = AddDefinition def
-    imap _ (CallFun fun args)   = CallFun fun args
-    imap _ (CallProc proc args) = CallProc proc args
+    imap _ (AddInclude incl)           = AddInclude incl
+    imap _ (AddDefinition def)         = AddDefinition def
+    imap _ (AddExternFun fun res args) = AddExternFun fun res args
+    imap _ (AddExternProc proc args)   = AddExternProc proc args
+    imap _ (CallFun fun args)          = CallFun fun args
+    imap _ (CallProc proc args)        = CallProc proc args
 
 instance CompExp exp => DryInterp (CallCMD exp)
   where
-    dryInterp (AddInclude _)    = return ()
-    dryInterp (AddDefinition _) = return ()
-    dryInterp (CallFun _ _)     = liftM varExp fresh
-    dryInterp (CallProc _ _)    = return ()
+    dryInterp (AddInclude _)       = return ()
+    dryInterp (AddDefinition _)    = return ()
+    dryInterp (AddExternFun _ _ _) = return ()
+    dryInterp (AddExternProc _ _)  = return ()
+    dryInterp (CallFun _ _)        = liftM varExp fresh
+    dryInterp (CallProc _ _)       = return ()
 
 type instance IExp (CallCMD e)       = e
 type instance IExp (CallCMD e :+: i) = e
@@ -359,10 +379,12 @@ runFileCMD (FGet h)   = do
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
-runCallCMD (AddInclude _)    = return ()
-runCallCMD (AddDefinition _) = return ()
-runCallCMD (CallFun _ _)     = error "cannot run programs involving callFun"
-runCallCMD (CallProc _ _)    = error "cannot run programs involving callProc"
+runCallCMD (AddInclude _)       = return ()
+runCallCMD (AddDefinition _)    = return ()
+runCallCMD (AddExternFun _ _ _) = return ()
+runCallCMD (AddExternProc _ _)  = return ()
+runCallCMD (CallFun _ _)        = error "cannot run programs involving callFun"
+runCallCMD (CallProc _ _)       = error "cannot run programs involving callProc"
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
@@ -511,6 +533,14 @@ addInclude = singleE . AddInclude
 addDefinition :: (CallCMD (IExp instr) :<: instr) => C.Definition -> ProgramT instr m ()
 addDefinition = singleE . AddDefinition
 
+addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr) =>
+    String -> proxy (exp res) -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+addExternFun fun res args = singleE $ AddExternFun fun res args
+
+addExternProc :: (CallCMD exp :<: instr, exp ~ IExp instr) =>
+    String -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+addExternProc proc args = singleE $ AddExternProc proc args
+
 callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
     => String                     -- ^ Function name
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
@@ -522,6 +552,19 @@ callProc :: (CallCMD (IExp instr) :<: instr)
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
 callProc fun as = singleE $ CallProc fun as
+
+externFun :: forall instr m exp res
+    .  (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
+    => String -> [FunArg (VarPred exp) exp] -> ProgramT instr m (exp res)
+externFun fun args = do
+    addExternFun fun (Proxy :: Proxy (exp res)) args
+    callFun fun $ map anyArg args
+
+externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m) =>
+    String -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+externProc proc args = do
+    addExternProc proc args
+    callProc proc $ map anyArg args
 
 getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
     ProgramT instr m (IExp instr Double)

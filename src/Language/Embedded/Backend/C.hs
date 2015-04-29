@@ -149,10 +149,25 @@ mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
 mkArg (ValArg a) = compExp a
 mkArg (RefArg r) = return [cexp|&$id:r|]
 
+mkArgParam :: forall exp . CompExp exp => FunArg (VarPred exp) exp -> CGen C.Param
+mkArgParam (ValArg a) = do
+    t <- compType a
+    return [cparam| $ty:t |]
+mkArgParam (RefArg (r :: Ref a)) = do
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    return [cparam| $ty:t |]
+
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
 compCallCMD (AddDefinition def) = addGlobal def
-compCallCMD (CallFun fun as)    = do
+compCallCMD (AddExternFun fun res args) = do
+    tres  <- compTypeP res
+    targs <- mapM mkArgParam args
+    addGlobal [cedecl| extern $ty:tres $id:fun($params:targs); |]
+compCallCMD (AddExternProc proc args) = do
+    targs <- mapM mkArgParam args
+    addGlobal [cedecl| extern void $id:proc($params:targs); |]
+compCallCMD (CallFun fun as) = do
     as'   <- mapM mkArg as
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
