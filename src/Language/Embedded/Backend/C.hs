@@ -23,7 +23,9 @@ freshVar = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     C.Var n _ <- compExp v
     touchVar n
-    addLocal [cdecl| $ty:t $id:n; |]
+    case t of
+      C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:n = NULL; |]
+      _                  -> addLocal [cdecl| $ty:t $id:n; |]
     return (v,n)
 
 -- | Compile `RefCMD`
@@ -32,7 +34,9 @@ compRefCMD :: forall exp prog a. CompExp exp
 compRefCMD cmd@NewRef = do
     t <- compTypePP2 (Proxy :: Proxy exp) cmd
     r <- RefComp <$> freshId
-    addLocal [cdecl| $ty:t $id:r; |]
+    case t of
+      C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:r = NULL; |]
+      _                  -> addLocal [cdecl| $ty:t $id:r; |]
     return r
 compRefCMD (InitRef exp) = do
     t <- compType exp
