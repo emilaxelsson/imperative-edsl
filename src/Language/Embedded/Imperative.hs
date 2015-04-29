@@ -63,6 +63,8 @@ module Language.Embedded.Imperative
   , fput
   , fget
   , printf
+  , addInclude
+  , addDefinition
   , callFun
   , callProc
   , getTime
