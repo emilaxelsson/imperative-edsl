@@ -546,9 +546,10 @@ fprintf :: PrintfType r => Handle -> String -> r
 fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
-fput :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
-    Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl a = fprintf hdl "%f" a
+fput :: forall instr a m
+    .  (PrintfArg a, Scannable a, FileCMD (IExp instr) :<: instr)
+    => Handle -> IExp instr a -> ProgramT instr m ()
+fput hdl a = fprintf hdl (scanFormatSpecifier (Proxy :: Proxy a)) a
 
 -- | Get a single value from a handle
 fget
