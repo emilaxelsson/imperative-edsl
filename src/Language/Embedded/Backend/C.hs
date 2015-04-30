@@ -159,7 +159,7 @@ mkArgParam (ValArg a) = do
     return [cparam| $ty:t |]
 mkArgParam (RefArg (r :: Ref a)) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
-    return [cparam| $ty:t |]
+    return [cparam| $ty:t* |]
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
