@@ -463,6 +463,7 @@ setArr :: (VarPred (IExp instr) a, ArrCMD (IExp instr) :<: instr, Integral i) =>
     IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
 
+-- | Conditional statement
 iff :: (ControlCMD (IExp instr) :<: instr)
     => IExp instr Bool
     -> ProgramT instr m ()
@@ -470,6 +471,7 @@ iff :: (ControlCMD (IExp instr) :<: instr)
     -> ProgramT instr m ()
 iff b t f = singleE $ If b t f
 
+-- | Conditional statement that returns an expression
 ifE
     :: ( VarPred (IExp instr) a
        , ControlCMD (IExp instr) :<: instr
@@ -485,12 +487,14 @@ ifE b t f = do
     iff b (t >>= setRef r) (f >>= setRef r)
     getRef r
 
+-- | While loop
 while :: (ControlCMD (IExp instr) :<: instr)
     => ProgramT instr m (IExp instr Bool)
     -> ProgramT instr m ()
     -> ProgramT instr m ()
 while b t = singleE $ While b t
 
+-- | While loop that returns an expression
 whileE
     :: ( VarPred (IExp instr) a
        , ControlCMD (IExp instr) :<: instr
@@ -505,15 +509,19 @@ whileE b t = do
     while b (t >>= setRef r)
     getRef r
 
+-- | Break out from a loop
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
+-- | Open a file
 fopen :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
 fopen file = singleE . FOpen file
 
+-- | Close a file
 fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
 fclose = singleE . FClose
 
+-- | Check for end of file
 feof :: (VarPred (IExp instr) Bool, FileCMD (IExp instr) :<: instr) =>
     Handle -> ProgramT instr m (IExp instr Bool)
 feof = singleE . FEof
@@ -533,59 +541,106 @@ instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> 
     type PrintfExp (exp a -> r) = exp
     fprf h form as = \a -> fprf h form (ValArg a : as)
 
+-- | Print to a handle. Accepts a variable number of arguments.
 fprintf :: PrintfType r => Handle -> String -> r
 fprintf h format = fprf h format []
 
-fput :: (Show a, PrintfArg a, FileCMD (IExp instr) :<: instr) =>
+-- | Put a single value to a handle
+fput :: (PrintfArg a, FileCMD (IExp instr) :<: instr) =>
     Handle -> IExp instr a -> ProgramT instr m ()
 fput hdl a = fprintf hdl "%f" a
 
-fget :: (Read a, Scannable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr) =>
-    Handle -> ProgramT instr m (IExp instr a)
+-- | Get a single value from a handle
+fget
+    :: ( Read a
+       , Scannable a
+       , VarPred (IExp instr) a
+       , FileCMD (IExp instr) :<: instr
+       )
+    => Handle -> ProgramT instr m (IExp instr a)
 fget = singleE . FGet
 
+-- | Print to @stdout@. Accepts a variable number of arguments.
 printf :: PrintfType r => String -> r
 printf = fprintf stdout
 
+-- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude
 
+-- | Add a global definition to the generated code
+--
+-- Can be used conveniently as follows:
+--
+-- > {-# LANGUAGE QuasiQuotes #-}
+-- >
+-- > import Language.Embedded.Imperative
+-- > import Language.C.Quote.C
+-- >
+-- > prog = do
+-- >     ...
+-- >     addDefinition myCFunction
+-- >     ...
+-- >   where
+-- >     myCFunction = [cedecl|
+-- >       void my_C_function( ... )
+-- >       {
+-- >           // C code
+-- >           // goes here
+-- >       }
+-- >       |]
 addDefinition :: (CallCMD (IExp instr) :<: instr) => C.Definition -> ProgramT instr m ()
 addDefinition = singleE . AddDefinition
 
-addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr) =>
-    String -> proxy (exp res) -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+-- | Declare an external function
+addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr)
+    => String                      -- ^ Function name
+    -> proxy (exp res)             -- ^ Proxy for expression and result type
+    -> [FunArg (VarPred exp) exp]  -- ^ Arguments (only used to determine types)
+    -> ProgramT instr m ()
 addExternFun fun res args = singleE $ AddExternFun fun res args
 
-addExternProc :: (CallCMD exp :<: instr, exp ~ IExp instr) =>
-    String -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+-- | Declare an external procedure
+addExternProc :: (CallCMD exp :<: instr, exp ~ IExp instr)
+    => String                      -- ^ Procedure name
+    -> [FunArg (VarPred exp) exp]  -- ^ Arguments (only used to determine types)
+    -> ProgramT instr m ()
 addExternProc proc args = singleE $ AddExternProc proc args
 
+-- | Call a function
 callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
     => String                     -- ^ Function name
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m (IExp instr a)
 callFun fun as = singleE $ CallFun fun as
 
+-- | Call a procedure
 callProc :: (CallCMD (IExp instr) :<: instr)
-    => String                     -- ^ Function name
+    => String                     -- ^ Procedure name
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
 callProc fun as = singleE $ CallProc fun as
 
+-- | Declare and call an external function
 externFun :: forall instr m exp res
     .  (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
-    => String -> [FunArg (VarPred exp) exp] -> ProgramT instr m (exp res)
+    => String                      -- ^ Function name
+    -> [FunArg (VarPred exp) exp]  -- ^ Arguments
+    -> ProgramT instr m (exp res)
 externFun fun args = do
     addExternFun fun (Proxy :: Proxy (exp res)) args
     callFun fun $ map anyArg args
 
-externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m) =>
-    String -> [FunArg (VarPred exp) exp] -> ProgramT instr m ()
+-- | Declare and call an external procedure
+externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
+    => String                      -- ^ Procedure name
+    -> [FunArg (VarPred exp) exp]  -- ^ Arguments
+    -> ProgramT instr m ()
 externProc proc args = do
     addExternProc proc args
     callProc proc $ map anyArg args
 
+-- | Get current time as number of seconds passed today
 getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
     ProgramT instr m (IExp instr Double)
 getTime = do
