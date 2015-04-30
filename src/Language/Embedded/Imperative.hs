@@ -281,7 +281,7 @@ instance Scannable Word16  where scanFormatSpecifier _ = "%d"
 instance Scannable Word32  where scanFormatSpecifier _ = "%d"
 instance Scannable Word64  where scanFormatSpecifier _ = "%d"
 instance Scannable Float   where scanFormatSpecifier _ = "%f"
-instance Scannable Double  where scanFormatSpecifier _ = "%d"
+instance Scannable Double  where scanFormatSpecifier _ = "%f"
 
 data FileCMD exp (prog :: * -> *) a
   where
