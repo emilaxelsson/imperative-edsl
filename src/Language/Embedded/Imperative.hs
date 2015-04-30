@@ -82,8 +82,10 @@ import Prelude hiding (break)
 import Control.Monad
 import Data.Array.IO
 import Data.Char (isSpace)
+import Data.Int
 import Data.IORef
 import Data.Typeable
+import Data.Word
 import System.IO (IOMode (..))
 import qualified System.IO as IO
 import System.IO.Unsafe
@@ -268,8 +270,18 @@ class Typeable a => Scannable a
   where
     scanFormatSpecifier :: Proxy a -> String
 
-instance Scannable Int   where scanFormatSpecifier _ = "%d"
-instance Scannable Float where scanFormatSpecifier _ = "%f"
+instance Scannable Int     where scanFormatSpecifier _ = "%d"
+instance Scannable Int8    where scanFormatSpecifier _ = "%d"
+instance Scannable Int16   where scanFormatSpecifier _ = "%d"
+instance Scannable Int32   where scanFormatSpecifier _ = "%d"
+instance Scannable Int64   where scanFormatSpecifier _ = "%d"
+instance Scannable Word    where scanFormatSpecifier _ = "%d"
+instance Scannable Word8   where scanFormatSpecifier _ = "%d"
+instance Scannable Word16  where scanFormatSpecifier _ = "%d"
+instance Scannable Word32  where scanFormatSpecifier _ = "%d"
+instance Scannable Word64  where scanFormatSpecifier _ = "%d"
+instance Scannable Float   where scanFormatSpecifier _ = "%f"
+instance Scannable Double  where scanFormatSpecifier _ = "%d"
 
 data FileCMD exp (prog :: * -> *) a
   where
