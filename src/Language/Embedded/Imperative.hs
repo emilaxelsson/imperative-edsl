@@ -465,9 +465,9 @@ setArr i a arr = singleE (SetArr i a arr)
 
 -- | Conditional statement
 iff :: (ControlCMD (IExp instr) :<: instr)
-    => IExp instr Bool
-    -> ProgramT instr m ()
-    -> ProgramT instr m ()
+    => IExp instr Bool      -- ^ Condition
+    -> ProgramT instr m ()  -- ^ True branch
+    -> ProgramT instr m ()  -- ^ False branch
     -> ProgramT instr m ()
 iff b t f = singleE $ If b t f
 
@@ -478,9 +478,9 @@ ifE
        , RefCMD (IExp instr)     :<: instr
        , Monad m
        )
-    => IExp instr Bool
-    -> ProgramT instr m (IExp instr a)
-    -> ProgramT instr m (IExp instr a)
+    => IExp instr Bool                  -- ^ Condition
+    -> ProgramT instr m (IExp instr a)  -- ^ True branch
+    -> ProgramT instr m (IExp instr a)  -- ^ False branch
     -> ProgramT instr m (IExp instr a)
 ifE b t f = do
     r <- newRef
@@ -489,8 +489,8 @@ ifE b t f = do
 
 -- | While loop
 while :: (ControlCMD (IExp instr) :<: instr)
-    => ProgramT instr m (IExp instr Bool)
-    -> ProgramT instr m ()
+    => ProgramT instr m (IExp instr Bool)  -- ^ Continue condition
+    -> ProgramT instr m ()                 -- ^ Loop body
     -> ProgramT instr m ()
 while b t = singleE $ While b t
 
@@ -501,8 +501,8 @@ whileE
        , RefCMD (IExp instr)     :<: instr
        , Monad m
        )
-    => ProgramT instr m (IExp instr Bool)
-    -> ProgramT instr m (IExp instr a)
+    => ProgramT instr m (IExp instr Bool)  -- ^ Continue condition
+    -> ProgramT instr m (IExp instr a)     -- ^ Loop body
     -> ProgramT instr m (IExp instr a)
 whileE b t = do
     r <- newRef
