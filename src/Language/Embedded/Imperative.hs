@@ -152,6 +152,10 @@ anyArg (RefArg r) = RefArg r
 -- * Commands
 ----------------------------------------------------------------------------------------------------
 
+----------------------------------------
+-- RefCMD
+----------------------------------------
+
 data Ref a
     = RefComp VarId
     | RefEval (IORef a)
@@ -188,6 +192,10 @@ instance CompExp exp => DryInterp (RefCMD exp)
 type instance IExp (RefCMD e)       = e
 type instance IExp (RefCMD e :+: i) = e
 
+----------------------------------------
+-- ArrCMD
+----------------------------------------
+
 data Arr n a
     = ArrComp String
     | ArrEval (IOArray Int a)
@@ -218,6 +226,10 @@ instance CompExp exp => DryInterp (ArrCMD exp)
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
 
+----------------------------------------
+-- ControlCMD
+----------------------------------------
+
 data ControlCMD exp prog a
   where
     If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
@@ -238,6 +250,10 @@ instance DryInterp (ControlCMD exp)
 
 type instance IExp (ControlCMD e)       = e
 type instance IExp (ControlCMD e :+: i) = e
+
+----------------------------------------
+-- FileCMD
+----------------------------------------
 
 data Handle
     = HandleComp String
@@ -281,6 +297,10 @@ instance CompExp exp => DryInterp (FileCMD exp)
 
 type instance IExp (FileCMD e)       = e
 type instance IExp (FileCMD e :+: i) = e
+
+----------------------------------------
+-- CallCMD
+----------------------------------------
 
 data CallCMD exp (prog :: * -> *) a
   where
