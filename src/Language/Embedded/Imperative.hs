@@ -200,15 +200,15 @@ type instance IExp (RefCMD e :+: i) = e
 
 data Arr n a
     = ArrComp String
-    | ArrEval (IOArray Int a)
+    | ArrEval (IOArray n a)
   deriving Typeable
 
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr :: (VarPred exp a, VarPred exp n, Integral n) => exp n -> exp a -> ArrCMD exp prog (Arr n a)
-    GetArr :: (VarPred exp a, Integral n)                => exp n -> Arr n a -> ArrCMD exp prog (exp a)
-    SetArr :: Integral n                                 => exp n -> exp a -> Arr n a -> ArrCMD exp prog ()
+    NewArr :: (VarPred exp a, VarPred exp n, Integral n, Ix n) => exp n -> exp a -> ArrCMD exp prog (Arr n a)
+    GetArr :: (VarPred exp a, Integral n, Ix n)                => exp n -> Arr n a -> ArrCMD exp prog (exp a)
+    SetArr :: (Integral n, Ix n)                               => exp n -> exp a -> Arr n a -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -360,11 +360,13 @@ runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "r
 runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 
-runArrCMD :: forall exp prog a . EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr n a)               = fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
-runArrCMD (SetArr i a (ArrEval arr)) = writeArray arr (fromIntegral (evalExp i)) (evalExp a)
-runArrCMD (GetArr i (ArrEval (arr :: IOArray Int b)))
-    = fmap litExp $ readArray arr (fromIntegral (evalExp i))
+runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
+runArrCMD (NewArr n a) =
+    fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
+runArrCMD (SetArr i a (ArrEval arr)) =
+    writeArray arr (fromIntegral (evalExp i)) (evalExp a)
+runArrCMD (GetArr i (ArrEval arr)) =
+    fmap litExp $ readArray arr (fromIntegral (evalExp i))
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f
@@ -461,18 +463,35 @@ unsafeFreezeRef (RefEval r) = litExp (unsafePerformIO $ readIORef r)
 unsafeFreezeRef (RefComp v) = varExp v
 
 -- | Create an uninitialized an array
-newArr :: (pred a, pred i, Integral i, ArrCMD (IExp instr) :<: instr, pred ~ VarPred (IExp instr)) =>
-    IExp instr i -> IExp instr a -> ProgramT instr m (Arr i a)
+newArr
+    :: ( pred a
+       , pred i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , pred ~ VarPred (IExp instr)
+       )
+    => IExp instr i -> IExp instr a -> ProgramT instr m (Arr i a)
 newArr n a = singleE $ NewArr n a
 
 -- | Set the contents of an array
-getArr :: (VarPred (IExp instr) a, ArrCMD (IExp instr) :<: instr, Integral i) =>
-    IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
+getArr
+    :: ( VarPred (IExp instr) a
+       , ArrCMD (IExp instr) :<: instr
+       , Integral i
+       , Ix i
+       )
+    => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
 getArr i arr = singleE (GetArr i arr)
 
 -- | Set the contents of an array
-setArr :: (VarPred (IExp instr) a, ArrCMD (IExp instr) :<: instr, Integral i) =>
-    IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
+setArr
+    :: ( VarPred (IExp instr) a
+       , ArrCMD (IExp instr) :<: instr
+       , Integral i
+       , Ix i
+       )
+    => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
 
 -- | Conditional statement
