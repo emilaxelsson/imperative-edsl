@@ -6,7 +6,6 @@ module Imperative where
 
 import Data.Word
 
-import Language.C.Monad
 import Language.Embedded.Expression (evalExp)
 import Language.Embedded.Imperative
 import Language.Embedded.Expr
@@ -42,12 +41,12 @@ arrProg = do
 evalRef :: IO Int
 evalRef = fmap evalExp $ interpret refProg
 
-compRef = prettyCGen $ wrapMain $ interpret refProg
+compRef = icompile refProg
 
 evalArr :: IO Int
 evalArr = fmap evalExp $ interpret arrProg
 
-compArr = prettyCGen $ wrapMain $ interpret arrProg
+compArr = icompile arrProg
 
 
 
@@ -73,5 +72,5 @@ runSummer = do
     writeFile "input" $ unwords $ map show ([-5..4] :: [Float])
     interpret summer
 
-compSummer = prettyCGen $ wrapMain $ interpret summer
+compSummer = icompile summer
 

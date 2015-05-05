@@ -10,6 +10,7 @@ module Language.Embedded.Imperative
   , module Language.Embedded.Imperative.Types
   , module Language.Embedded.Imperative.CMD
   , module Language.Embedded.Imperative.Frontend
+  , module Language.Embedded.Backend.C
   ) where
 
 
@@ -23,5 +24,5 @@ import Language.Embedded.Expression (VarPred, EvalExp, CompExp)
 import Language.Embedded.Imperative.CMD (RefCMD, ArrCMD, ControlCMD, FileCMD, CallCMD)
 import Language.Embedded.Imperative.Types
 import Language.Embedded.Imperative.Frontend
-import Language.Embedded.Backend.C ()
+import Language.Embedded.Backend.C (compile, icompile)
 

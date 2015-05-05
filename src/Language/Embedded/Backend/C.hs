@@ -180,3 +180,11 @@ instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlC
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
+-- | Generate C code from a 'Program'
+compile :: (Interp instr CGen, MapInstr instr) => Program instr a -> String
+compile = show . prettyCGen . wrapMain . interpret
+
+-- | Generate C code from a 'Program'
+icompile :: (Interp instr CGen, MapInstr instr) => Program instr a -> IO ()
+icompile = putStrLn . compile
+
