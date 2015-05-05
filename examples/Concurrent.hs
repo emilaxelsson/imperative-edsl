@@ -1,4 +1,8 @@
-module Main where
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
+
+module Concurrent where
+
 import Prelude hiding (break)
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
