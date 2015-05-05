@@ -25,9 +25,12 @@ library
     Data.TypePredicates
     Language.C.Monad
     Language.Embedded.Expression
+    Language.Embedded.Imperative.CMD
+    Language.Embedded.Imperative.Types
+    Language.Embedded.Imperative.Frontend
+    Language.Embedded.Backend.C
     Language.Embedded.Imperative
     Language.Embedded.Concurrent
-    Language.Embedded.Backend.C
     Language.Embedded.Expr
 
   -- other-modules:

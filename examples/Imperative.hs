@@ -1,5 +1,4 @@
-{-# LANGUAGE TypeOperators   #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Imperative where
 
@@ -10,7 +9,6 @@ import Data.Word
 import Language.C.Monad
 import Language.Embedded.Expr
 import Language.Embedded.Imperative
-import Language.Embedded.Backend.C ()
 
 
 

@@ -4,13 +4,18 @@
 -- | Generate C code from @Language.Embedded.Imperative@ programs
 module Language.Embedded.Backend.C where
 
-import Data.Proxy
 import Control.Applicative
-import Control.Monad.Operational.Compositional
-import Language.Embedded.Imperative hiding (addInclude)
-import Language.C.Monad
+import Data.Proxy
+
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
+
+import Control.Monad.Operational.Compositional
+import Data.TypePredicates
+import Language.C.Monad
+import Language.Embedded.Expression
+import Language.Embedded.Imperative.CMD
+import Language.Embedded.Imperative.Types
 
 -- | Identifiers from references
 instance ToIdent (Ref a)
