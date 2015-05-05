@@ -27,8 +27,8 @@ import Text.Printf (PrintfArg)
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
-import Data.TypePredicates
 import Control.Monad.Operational.Compositional
+import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Types
