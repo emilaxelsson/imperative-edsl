@@ -42,6 +42,7 @@ compRefCMD (InitRef exp) = do
 compRefCMD (GetRef ref) = do
     (v,_) <- freshVar
     e <- compExp v
+    touchVar ref
     addStm [cstm| $e = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
