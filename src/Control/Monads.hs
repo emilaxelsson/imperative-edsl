@@ -58,6 +58,7 @@ instance MonadState s m => MonadState s (SupplyT m)
 
 instance MonadWriter w m => MonadWriter w (SupplyT m)
   where
+    tell   = SupplyT . tell
     listen = SupplyT . listen . unSupplyT
     pass   = SupplyT . pass   . unSupplyT
 
@@ -109,6 +110,7 @@ instance MonadState s m => MonadState s (TickT m)
 
 instance MonadWriter w m => MonadWriter w (TickT m)
   where
+    tell   = TickT . tell
     listen = TickT . listen . unTickT
     pass   = TickT . pass   . unTickT
 

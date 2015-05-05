@@ -1,7 +1,12 @@
 name:                imperative-edsl
 version:             0.2
 synopsis:            Deep embedding of imperative programs with code generation
-description:         Deep embedding of imperative programs with code generation
+description:         Deep embedding of imperative programs with code generation.
+                     .
+                     The main module for users who want to write imperative
+                     programs is "Language.Embedded.Imperative" (and optionally
+                     "Language.Embedded.Expr" which provides a simple expression
+                     language).
 license:             BSD3
 license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson
@@ -25,9 +30,12 @@ library
     Data.TypePredicates
     Language.C.Monad
     Language.Embedded.Expression
+    Language.Embedded.Imperative.CMD
+    Language.Embedded.Imperative.Types
+    Language.Embedded.Imperative.Frontend
+    Language.Embedded.Backend.C
     Language.Embedded.Imperative
     Language.Embedded.Concurrent
-    Language.Embedded.Backend.C
     Language.Embedded.Expr
 
   -- other-modules:
@@ -69,3 +77,17 @@ library
     srcloc
 
   hs-source-dirs: src
+
+test-suite Examples
+  type: exitcode-stdio-1.0
+
+  hs-source-dirs: tests examples
+
+  main-is: Examples.hs
+
+  default-language: Haskell2010
+
+  build-depends:
+    base,
+    imperative-edsl,
+    mainland-pretty

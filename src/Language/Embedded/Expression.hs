@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
--- | Interface for pure expressions
+-- | Interface for evaluation and compilation of pure expressions
 module Language.Embedded.Expression
   ( VarId
   , VarPred

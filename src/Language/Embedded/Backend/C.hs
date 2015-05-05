@@ -4,13 +4,18 @@
 -- | Generate C code from @Language.Embedded.Imperative@ programs
 module Language.Embedded.Backend.C where
 
-import Data.Proxy
 import Control.Applicative
-import Control.Monad.Operational.Compositional
-import Language.Embedded.Imperative hiding (addInclude)
-import Language.C.Monad
+import Data.Proxy
+
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
+
+import Control.Monad.Operational.Compositional
+import Data.TypePredicates
+import Language.C.Monad
+import Language.Embedded.Expression
+import Language.Embedded.Imperative.CMD
+import Language.Embedded.Imperative.Types
 
 -- | Identifiers from references
 instance ToIdent (Ref a)
@@ -37,6 +42,7 @@ compRefCMD (InitRef exp) = do
 compRefCMD (GetRef ref) = do
     (v,_) <- freshVar
     e <- compExp v
+    touchVar ref
     addStm [cstm| $e = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
@@ -174,4 +180,12 @@ instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
+
+-- | Generate C code from a 'Program'
+compile :: (Interp instr CGen, MapInstr instr) => Program instr a -> String
+compile = show . prettyCGen . wrapMain . interpret
+
+-- | Generate C code from a 'Program'
+icompile :: (Interp instr CGen, MapInstr instr) => Program instr a -> IO ()
+icompile = putStrLn . compile
 

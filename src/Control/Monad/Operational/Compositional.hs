@@ -19,7 +19,8 @@
 -- \[1\] <http://hackage.haskell.org/package/operational>
 
 module Control.Monad.Operational.Compositional
-    ( module Data.ALaCarte
+    ( module Control.Monad
+    , module Data.ALaCarte
       -- * Program monad
     , ProgramT
     , Program
@@ -44,11 +45,17 @@ module Control.Monad.Operational.Compositional
     , observe
     , fresh
     , freshStr
+      -- * Working with instruction sets
+    , IExp
+    , injE
+    , prjE
+    , singleE
     ) where
 
 
 
 import Control.Applicative (Applicative (..))
+import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Trans
 import Control.Monads
@@ -228,4 +235,33 @@ instance (DryInterp i1, DryInterp i2) => DryInterp (i1 :+: i2)
   where
     dryInterp (Inl i) = dryInterp i
     dryInterp (Inr i) = dryInterp i
+
+
+
+----------------------------------------------------------------------------------------------------
+-- * Working with instruction sets
+----------------------------------------------------------------------------------------------------
+
+-- | Extract the expression type from an instruction set. 'IExp' is needed to avoid types like
+-- @(`SomeInstr` exp `:<:` i) => `Program` i ()@. Here it is not possible to constrain @exp@ by
+-- constraining @i@, so the instance search will always fail. Functions like 'injE' solve this by
+-- using 'IExp' to determine @exp@ from @i@. For this to work, one must use an instruction set @i@
+-- that has an instance of 'IExp'. By using instruction sets of the form
+-- @(`RefCMD` SomeExp `:+:` ...)@, such instances are obtained for free (see the available instances
+-- defined in this module). Then functions like 'injE' will determine the predicate and expression
+-- type from the first summand, which may or may not be the desired behavior. It is of course also
+-- possible to make custom instruction types with custom instances of 'IExp'.
+type family IExp (i :: (* -> *) -> * -> *) :: * -> *
+
+-- | Inject an instruction that is parameterized by an expression type
+injE :: (i (IExp instr) :<: instr) => i (IExp instr) m a -> instr m a
+injE = inj
+
+-- | Project an instruction that is parameterized by an expression type
+prjE :: (i (IExp instr) :<: instr) => instr m a -> Maybe (i (IExp instr) m a)
+prjE = prj
+
+-- | Create a program from an instruction that is parameterized by an expression type
+singleE :: (i (IExp instr) :<: instr) => i (IExp instr) (ProgramT instr m) a -> ProgramT instr m a
+singleE = singleton . inj
 
