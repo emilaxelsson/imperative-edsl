@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
 
+-- | Imperative commands
+
 module Language.Embedded.Imperative.CMD where
+  -- TODO There's probably no need to export the stuff under "Running commands"
 
 
 

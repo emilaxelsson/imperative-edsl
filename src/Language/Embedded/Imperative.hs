@@ -1,4 +1,5 @@
--- | Deep embedding of imperative programs with code generation
+-- | Deep embedding of imperative programs with code generation. This is the
+-- main module for users who want to write imperative programs.
 
 module Language.Embedded.Imperative
   ( module Control.Monad

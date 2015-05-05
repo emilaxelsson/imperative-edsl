@@ -1,3 +1,5 @@
+-- | Re-exports of extra types used by imperative instructions
+
 module Language.Embedded.Imperative.Types
   ( Ref (..)
   , Arr (..)
