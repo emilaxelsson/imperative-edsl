@@ -4,16 +4,10 @@
 module Concurrent where
 
 import Prelude hiding (break)
+
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
 import Language.Embedded.Expr
-import Language.Embedded.Backend.C ()
-import Control.Applicative
-import Control.Monad
-
--- For compilation
-import Language.C.Monad
-import Text.PrettyPrint.Mainland (Doc)
 
 type L =
   ThreadCMD :+:
@@ -75,11 +69,3 @@ suicide = do
   waitThread tid
   printf "The thread is dead, long live the thread! %d\n" (0 :: Expr Int)
 
--- | Compile a program. To compile the resulting C program:
---
---       gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
---
-compileProg :: (MapInstr instr, Interp instr CGen)
-            => Program instr a
-            -> Doc
-compileProg = prettyCGen . liftSharedLocals . wrapMain . interpret
