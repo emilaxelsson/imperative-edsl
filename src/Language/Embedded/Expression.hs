@@ -1,16 +1,21 @@
+{-# LANGUAGE QuasiQuotes #-}
+
 -- | Interface for pure expressions
 module Language.Embedded.Expression
   ( VarId
   , VarPred
   , EvalExp(..)
   , CompExp(..)
+  , freshVar
   )
   where
 
 import Data.Proxy
 import Data.Constraint
-import Language.C.Monad (MonadC)
+import Language.C.Monad
+import Language.C.Quote.C
 import Language.C.Syntax (Exp,Type)
+import qualified Language.C.Syntax as C
 
 
 
@@ -69,4 +74,15 @@ class CompExp exp where
 
 -- | Variable identifier
 type VarId = Integer
+
+freshVar :: forall exp a. (CompExp exp, VarPred exp a) => CGen (exp a, C.Id)
+freshVar = do
+    v <- fmap varExp freshId
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    C.Var n _ <- compExp v
+    touchVar n
+    case t of
+      C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:n = NULL; |]
+      _                  -> addLocal [cdecl| $ty:t $id:n; |]
+    return (v,n)
 

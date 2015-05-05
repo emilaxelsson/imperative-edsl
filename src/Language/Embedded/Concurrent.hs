@@ -19,7 +19,6 @@ import Data.IORef
 import Data.Proxy
 import Data.Typeable
 import Language.Embedded.Imperative
-import Language.Embedded.Backend.C (freshVar)
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C
