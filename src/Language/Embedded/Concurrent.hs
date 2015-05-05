@@ -18,7 +18,7 @@ import Control.Monad.Operational.Compositional
 import Data.IORef
 import Data.Proxy
 import Data.Typeable
-import Language.Embedded.Imperative
+import Language.Embedded.Expression
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C
