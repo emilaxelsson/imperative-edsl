@@ -7,8 +7,9 @@ module Imperative where
 import Data.Word
 
 import Language.C.Monad
-import Language.Embedded.Expr
+import Language.Embedded.Expression (evalExp)
 import Language.Embedded.Imperative
+import Language.Embedded.Expr
 
 
 
