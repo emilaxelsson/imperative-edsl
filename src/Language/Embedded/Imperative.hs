@@ -17,8 +17,8 @@ module Language.Embedded.Imperative
 
 import Control.Monad
 
-import Control.Monad.Operational.Compositional (ProgramT, Program, interpretT, interpret)
-import Data.TypePredicates (Any)
+import Control.Monad.Operational.Compositional (ProgramT, Program, interpretT, interpret, IExp)
+import Data.TypePredicates ((:<), Any)
 import Data.ALaCarte ((:+:), (:<:))
 import Language.Embedded.Expression (VarPred, EvalExp, CompExp)
 import Language.Embedded.Imperative.CMD (RefCMD, ArrCMD, ControlCMD, FileCMD, CallCMD)
