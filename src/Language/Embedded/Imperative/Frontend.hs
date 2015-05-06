@@ -65,8 +65,8 @@ newArr
        , ArrCMD (IExp instr) :<: instr
        , pred ~ VarPred (IExp instr)
        )
-    => IExp instr i -> IExp instr a -> ProgramT instr m (Arr i a)
-newArr n a = singleE $ NewArr n a
+    => IExp instr i -> ProgramT instr m (Arr i a)
+newArr n = singleE $ NewArr n
 
 -- | Set the contents of an array
 getArr
@@ -76,7 +76,7 @@ getArr
        , Ix i
        )
     => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
-getArr i arr = singleE (GetArr i arr)
+getArr i arr = singleE $ GetArr i arr
 
 -- | Set the contents of an array
 setArr

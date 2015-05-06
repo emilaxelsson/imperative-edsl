@@ -85,7 +85,7 @@ data Arr n a
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr :: (VarPred exp a, VarPred exp n, Integral n, Ix n) => exp n -> exp a -> ArrCMD exp prog (Arr n a)
+    NewArr :: (VarPred exp a, VarPred exp n, Integral n, Ix n) => exp n -> ArrCMD exp prog (Arr n a)
     GetArr :: (VarPred exp a, Integral n, Ix n)                => exp n -> Arr n a -> ArrCMD exp prog (exp a)
     SetArr :: (Integral n, Ix n)                               => exp n -> exp a -> Arr n a -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
@@ -94,13 +94,13 @@ data ArrCMD exp (prog :: * -> *) a
 
 instance MapInstr (ArrCMD exp)
   where
-    imap _ (NewArr n a)     = NewArr n a
+    imap _ (NewArr n)       = NewArr n
     imap _ (GetArr i arr)   = GetArr i arr
     imap _ (SetArr i a arr) = SetArr i a arr
 
 instance CompExp exp => DryInterp (ArrCMD exp)
   where
-    dryInterp (NewArr _ _)   = liftM ArrComp $ freshStr "a"
+    dryInterp (NewArr _)   = liftM ArrComp $ freshStr "a"
     dryInterp (GetArr _ _)   = liftM varExp fresh
     dryInterp (SetArr _ _ _) = return ()
 
@@ -263,8 +263,7 @@ runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr n a) =
-    fmap ArrEval $ newArray (0, fromIntegral (evalExp n) - 1) (evalExp a)
+runArrCMD (NewArr n) = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
 runArrCMD (SetArr i a (ArrEval arr)) =
     writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (GetArr i (ArrEval arr)) =

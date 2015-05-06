@@ -61,14 +61,11 @@ instance ToIdent (Arr i a)
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. CompExp exp
            => ArrCMD exp prog a -> CGen a
-compArrCMD (NewArr size ini) = do
-    addInclude "<string.h>"
+compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
     v   <- compExp size
-    i   <- compExp ini
-    t   <- compType ini
+    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     addLocal [cdecl| $ty:t $id:sym[ $v ]; |]
-    addStm   [cstm| memset($id:sym, $i, sizeof( $id:sym )); |]
     return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar

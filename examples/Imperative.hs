@@ -29,7 +29,8 @@ type CMD1
 arrProg :: Program CMD1 (Expr Int)
 arrProg = do
     ref <- initRef 4
-    arr <- newArr (10:: Expr Word8) 6
+    arr <- newArr (10 :: Expr Word8)
+    setArr 3 45 arr
     b   <- getArr 3 arr
     let a = unsafeFreezeRef ref
         c = Add a b
