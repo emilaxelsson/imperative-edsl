@@ -3,25 +3,25 @@
 
 module Language.Embedded.Imperative
   ( module Control.Monad
-    -- * Composing instruction sets
-  , (:+:)
-  , (:<:)
     -- * Program monad
   , ProgramT
   , Program
   , interpretT
   , interpret
-  , IExp
-    -- * Interpreting expression
-  , VarPred
-  , EvalExp
-  , CompExp
     -- * Imperative instructions
   , RefCMD
   , ArrCMD
   , ControlCMD
   , FileCMD
   , CallCMD
+    -- * Composing instruction sets
+  , (:+:)
+  , (:<:)
+  , IExp
+    -- * Interpreting expressions
+  , VarPred
+  , EvalExp
+  , CompExp
     -- * Front end
   , module Language.Embedded.Imperative.Types
   , module Language.Embedded.Imperative.Frontend
