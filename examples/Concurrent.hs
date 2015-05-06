@@ -5,6 +5,8 @@ module Concurrent where
 
 import Prelude hiding (break)
 
+import Control.Applicative
+
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
 import Language.Embedded.Expr

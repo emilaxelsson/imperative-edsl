@@ -18,6 +18,8 @@ import qualified System.IO as IO
 import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
+import Data.Proxy
+
 import Control.Monad.Operational.Compositional
 import Data.TypePredicates
 import Language.Embedded.Expression
