@@ -143,30 +143,30 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
-class Typeable a => Scannable a
+class (Typeable a, Read a, PrintfArg a) => Formattable a
   where
-    scanFormatSpecifier :: Proxy a -> String
+    formatSpecifier :: Proxy a -> String
 
-instance Scannable Int     where scanFormatSpecifier _ = "%d"
-instance Scannable Int8    where scanFormatSpecifier _ = "%d"
-instance Scannable Int16   where scanFormatSpecifier _ = "%d"
-instance Scannable Int32   where scanFormatSpecifier _ = "%d"
-instance Scannable Int64   where scanFormatSpecifier _ = "%d"
-instance Scannable Word    where scanFormatSpecifier _ = "%d"
-instance Scannable Word8   where scanFormatSpecifier _ = "%d"
-instance Scannable Word16  where scanFormatSpecifier _ = "%d"
-instance Scannable Word32  where scanFormatSpecifier _ = "%d"
-instance Scannable Word64  where scanFormatSpecifier _ = "%d"
-instance Scannable Float   where scanFormatSpecifier _ = "%f"
-instance Scannable Double  where scanFormatSpecifier _ = "%f"
+instance Formattable Int    where formatSpecifier _ = "%d"
+instance Formattable Int8   where formatSpecifier _ = "%d"
+instance Formattable Int16  where formatSpecifier _ = "%d"
+instance Formattable Int32  where formatSpecifier _ = "%d"
+instance Formattable Int64  where formatSpecifier _ = "%d"
+instance Formattable Word   where formatSpecifier _ = "%d"
+instance Formattable Word8  where formatSpecifier _ = "%d"
+instance Formattable Word16 where formatSpecifier _ = "%d"
+instance Formattable Word32 where formatSpecifier _ = "%d"
+instance Formattable Word64 where formatSpecifier _ = "%d"
+instance Formattable Float  where formatSpecifier _ = "%f"
+instance Formattable Double where formatSpecifier _ = "%f"
 
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen   :: FilePath -> IOMode                             -> FileCMD exp prog Handle
-    FClose  :: Handle                                         -> FileCMD exp prog ()
-    FEof    :: VarPred exp Bool => Handle                     -> FileCMD exp prog (exp Bool)
-    FPrintf :: Handle -> String -> [FunArg PrintfArg exp]     -> FileCMD exp prog ()
-    FGet    :: (Read a, Scannable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                           -> FileCMD exp prog Handle
+    FClose  :: Handle                                       -> FileCMD exp prog ()
+    FEof    :: VarPred exp Bool => Handle                   -> FileCMD exp prog (exp Bool)
+    FPrintf :: Handle -> String -> [FunArg Formattable exp] -> FileCMD exp prog ()
+    FGet    :: (Formattable a, VarPred exp a) => Handle     -> FileCMD exp prog (exp a)
 
 instance MapInstr (FileCMD exp)
   where
@@ -285,7 +285,7 @@ readWord h = do
         return (c:cs)
 
 evalFPrintf :: EvalExp exp =>
-    [FunArg PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+    [FunArg Formattable exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
 evalFPrintf []            pf = pf
 evalFPrintf (ValArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 

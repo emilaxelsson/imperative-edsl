@@ -10,7 +10,7 @@ module Language.Embedded.Imperative.Types
   , Arr
   , IO.IOMode (..)
   , Handle
-  , Scannable (..)
+  , Formattable
   , FunArg (..)
   ) where
   -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,

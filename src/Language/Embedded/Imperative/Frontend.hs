@@ -12,7 +12,6 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import System.IO.Unsafe
-import Text.Printf (PrintfArg)
 
 #if __GLASGOW_HASKELL__ < 708
 import Data.Proxy
@@ -160,14 +159,14 @@ feof = singleE . FEof
 class PrintfType r
   where
     type PrintfExp r :: * -> *
-    fprf :: Handle -> String -> [FunArg PrintfArg (PrintfExp r)] -> r
+    fprf :: Handle -> String -> [FunArg Formattable (PrintfExp r)] -> r
 
 instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr m a)
   where
     type PrintfExp (ProgramT instr m a) = IExp instr
     fprf h form as = singleE $ FPrintf h form (reverse as)
 
-instance (PrintfArg a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
+instance (Formattable a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
   where
     type PrintfExp (exp a -> r) = exp
     fprf h form as = \a -> fprf h form (ValArg a : as)
@@ -178,14 +177,13 @@ fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
 fput :: forall instr a m
-    .  (PrintfArg a, Scannable a, FileCMD (IExp instr) :<: instr)
+    .  (Formattable a, FileCMD (IExp instr) :<: instr)
     => Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl a = fprintf hdl (scanFormatSpecifier (Proxy :: Proxy a)) a
+fput hdl a = fprintf hdl (formatSpecifier (Proxy :: Proxy a)) a
 
 -- | Get a single value from a handle
 fget
-    :: ( Read a
-       , Scannable a
+    :: ( Formattable a
        , VarPred (IExp instr) a
        , FileCMD (IExp instr) :<: instr
        )
