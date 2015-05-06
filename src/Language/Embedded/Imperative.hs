@@ -3,26 +3,45 @@
 
 module Language.Embedded.Imperative
   ( module Control.Monad
-  , module Data.TypePredicates
-  , module Data.ALaCarte
-  , module Control.Monad.Operational.Compositional
-  , module Language.Embedded.Expression
-  , module Language.Embedded.Imperative.CMD
+    -- * Type predicates
+  , (:<)
+  , Any
+    -- * Composing instruction sets
+  , (:+:)
+  , (:<:)
+    -- * Program monad
+  , ProgramT
+  , Program
+  , interpretT
+  , interpret
+  , IExp
+    -- * Interpreting expression
+  , VarPred
+  , EvalExp
+  , CompExp
+    -- * Imperative instructions
+  , RefCMD
+  , ArrCMD
+  , ControlCMD
+  , FileCMD
+  , CallCMD
+    -- * Front end
   , module Language.Embedded.Imperative.Types
   , module Language.Embedded.Imperative.Frontend
-  , module Language.Embedded.Backend.C
+    -- * C code generation
+  , compile
+  , icompile
   ) where
 
 
 
 import Control.Monad
 
-import Control.Monad.Operational.Compositional (ProgramT, Program, interpretT, interpret, IExp)
-import Data.TypePredicates ((:<), Any)
-import Data.ALaCarte ((:+:), (:<:))
-import Language.Embedded.Expression (VarPred, EvalExp, CompExp)
-import Language.Embedded.Imperative.CMD (RefCMD, ArrCMD, ControlCMD, FileCMD, CallCMD)
-import Language.Embedded.Imperative.Types
+import Control.Monad.Operational.Compositional
+import Data.TypePredicates
+import Language.Embedded.Expression
+import Language.Embedded.Imperative.CMD
+import Language.Embedded.Imperative.Types hiding (Any)
 import Language.Embedded.Imperative.Frontend
-import Language.Embedded.Backend.C (compile, icompile)
+import Language.Embedded.Backend.C
 
