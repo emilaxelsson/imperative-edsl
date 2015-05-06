@@ -7,6 +7,7 @@ module Language.Embedded.Expression
   , EvalExp(..)
   , CompExp(..)
   , freshVar
+  , freshVar_
   )
   where
 
@@ -75,6 +76,7 @@ class CompExp exp where
 -- | Variable identifier
 type VarId = Integer
 
+-- | Create and declare a fresh variable and return its name
 freshVar :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a, C.Id)
 freshVar = do
     v <- fmap varExp freshId
@@ -86,3 +88,6 @@ freshVar = do
       _                  -> addLocal [cdecl| $ty:t $id:n; |]
     return (v,n)
 
+-- | Create and declare a fresh variable
+freshVar_ :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a)
+freshVar_ = fst `fmap` freshVar
