@@ -17,7 +17,6 @@ import System.IO.Unsafe
 import Data.Proxy
 #endif
 import Language.C.Quote.C
-import qualified Language.C.Syntax as C
 
 import Control.Monad.Operational.Compositional
 import Data.TypePredicates
@@ -219,7 +218,7 @@ addInclude = singleE . AddInclude
 -- >           // goes here
 -- >       }
 -- >       |]
-addDefinition :: (CallCMD (IExp instr) :<: instr) => C.Definition -> ProgramT instr m ()
+addDefinition :: (CallCMD (IExp instr) :<: instr) => Definition -> ProgramT instr m ()
 addDefinition = singleE . AddDefinition
 
 -- | Declare an external function

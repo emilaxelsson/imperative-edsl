@@ -12,6 +12,7 @@ module Language.Embedded.Imperative.Types
   , Handle
   , Formattable
   , FunArg (..)
+  , Definition
   ) where
   -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,
   -- since the user is not supposed to inspect such values.
@@ -20,4 +21,6 @@ import qualified System.IO as IO
 
 import Data.TypePredicates
 import Language.Embedded.Imperative.CMD
+
+import Language.C.Syntax
 
