@@ -36,7 +36,7 @@ module Language.Embedded.Imperative
   , EvalExp
   , CompExp
     -- * Front end
-  , module Language.Embedded.Imperative.Types
+  , module Language.Embedded.Imperative.Frontend.General
   , module Language.Embedded.Imperative.Frontend
     -- * C code generation
   , compile
@@ -51,7 +51,7 @@ import Control.Monad.Operational.Compositional
 import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
-import Language.Embedded.Imperative.Types
+import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Frontend
 import Language.Embedded.Backend.C
 

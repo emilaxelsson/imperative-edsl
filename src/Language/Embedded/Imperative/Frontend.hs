@@ -22,7 +22,7 @@ import Control.Monad.Operational.Compositional
 import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
-import Language.Embedded.Imperative.Types
+import Language.Embedded.Imperative.Frontend.General
 
 
 
@@ -137,10 +137,6 @@ whileE b t = do
 -- | Break out from a loop
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
-
-stdin, stdout :: Handle
-stdin  = HandleComp "stdin"
-stdout = HandleComp "stdout"
 
 -- | Open a file
 fopen :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle

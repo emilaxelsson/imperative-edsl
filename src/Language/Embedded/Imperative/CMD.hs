@@ -143,6 +143,10 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
+stdin, stdout :: Handle
+stdin  = HandleComp "stdin"
+stdout = HandleComp "stdout"
+
 class (Typeable a, Read a, PrintfArg a) => Formattable a
   where
     formatSpecifier :: Proxy a -> String

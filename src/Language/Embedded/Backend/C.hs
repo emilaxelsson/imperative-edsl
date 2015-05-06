@@ -18,7 +18,7 @@ import Data.TypePredicates
 import Language.C.Monad
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
-import Language.Embedded.Imperative.Types
+import Language.Embedded.Imperative.Frontend.General
 
 -- | Identifiers from references
 instance ToIdent (Ref a)
