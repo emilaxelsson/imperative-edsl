@@ -3,9 +3,6 @@
 
 module Language.Embedded.Imperative
   ( module Control.Monad
-    -- * Type predicates
-  , (:<)
-  , Any
     -- * Composing instruction sets
   , (:+:)
   , (:<:)
@@ -41,7 +38,7 @@ import Control.Monad.Operational.Compositional
 import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
-import Language.Embedded.Imperative.Types hiding (Any)
+import Language.Embedded.Imperative.Types
 import Language.Embedded.Imperative.Frontend
 import Language.Embedded.Backend.C
 
