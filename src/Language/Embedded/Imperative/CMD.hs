@@ -18,7 +18,9 @@ import qualified System.IO as IO
 import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
+#if __GLASGOW_HASKELL__ < 708
 import Data.Proxy
+#endif
 
 import Control.Monad.Operational.Compositional
 import Data.TypePredicates

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -24,7 +25,9 @@ import Data.Typeable
 import System.IO.Unsafe
 import Text.Printf (PrintfArg)
 
+#if __GLASGOW_HASKELL__ < 708
 import Data.Proxy
+#endif
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 

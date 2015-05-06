@@ -79,6 +79,7 @@
 -- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE BangPatterns #-}
@@ -92,7 +93,9 @@ module Language.C.Monad
   where
 
 import Control.Lens
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad.State.Strict
 import Control.Monad.Exception
 

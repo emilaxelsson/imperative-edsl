@@ -1,10 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monads where
 
 
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad.Exception
 import Control.Monad.Identity
 import Control.Monad.Reader

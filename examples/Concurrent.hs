@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -5,7 +6,9 @@ module Concurrent where
 
 import Prelude hiding (break)
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent

@@ -1,10 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Generate C code from @Language.Embedded.Imperative@ programs
 module Language.Embedded.Backend.C where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Data.Proxy
 
 import Language.C.Quote.C

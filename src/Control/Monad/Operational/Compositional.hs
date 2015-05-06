@@ -54,7 +54,9 @@ module Control.Monad.Operational.Compositional
 
 
 
-import Control.Applicative (Applicative (..))
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 import Control.Monad
 import Control.Monad.Identity
 import Control.Monad.Trans
