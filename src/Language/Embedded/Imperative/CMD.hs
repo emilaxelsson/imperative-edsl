@@ -33,6 +33,7 @@ import qualified Language.C.Syntax as C
 -- * References
 --------------------------------------------------------------------------------
 
+-- | Mutable reference
 data Ref a
     = RefComp VarId
     | RefEval (IORef a)
@@ -75,6 +76,7 @@ type instance IExp (RefCMD e :+: i) = e
 -- * Arrays
 --------------------------------------------------------------------------------
 
+-- | Mutable array
 data Arr n a
     = ArrComp String
     | ArrEval (IOArray n a)
@@ -138,15 +140,21 @@ type instance IExp (ControlCMD e :+: i) = e
 -- * File handling
 --------------------------------------------------------------------------------
 
+-- | File handle
 data Handle
     = HandleComp String
     | HandleEval IO.Handle
   deriving Typeable
 
-stdin, stdout :: Handle
-stdin  = HandleComp "stdin"
+-- | Handle to stdin
+stdin :: Handle
+stdin = HandleComp "stdin"
+
+-- | Handle to stdout
+stdout :: Handle
 stdout = HandleComp "stdout"
 
+-- | Values that can be printed\/scanned using @printf@\/@scanf@
 class (Typeable a, Read a, PrintfArg a) => Formattable a
   where
     formatSpecifier :: Proxy a -> String
