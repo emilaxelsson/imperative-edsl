@@ -7,8 +7,8 @@ module Language.Embedded.Imperative
   , module Data.ALaCarte
   , module Control.Monad.Operational.Compositional
   , module Language.Embedded.Expression
-  , module Language.Embedded.Imperative.Types
   , module Language.Embedded.Imperative.CMD
+  , module Language.Embedded.Imperative.Types
   , module Language.Embedded.Imperative.Frontend
   , module Language.Embedded.Backend.C
   ) where

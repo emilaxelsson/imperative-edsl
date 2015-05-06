@@ -1,7 +1,8 @@
 -- | Re-exports of extra types used by imperative instructions
 
 module Language.Embedded.Imperative.Types
-  ( Ref (..)
+  ( Any
+  , Ref (..)
   , Arr (..)
   , IO.IOMode (..)
   , Handle (..)
@@ -11,5 +12,6 @@ module Language.Embedded.Imperative.Types
 
 import qualified System.IO as IO
 
+import Data.TypePredicates
 import Language.Embedded.Imperative.CMD
 
