@@ -75,7 +75,7 @@ class CompExp exp where
 -- | Variable identifier
 type VarId = Integer
 
-freshVar :: forall exp a. (CompExp exp, VarPred exp a) => CGen (exp a, C.Id)
+freshVar :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a, C.Id)
 freshVar = do
     v <- fmap varExp freshId
     t <- compTypeP (Proxy :: Proxy (exp a))
