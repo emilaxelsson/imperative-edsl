@@ -7,6 +7,8 @@ description:         Deep embedding of imperative programs with code generation.
                      programs is "Language.Embedded.Imperative" (and optionally
                      "Language.Embedded.Expr" which provides a simple expression
                      language).
+                     .
+                     Examples can be found in the @examples@ directory.
 license:             BSD3
 license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson

@@ -2,17 +2,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- | A generic user interface for imperative programs. Programs are
--- parameterized by instruction sets that can be combined in a modular way; e.g:
---
--- @
--- type MyProg exp a = `Program` (`RefCMD` exp `:+:` `ArrCMD` exp) a
--- @
---
--- Also, instructions are parameterized on the expression language. In the above
--- example, @exp@ can be any type (of kind @* -> *@) that implements the
--- 'EvalExp' and 'CompExp' classes.
-
 module Language.Embedded.Imperative.Frontend where
 
 

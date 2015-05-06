@@ -251,8 +251,10 @@ instance (DryInterp i1, DryInterp i2) => DryInterp (i1 :+: i2)
 -- that has an instance of 'IExp'. The instructions defined in this package provide 'IExp' instances
 -- of the form
 --
--- > type instance IExp (SomeInstr exp)       = exp
--- > type instance IExp (SomeInstr exp :+: i) = exp
+-- @
+-- type instance `IExp` (SomeInstr exp)       = exp
+-- type instance `IExp` (SomeInstr exp `:+:` i) = exp
+-- @
 --
 -- Which means that functions like 'injE' will determine the expression type from the first summand.
 -- If some other behavior is needed, it is of course also possible to make custom instruction types
