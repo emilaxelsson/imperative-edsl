@@ -1,4 +1,8 @@
--- | Re-exports of extra types used by imperative instructions
+-- | Re-exports of extra types used by imperative front ends. The motivation for
+-- this module is to support making specialized front ends (e.g. like
+-- "Language.Embedded.Imperative.Frontend" but specialized for a specific
+-- instruction set). The types exported here are the parts of the front end that
+-- are independent of the instruction set and/or expression language.
 
 module Language.Embedded.Imperative.Types
   ( Any
