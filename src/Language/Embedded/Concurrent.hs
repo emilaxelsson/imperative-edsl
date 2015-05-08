@@ -9,8 +9,6 @@ module Language.Embedded.Concurrent (
     fork, forkWithId, asyncKillThread, killThread, waitThread,
     newChan, newCloseableChan, readChan, writeChan,
     closeChan, lastChanReadOK,
-    compileConc,
-    icompileConc
   ) where
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -185,7 +183,7 @@ waitThread :: (ThreadCMD :<: instr) => ThreadId -> ProgramT instr m ()
 waitThread = singleton . inj . Wait
 
 -- | Create a new channel. Writing a reference type to a channel will copy the
---   *reference* into the queue, not its contents.
+--   /reference/ into the queue, not its contents.
 --
 --   We'll likely want to change this, actually copying arrays and the like
 --   into the queue instead of sharing them across threads.
@@ -299,22 +297,4 @@ instance Interp ThreadCMD CGen where
   interp = compThreadCMD
 instance CompExp exp => Interp (ChanCMD exp) CGen where
   interp = compChanCMD
-
--- | Compile a concurrent program. To compile the resulting C program:
---
---       gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
---
-compileConc :: (MapInstr instr, Interp instr CGen)
-            => Program instr a
-            -> String
-compileConc = show . prettyCGen . liftSharedLocals . wrapMain . interpret
-
--- | Compile a concurrent program. To compile the resulting C program:
---
---       gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
---
-icompileConc :: (MapInstr instr, Interp instr CGen)
-            => Program instr a
-            -> IO ()
-icompileConc = putStrLn . compileConc
 

@@ -181,11 +181,23 @@ instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlC
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
--- | Generate C code from a 'Program'
+-- | Compile a program to C code represented as a string
+--
+-- For programs that make use of the primitives in
+-- "Language.Embedded.Concurrent", the resulting C code can be compiled as
+-- follows:
+--
+-- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen, MapInstr instr) => Program instr a -> String
-compile = show . prettyCGen . wrapMain . interpret
+compile = show . prettyCGen . liftSharedLocals . wrapMain . interpret
 
--- | Generate C code from a 'Program'
+-- | Compile a program to C code and print it on the screen
+--
+-- For programs that make use of the primitives in
+-- "Language.Embedded.Concurrent", the resulting C code can be compiled as
+-- follows:
+--
+-- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen, MapInstr instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
 
