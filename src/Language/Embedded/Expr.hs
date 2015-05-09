@@ -123,8 +123,8 @@ compExpr (LEq a b) = do
 compTypeImpl :: forall proxy m a. (MonadC m, VarPred Expr a)
              => proxy (Expr a) -> m C.Type
 compTypeImpl a = case show (typeOf (undefined :: a)) of
-    "Bool"  -> return [cty| int   |]
-    "Int"   -> return [cty| int   |]
+    "Bool" -> addSystemInclude "stdbool.h" >> return [cty| typename bool |]
+    "Int"  -> return [cty| int |]
     'I':'n':'t':xs -> do
       addSystemInclude "stdint.h"
       case xs of
