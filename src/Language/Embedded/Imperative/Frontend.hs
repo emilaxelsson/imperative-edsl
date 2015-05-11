@@ -46,9 +46,15 @@ setRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
 setRef r = singleE . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr, Monad m) =>
-    Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
-modifyRef r f = getRef r >>= setRef r . f
+modifyRef
+    :: ( VarPred (IExp instr) a
+       , EvalExp (IExp instr)
+       , CompExp (IExp instr)
+       , RefCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
+modifyRef r f = setRef r $ f $ unsafeFreezeRef r
 
 -- | Freeze the contents of reference (only safe if the reference is never written to after the
 -- first action that makes use of the resulting expression)
