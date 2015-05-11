@@ -13,6 +13,7 @@ module Language.Embedded.Imperative.Frontend.General
   , stdin
   , stdout
   , Formattable
+  , Object
   , FunArg (..)
   , Definition
   ) where

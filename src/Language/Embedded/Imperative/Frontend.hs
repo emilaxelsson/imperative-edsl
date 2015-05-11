@@ -189,6 +189,13 @@ fget = singleE . FGet
 printf :: PrintfType r => String -> r
 printf = fprintf stdout
 
+-- | Create a pointer to an abstract object. The only thing one can do with such
+-- objects is to pass them to 'callFun' or 'callProc'.
+newObject :: (ObjectCMD :<: instr)
+    => String  -- ^ Object type
+    -> ProgramT instr m Object
+newObject = singleInj . NewObject
+
 -- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude

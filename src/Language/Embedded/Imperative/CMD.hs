@@ -202,19 +202,54 @@ type instance IExp (FileCMD e :+: i) = e
 
 
 --------------------------------------------------------------------------------
+-- * Abstract objects
+--------------------------------------------------------------------------------
+
+data Object = Object
+    { objectType :: String
+    , objectId   :: String
+    }
+  deriving (Eq, Show, Ord, Typeable)
+
+data ObjectCMD (prog :: * -> *) a
+  where
+    NewObject
+        :: String  -- Type
+        -> ObjectCMD prog Object
+
+instance MapInstr ObjectCMD
+  where
+    imap _ (NewObject t) = NewObject t
+
+instance DryInterp ObjectCMD
+  where
+    dryInterp (NewObject t) = liftM (Object t) $ freshStr "obj"
+
+--------------------------------------------------------------------------------
 -- * External function calls
 --------------------------------------------------------------------------------
 
--- | A function argument with constrained existentially quantified type
+-- | External function arguments
 data FunArg pred exp
   where
-    ValArg :: pred a               => exp a -> FunArg pred exp
+    -- Expression argument
+    ValArg :: pred a => exp a -> FunArg pred exp
+    -- Reference argument, passed by reference
     RefArg :: (pred a, Typeable a) => Ref a -> FunArg pred exp
+    -- Array argument
+    ArrArg :: (pred a, Typeable a) => Arr n a -> FunArg pred exp
+    -- Object argument
+    ObjArg :: Object -> FunArg pred exp
+    -- Object address argument (address of the object pointer)
+    ObjAddrArg :: Object -> FunArg pred exp  -- P
 
 -- | Cast the argument predicate to 'Any'
 anyArg :: FunArg pred exp -> FunArg Any exp
-anyArg (ValArg a) = ValArg a
-anyArg (RefArg r) = RefArg r
+anyArg (ValArg a)     = ValArg a
+anyArg (RefArg r)     = RefArg r
+anyArg (ArrArg a)     = ArrArg a
+anyArg (ObjArg o)     = ObjArg o
+anyArg (ObjAddrArg o) = ObjAddrArg o
 
 data CallCMD exp (prog :: * -> *) a
   where
@@ -313,6 +348,9 @@ runFileCMD (FGet h)   = do
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
+runObjectCMD :: ObjectCMD IO a -> IO a
+runObjectCMD (NewObject _) = error "cannot run programs involving newObject"
+
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
 runCallCMD (AddInclude _)       = return ()
 runCallCMD (AddDefinition _)    = return ()
@@ -325,5 +363,6 @@ instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
+instance                Interp ObjectCMD        IO where interp = runObjectCMD
 instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
 

@@ -10,6 +10,7 @@ import Control.Applicative
 #endif
 import Data.Proxy
 
+import Data.Loc (noLoc)
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
@@ -144,9 +145,25 @@ compFileCMD (FEof (HandleComp h)) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
+namedType :: String -> C.Type
+namedType t = C.Type
+    (C.DeclSpec [] [] (C.Tnamed (C.Id t noLoc) [] noLoc) noLoc)
+    (C.DeclRoot noLoc)
+    noLoc
+
+compObjectCMD :: ObjectCMD CGen a -> CGen a
+compObjectCMD (NewObject t) = do
+    sym <- gensym "obj"
+    let t' = namedType t
+    addLocal [cdecl| $ty:t' * $id:sym; |]
+    return $ Object t sym
+
 mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
 mkArg (ValArg a) = compExp a
-mkArg (RefArg r) = return [cexp|&$id:r|]
+mkArg (RefArg r) = return [cexp| &$id:r |]
+mkArg (ArrArg a) = return [cexp| $id:a |]
+mkArg (ObjArg     (Object _ o)) = return [cexp| $id:o |]
+mkArg (ObjAddrArg (Object _ o)) = return [cexp| &$id:o |]
 
 mkArgParam :: forall exp . CompExp exp => FunArg (VarPred exp) exp -> CGen C.Param
 mkArgParam (ValArg a) = do
@@ -155,6 +172,11 @@ mkArgParam (ValArg a) = do
 mkArgParam (RefArg (r :: Ref a)) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
+mkArgParam (ArrArg (a :: Arr n a)) = do
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    return [cparam| $ty:t* |]
+mkArgParam (ObjArg     (Object t _)) = let t' = namedType t in return [cparam| $ty:t'* |]
+mkArgParam (ObjAddrArg (Object t _)) = let t' = namedType t in return [cparam| $ty:t'** |]
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
@@ -179,6 +201,7 @@ instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance                Interp ObjectCMD        CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
 -- | Compile a program to C code represented as a string
