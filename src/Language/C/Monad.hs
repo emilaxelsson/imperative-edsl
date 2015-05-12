@@ -123,6 +123,7 @@ data CEnv = CEnv
     , _prototypes  :: [C.Definition]
     , _globals     :: [C.Definition]
 
+    , _aliases     :: Map.Map Integer String
     , _params      :: [C.Param]
     , _args        :: [C.Exp]
     , _locals      :: [C.InitGroup]
@@ -145,6 +146,7 @@ defaultCEnv fl = CEnv
     , _typedefs    = mempty
     , _prototypes  = mempty
     , _globals     = mempty
+    , _aliases     = mempty
     , _params      = mempty
     , _args        = mempty
     , _locals      = mempty
@@ -245,9 +247,20 @@ addGlobal def = globals %= (def:)
 addGlobals :: MonadC m => [C.Definition] -> m ()
 addGlobals defs = globals %= (defs++)
 
+-- | Let a variable be known by another name
+withAlias :: MonadC m => Integer -> String -> m a -> m a
+withAlias i n act = do
+  oldAliases <- aliases <<%= Map.insert i n
+  a <- act
+  aliases .= oldAliases
+  return a
+
 -- | Add a function parameter when building a function definition
 addParam :: MonadC m => C.Param -> m ()
 addParam param = params %= (param:)
+
+addParams :: MonadC m => [C.Param] -> m ()
+addParams ps = params %= (reverse ps++)
 
 -- | Add a function argument when building a function call
 addArg :: MonadC m => C.Exp -> m ()
