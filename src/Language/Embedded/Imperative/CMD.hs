@@ -117,18 +117,22 @@ data ControlCMD exp prog a
   where
     If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
     While :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
+    For   :: (VarPred exp n, Integral n) =>
+             exp n -> exp n -> (exp n -> prog ()) -> ControlCMD exp prog ()
     Break :: ControlCMD exp prog ()
 
 instance MapInstr (ControlCMD exp)
   where
     imap g (If c t f)        = If c (g t) (g f)
     imap g (While cont body) = While (g cont) (g body)
+    imap g (For lo hi body)  = For lo hi (g . body)
     imap _ Break             = Break
 
 instance DryInterp (ControlCMD exp)
   where
     dryInterp (If _ _ _)  = return ()
     dryInterp (While _ _) = return ()
+    dryInterp (For _ _ _) = return ()
     dryInterp Break       = return ()
 
 type instance IExp (ControlCMD e)       = e
@@ -241,7 +245,7 @@ data FunArg pred exp
     -- Object argument
     ObjArg :: Object -> FunArg pred exp
     -- Object address argument (address of the object pointer)
-    ObjAddrArg :: Object -> FunArg pred exp  -- P
+    ObjAddrArg :: Object -> FunArg pred exp
 
 -- | Cast the argument predicate to 'Any'
 anyArg :: FunArg pred exp -> FunArg Any exp
@@ -310,6 +314,12 @@ runControlCMD (While cont body) = loop
   where loop = do
           c <- cont
           when (evalExp c) $ body >> loop
+runControlCMD (For lo hi body) = loop (evalExp lo)
+  where
+    hi' = evalExp hi
+    loop i
+      | i == hi'  = return ()
+      | otherwise = body (litExp i) >> loop (i-1)
 runControlCMD Break = error "cannot run programs involving break"
 
 evalHandle :: Handle -> IO.Handle
