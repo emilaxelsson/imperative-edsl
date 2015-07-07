@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.2
+version:             0.2.1
 synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
@@ -72,7 +72,7 @@ library
     exception-transformers,
     language-c-quote,
     lens,
-    mainland-pretty,
+    mainland-pretty < 0.4,
     mtl,
     tagged,
     BoundedChan,
