@@ -21,6 +21,8 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 
+import Text.PrettyPrint.Mainland (pretty)
+
 -- | Identifiers from references
 instance ToIdent (Ref a)
   where
@@ -212,7 +214,7 @@ instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 --
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen, MapInstr instr) => Program instr a -> String
-compile = show . prettyCGen . liftSharedLocals . wrapMain . interpret
+compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
 --
