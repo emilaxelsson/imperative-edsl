@@ -318,8 +318,8 @@ runControlCMD (For lo hi body) = loop (evalExp lo)
   where
     hi' = evalExp hi
     loop i
-      | i == hi'  = return ()
-      | otherwise = body (litExp i) >> loop (i-1)
+      | i <= hi'  = body (litExp i) >> loop (i+1)
+      | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
 
 evalHandle :: Handle -> IO.Handle
