@@ -102,6 +102,12 @@ compControlCMD (While cont body) = do
           _ -> addStm [cstm| if (! $contc) {break;} |]
         body
     addStm [cstm| while (1) {$items:bodyc} |]
+compControlCMD (For lo hi body) = do
+    loe   <- compExp lo
+    hie   <- compExp hi
+    (i,n) <- freshVar
+    bodyc <- inNewBlock_ (body i)
+    addStm [cstm| for ($id:n=$loe; $id:n<=$hie; $id:n++) {$items:bodyc} |]
 compControlCMD Break = addStm [cstm| break; |]
 
 compIOMode :: IOMode -> String
