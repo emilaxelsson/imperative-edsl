@@ -205,8 +205,13 @@ fprintf h format = fprf h format []
 -- | Put a single value to a handle
 fput :: forall instr a m
     .  (Formattable a, FileCMD (IExp instr) :<: instr)
-    => Handle -> IExp instr a -> ProgramT instr m ()
-fput hdl a = fprintf hdl (formatSpecifier (Proxy :: Proxy a)) a
+    => Handle
+    -> String        -- Prefix
+    -> IExp instr a  -- Expression to print
+    -> String        -- Suffix
+    -> ProgramT instr m ()
+fput hdl prefix a suffix =
+    fprintf hdl (prefix ++ formatSpecifier (Proxy :: Proxy a) ++ suffix) a
 
 -- | Get a single value from a handle
 fget
