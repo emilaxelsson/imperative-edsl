@@ -74,7 +74,7 @@ translateFunction sig = go sig (return ())
         addStm [cstm| *out = $e; |]
     go fun@(Lam Empty f) prelude = do
       t <- compTypePP (Proxy :: Proxy exp) (argProxy fun)
-      v <- varExp <$> freshId
+      v <- fmap varExp freshId
       Var n _ <- compExp v
       go (f v) $ prelude >> addParam [cparam| $ty:t $id:n |]
     go fun@(Lam n@(Native l) f) prelude = do
