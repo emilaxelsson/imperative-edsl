@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.3
+version:             0.4
 synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
@@ -35,8 +35,9 @@ library
     Language.Embedded.Imperative.CMD
     Language.Embedded.Imperative.Frontend.General
     Language.Embedded.Imperative.Frontend
-    Language.Embedded.Backend.C
     Language.Embedded.Imperative
+    Language.Embedded.Signature
+    Language.Embedded.Backend.C
     Language.Embedded.Concurrent
     Language.Embedded.Expr
 
