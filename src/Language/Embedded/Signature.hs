@@ -13,6 +13,7 @@ import Language.Embedded.Expression
 import Language.C.Quote.C
 import Language.C.Syntax (Id(..),Exp(..),Type)
 
+
 -- * Language
 
 -- | Signature annotations
@@ -25,8 +26,30 @@ data Ann exp a where
 data Signature exp a where
   Ret    :: (CompExp exp, VarPred exp a) => String -> exp a -> Signature exp a
   Ptr    :: (CompExp exp, VarPred exp a) => String -> exp a -> Signature exp a
-  Lam    :: (CompExp exp, VarPred exp a) => Ann exp a  -> (exp a -> Signature exp a)
+  Lam    :: (CompExp exp, VarPred exp a) => Ann exp a -> (exp a -> Signature exp b)
          -> Signature exp (a -> b)
+
+
+-- * Combinators
+
+lam :: (CompExp exp, VarPred exp a)
+    => (exp a -> Signature exp b) -> Signature exp (a -> b)
+lam f = Lam Empty $ \x -> f x
+
+name :: (CompExp exp, VarPred exp a)
+     => String -> (exp a -> Signature exp b) -> Signature exp (a -> b)
+name s f = Lam (Named s) $ \x -> f x
+
+ret,ptr :: (CompExp exp, VarPred exp a)
+        => String -> exp a -> Signature exp a
+ret = Ret
+ptr = Ptr
+
+arg :: (CompExp exp, VarPred exp a)
+    => Ann exp a -> (exp a -> exp b) -> (exp b -> Signature exp c) -> Signature exp (a -> c)
+arg s g f = Lam s $ \x -> f (g x)
+
+
 
 -- * Compilation
 
