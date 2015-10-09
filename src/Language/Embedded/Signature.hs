@@ -19,33 +19,33 @@ import Language.C.Syntax (Id(..),Exp(..),Type)
 -- | Signature annotations
 data Ann exp a where
   Empty  :: Ann exp a
-  Native :: (CompExp exp, VarPred exp a) => exp len -> Ann exp [a]
+  Native :: (VarPred exp a) => exp len -> Ann exp [a]
   Named  :: String -> Ann exp a
 
 -- | Signatures
 data Signature exp a where
-  Ret    :: (CompExp exp, VarPred exp a) => String -> exp a -> Signature exp a
-  Ptr    :: (CompExp exp, VarPred exp a) => String -> exp a -> Signature exp a
-  Lam    :: (CompExp exp, VarPred exp a) => Ann exp a -> (exp a -> Signature exp b)
+  Ret    :: (VarPred exp a) => String -> exp a -> Signature exp a
+  Ptr    :: (VarPred exp a) => String -> exp a -> Signature exp a
+  Lam    :: (VarPred exp a) => Ann exp a -> (exp a -> Signature exp b)
          -> Signature exp (a -> b)
 
 
 -- * Combinators
 
-lam :: (CompExp exp, VarPred exp a)
+lam :: (VarPred exp a)
     => (exp a -> Signature exp b) -> Signature exp (a -> b)
 lam f = Lam Empty $ \x -> f x
 
-name :: (CompExp exp, VarPred exp a)
+name :: (VarPred exp a)
      => String -> (exp a -> Signature exp b) -> Signature exp (a -> b)
 name s f = Lam (Named s) $ \x -> f x
 
-ret,ptr :: (CompExp exp, VarPred exp a)
+ret,ptr :: (VarPred exp a)
         => String -> exp a -> Signature exp a
 ret = Ret
 ptr = Ptr
 
-arg :: (CompExp exp, VarPred exp a)
+arg :: (VarPred exp a)
     => Ann exp a -> (exp a -> exp b) -> (exp b -> Signature exp c) -> Signature exp (a -> c)
 arg s g f = Lam s $ \x -> f (g x)
 
@@ -54,7 +54,7 @@ arg s g f = Lam s $ \x -> f (g x)
 -- * Compilation
 
 -- | Compile a function @Signature@ to C code
-translateFunction :: forall m exp a. (MonadC m)
+translateFunction :: forall m exp a. (MonadC m, CompExp exp)
                   => Signature exp a -> m ()
 translateFunction sig = go sig (return ())
   where
