@@ -27,7 +27,6 @@ module Control.Monad.Operational.Compositional
     , singleton
     , singleInj
       -- * Interpretation
-    , HFunctor (..)
     , liftProgram
     , interpretWithMonadT
     , interpretWithMonad
@@ -115,17 +114,6 @@ singleInj = Instr . inj
 ----------------------------------------------------------------------------------------------------
 -- * Interpretation
 ----------------------------------------------------------------------------------------------------
-
--- | Higher-order functors
-class HFunctor h
-  where
-    -- | Higher-order 'fmap'
-    hfmap :: (forall b . m b -> n b) -> h m a -> h n a
-
-instance (HFunctor h1, HFunctor h2) => HFunctor (h1 :+: h2)
-  where
-    hfmap f (Inl i) = Inl (hfmap f i)
-    hfmap f (Inr i) = Inr (hfmap f i)
 
 -- | Lift a simple program to a program over a monad @m@
 liftProgram :: forall instr m a . (HFunctor instr, Monad m) => Program instr a -> ProgramT instr m a

@@ -55,3 +55,14 @@ instance {-# OVERLAPPING #-} (f :<: h) => (f :<: (g :+: h))
     prj (Inr h) = prj h
     prj _       = Nothing
 
+-- | Higher-order functors
+class HFunctor h
+  where
+    -- | Higher-order 'fmap'
+    hfmap :: (forall b . m b -> n b) -> h m a -> h n a
+
+instance (HFunctor h1, HFunctor h2) => HFunctor (h1 :+: h2)
+  where
+    hfmap f (Inl i) = Inl (hfmap f i)
+    hfmap f (Inr i) = Inr (hfmap f i)
+
