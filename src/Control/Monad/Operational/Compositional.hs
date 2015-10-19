@@ -165,12 +165,12 @@ instance (Interp i1 m, Interp i2 m) => Interp (i1 :+: i2) m
     interp (Inr i) = interp i
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
--- 'MapInstr' class.
+-- 'Interp' class.
 interpretT :: (Interp i m, MapInstr i, Monad m) => (forall b . n b -> m b) -> ProgramT i n a -> m a
 interpretT = interpretWithMonadT interp
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
--- 'MapInstr' class.
+-- 'Interp' class.
 interpret :: (Interp i m, MapInstr i, Monad m) => Program i a -> m a
 interpret = interpretWithMonad interp
 
