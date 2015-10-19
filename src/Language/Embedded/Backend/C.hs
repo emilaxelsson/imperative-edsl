@@ -219,7 +219,7 @@ instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 -- follows:
 --
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
-compile :: (Interp instr CGen, MapInstr instr) => Program instr a -> String
+compile :: (Interp instr CGen, HFunctor instr) => Program instr a -> String
 compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
@@ -229,6 +229,6 @@ compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 -- follows:
 --
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
-icompile :: (Interp instr CGen, MapInstr instr) => Program instr a -> IO ()
+icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
 

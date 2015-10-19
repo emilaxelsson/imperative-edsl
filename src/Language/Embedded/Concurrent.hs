@@ -90,17 +90,17 @@ data ChanCMD exp (prog :: * -> *) a where
   ReadOK    :: VarPred exp Bool
             => Chan Closeable a -> ChanCMD exp prog (exp Bool)
 
-instance MapInstr ThreadCMD where
-  imap f (ForkWithId p) = ForkWithId $ f . p
-  imap _ (Kill tid)     = Kill tid
-  imap _ (Wait tid)     = Wait tid
+instance HFunctor ThreadCMD where
+  hfmap f (ForkWithId p) = ForkWithId $ f . p
+  hfmap _ (Kill tid)     = Kill tid
+  hfmap _ (Wait tid)     = Wait tid
 
-instance MapInstr (ChanCMD exp) where
-  imap _ (NewChan sz)    = NewChan sz
-  imap _ (ReadChan c)    = ReadChan c
-  imap _ (WriteChan c x) = WriteChan c x
-  imap _ (CloseChan c)   = CloseChan c
-  imap _ (ReadOK c)      = ReadOK c
+instance HFunctor (ChanCMD exp) where
+  hfmap _ (NewChan sz)    = NewChan sz
+  hfmap _ (ReadChan c)    = ReadChan c
+  hfmap _ (WriteChan c x) = WriteChan c x
+  hfmap _ (CloseChan c)   = CloseChan c
+  hfmap _ (ReadOK c)      = ReadOK c
 
 type instance IExp (ThreadCMD :+: i) = IExp i
 

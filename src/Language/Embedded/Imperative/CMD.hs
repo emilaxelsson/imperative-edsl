@@ -53,12 +53,12 @@ data RefCMD exp (prog :: * -> *) a
   deriving Typeable
 #endif
 
-instance MapInstr (RefCMD exp)
+instance HFunctor (RefCMD exp)
   where
-    imap _ NewRef              = NewRef
-    imap _ (InitRef a)         = InitRef a
-    imap _ (GetRef r)          = GetRef r
-    imap _ (SetRef r a)        = SetRef r a
+    hfmap _ NewRef       = NewRef
+    hfmap _ (InitRef a)  = InitRef a
+    hfmap _ (GetRef r)   = GetRef r
+    hfmap _ (SetRef r a) = SetRef r a
 
 instance CompExp exp => DryInterp (RefCMD exp)
   where
@@ -92,11 +92,11 @@ data ArrCMD exp (prog :: * -> *) a
   deriving Typeable
 #endif
 
-instance MapInstr (ArrCMD exp)
+instance HFunctor (ArrCMD exp)
   where
-    imap _ (NewArr n)       = NewArr n
-    imap _ (GetArr i arr)   = GetArr i arr
-    imap _ (SetArr i a arr) = SetArr i a arr
+    hfmap _ (NewArr n)       = NewArr n
+    hfmap _ (GetArr i arr)   = GetArr i arr
+    hfmap _ (SetArr i a arr) = SetArr i a arr
 
 instance CompExp exp => DryInterp (ArrCMD exp)
   where
@@ -121,12 +121,12 @@ data ControlCMD exp prog a
              exp n -> exp n -> (exp n -> prog ()) -> ControlCMD exp prog ()
     Break :: ControlCMD exp prog ()
 
-instance MapInstr (ControlCMD exp)
+instance HFunctor (ControlCMD exp)
   where
-    imap g (If c t f)        = If c (g t) (g f)
-    imap g (While cont body) = While (g cont) (g body)
-    imap g (For lo hi body)  = For lo hi (g . body)
-    imap _ Break             = Break
+    hfmap g (If c t f)        = If c (g t) (g f)
+    hfmap g (While cont body) = While (g cont) (g body)
+    hfmap g (For lo hi body)  = For lo hi (g . body)
+    hfmap _ Break             = Break
 
 instance DryInterp (ControlCMD exp)
   where
@@ -184,13 +184,13 @@ data FileCMD exp (prog :: * -> *) a
     FPrintf :: Handle -> String -> [FunArg Formattable exp] -> FileCMD exp prog ()
     FGet    :: (Formattable a, VarPred exp a) => Handle     -> FileCMD exp prog (exp a)
 
-instance MapInstr (FileCMD exp)
+instance HFunctor (FileCMD exp)
   where
-    imap _ (FOpen file mode)     = FOpen file mode
-    imap _ (FClose hdl)          = FClose hdl
-    imap _ (FPrintf hdl form as) = FPrintf hdl form as
-    imap _ (FGet hdl)            = FGet hdl
-    imap _ (FEof hdl)            = FEof hdl
+    hfmap _ (FOpen file mode)     = FOpen file mode
+    hfmap _ (FClose hdl)          = FClose hdl
+    hfmap _ (FPrintf hdl form as) = FPrintf hdl form as
+    hfmap _ (FGet hdl)            = FGet hdl
+    hfmap _ (FEof hdl)            = FEof hdl
 
 instance CompExp exp => DryInterp (FileCMD exp)
   where
@@ -221,9 +221,9 @@ data ObjectCMD (prog :: * -> *) a
         :: String  -- Type
         -> ObjectCMD prog Object
 
-instance MapInstr ObjectCMD
+instance HFunctor ObjectCMD
   where
-    imap _ (NewObject t) = NewObject t
+    hfmap _ (NewObject t) = NewObject t
 
 instance DryInterp ObjectCMD
   where
@@ -268,14 +268,14 @@ data CallCMD exp (prog :: * -> *) a
     CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
     CallProc      ::                  String -> [FunArg Any exp] -> CallCMD exp prog ()
 
-instance MapInstr (CallCMD exp)
+instance HFunctor (CallCMD exp)
   where
-    imap _ (AddInclude incl)           = AddInclude incl
-    imap _ (AddDefinition def)         = AddDefinition def
-    imap _ (AddExternFun fun res args) = AddExternFun fun res args
-    imap _ (AddExternProc proc args)   = AddExternProc proc args
-    imap _ (CallFun fun args)          = CallFun fun args
-    imap _ (CallProc proc args)        = CallProc proc args
+    hfmap _ (AddInclude incl)           = AddInclude incl
+    hfmap _ (AddDefinition def)         = AddDefinition def
+    hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
+    hfmap _ (AddExternProc proc args)   = AddExternProc proc args
+    hfmap _ (CallFun fun args)          = CallFun fun args
+    hfmap _ (CallProc proc args)        = CallProc proc args
 
 instance CompExp exp => DryInterp (CallCMD exp)
   where

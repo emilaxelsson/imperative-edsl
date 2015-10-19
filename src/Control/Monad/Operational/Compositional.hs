@@ -27,7 +27,7 @@ module Control.Monad.Operational.Compositional
     , singleton
     , singleInj
       -- * Interpretation
-    , MapInstr (..)
+    , HFunctor (..)
     , liftProgram
     , interpretWithMonadT
     , interpretWithMonad
@@ -116,28 +116,28 @@ singleInj = Instr . inj
 -- * Interpretation
 ----------------------------------------------------------------------------------------------------
 
--- | Class for mapping over the sub-programs of instructions
-class MapInstr instr
+-- | Higher-order functors
+class HFunctor h
   where
-    -- | Map over the sub-programs of instructions
-    imap :: (forall b . m b -> n b) -> instr m a -> instr n a
+    -- | Higher-order 'fmap'
+    hfmap :: (forall b . m b -> n b) -> h m a -> h n a
 
-instance (MapInstr i1, MapInstr i2) => MapInstr (i1 :+: i2)
+instance (HFunctor h1, HFunctor h2) => HFunctor (h1 :+: h2)
   where
-    imap f (Inl i) = Inl $ imap f i
-    imap f (Inr i) = Inr $ imap f i
+    hfmap f (Inl i) = Inl (hfmap f i)
+    hfmap f (Inr i) = Inr (hfmap f i)
 
 -- | Lift a simple program to a program over a monad @m@
-liftProgram :: forall instr m a . (MapInstr instr, Monad m) => Program instr a -> ProgramT instr m a
+liftProgram :: forall instr m a . (HFunctor instr, Monad m) => Program instr a -> ProgramT instr m a
 liftProgram = go
   where
     go :: Program instr b -> ProgramT instr m b
     go (Lift a)   = Lift $ return $ runIdentity a
     go (Bind p k) = Bind (go p) (go . k)
-    go (Instr i)  = Instr $ imap go i
+    go (Instr i)  = Instr $ hfmap go i
 
 -- | Interpret a program in a monad
-interpretWithMonadT :: forall instr m n a . (MapInstr instr, Monad m)
+interpretWithMonadT :: forall instr m n a . (HFunctor instr, Monad m)
     => (forall b . instr m b -> m b)
     -> (forall b . n b -> m b)
     -> ProgramT instr n a -> m a
@@ -146,10 +146,10 @@ interpretWithMonadT runi runn = go
     go :: ProgramT instr n b -> m b
     go (Lift a)   = runn a
     go (Bind p k) = go p >>= (go . k)
-    go (Instr i)  = runi $ imap go i
+    go (Instr i)  = runi $ hfmap go i
 
 -- | Interpret a program in a monad
-interpretWithMonad :: (MapInstr instr, Monad m) =>
+interpretWithMonad :: (HFunctor instr, Monad m) =>
     (forall b . instr m b -> m b) -> Program instr a -> m a
 interpretWithMonad interp = interpretWithMonadT interp (return . runIdentity)
 
@@ -166,12 +166,12 @@ instance (Interp i1 m, Interp i2 m) => Interp (i1 :+: i2) m
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
 -- 'Interp' class.
-interpretT :: (Interp i m, MapInstr i, Monad m) => (forall b . n b -> m b) -> ProgramT i n a -> m a
+interpretT :: (Interp i m, HFunctor i, Monad m) => (forall b . n b -> m b) -> ProgramT i n a -> m a
 interpretT = interpretWithMonadT interp
 
 -- | Interpret a program in a monad. The interpretation of primitive instructions is provided by the
 -- 'Interp' class.
-interpret :: (Interp i m, MapInstr i, Monad m) => Program i a -> m a
+interpret :: (Interp i m, HFunctor i, Monad m) => Program i a -> m a
 interpret = interpretWithMonad interp
 
 -- | View type for inspecting the first instruction
@@ -192,7 +192,7 @@ viewT (Instr i      `Bind` g) = return (i :>>= g)
 viewT (Instr i)               = return (i :>>= return)
 
 -- | View function for inspecting the first instruction
-view :: MapInstr instr => Program instr a -> ProgramView instr a
+view :: HFunctor instr => Program instr a -> ProgramView instr a
 view = runIdentity . viewT
 
 -- | Turn a 'ProgramViewT' back to a 'Program'
@@ -215,7 +215,7 @@ class DryInterp instr
     dryInterp :: MonadSupply m => instr m a -> m a
 
 -- | Interpretation of a program as a combination of dry interpretation and effectful observation
-observe_ :: (DryInterp instr, MapInstr instr, MonadSupply m)
+observe_ :: (DryInterp instr, HFunctor instr, MonadSupply m)
     => (forall a . instr m a -> a -> m ())  -- ^ Function for observing instructions
     -> Program instr a
     -> m a
@@ -225,7 +225,7 @@ observe_ obs = interpretWithMonad $ \i -> do
     return a
 
 -- | Interpretation of a program as a combination of dry interpretation and effectful observation
-observe :: (DryInterp instr, MapInstr instr, MonadSupply m)
+observe :: (DryInterp instr, HFunctor instr, MonadSupply m)
     => (forall a . instr m a -> a -> m a)  -- ^ Function for observing instructions
     -> Program instr a
     -> m a
