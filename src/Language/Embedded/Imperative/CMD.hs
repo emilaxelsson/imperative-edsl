@@ -246,6 +246,8 @@ data FunArg pred exp
     ObjArg :: Object -> FunArg pred exp
     -- Object address argument (address of the object pointer)
     ObjAddrArg :: Object -> FunArg pred exp
+    -- String literal argument
+    StrArg :: String -> FunArg pred exp
 
 -- | Cast the argument predicate to 'Any'
 anyArg :: FunArg pred exp -> FunArg Any exp
@@ -254,6 +256,7 @@ anyArg (RefArg r)     = RefArg r
 anyArg (ArrArg a)     = ArrArg a
 anyArg (ObjArg o)     = ObjArg o
 anyArg (ObjAddrArg o) = ObjAddrArg o
+anyArg (StrArg s)     = StrArg s
 
 data CallCMD exp (prog :: * -> *) a
   where

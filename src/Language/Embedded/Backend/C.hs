@@ -172,6 +172,7 @@ mkArg (RefArg r) = return [cexp| &$id:r |]
 mkArg (ArrArg a) = return [cexp| $id:a |]
 mkArg (ObjArg     (Object _ o)) = return [cexp| $id:o |]
 mkArg (ObjAddrArg (Object _ o)) = return [cexp| &$id:o |]
+mkArg (StrArg s) = return [cexp| $string:s |]
 
 mkArgParam :: forall exp . CompExp exp => FunArg (VarPred exp) exp -> CGen C.Param
 mkArgParam (ValArg a) = do
@@ -185,6 +186,7 @@ mkArgParam (ArrArg (a :: Arr n a)) = do
     return [cparam| $ty:t* |]
 mkArgParam (ObjArg     (Object t _)) = let t' = namedType t in return [cparam| $ty:t'* |]
 mkArgParam (ObjAddrArg (Object t _)) = let t' = namedType t in return [cparam| $ty:t'** |]
+mkArgParam (StrArg s) = return [cparam| const char* |]
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
