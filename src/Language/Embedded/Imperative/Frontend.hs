@@ -18,7 +18,7 @@ import Data.Proxy
 #endif
 import Language.C.Quote.C
 
-import Control.Monad.Operational.Compositional
+import Control.Monad.Operational.Higher
 import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD

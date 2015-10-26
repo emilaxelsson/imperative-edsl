@@ -27,11 +27,10 @@ source-repository head
 library
   exposed-modules:
     Control.Monads
-    Data.ALaCarte
-    Control.Monad.Operational.Compositional
     Data.TypePredicates
     Language.C.Monad
     Language.Embedded.Expression
+    Language.Embedded.Traversal
     Language.Embedded.Imperative.CMD
     Language.Embedded.Imperative.Frontend.General
     Language.Embedded.Imperative.Frontend
@@ -75,6 +74,7 @@ library
     lens,
     mainland-pretty >= 0.4 && < 0.5,
     mtl,
+    operational-alacarte,
     tagged,
     BoundedChan,
     srcloc

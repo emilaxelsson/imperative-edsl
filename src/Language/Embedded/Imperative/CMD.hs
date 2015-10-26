@@ -22,9 +22,12 @@ import qualified Text.Printf as Printf
 import Data.Proxy
 #endif
 
-import Control.Monad.Operational.Compositional
+import Control.Monad.Operational.Higher
+
+import Control.Monads
 import Data.TypePredicates
 import Language.Embedded.Expression
+import Language.Embedded.Traversal
 import qualified Language.C.Syntax as C
 
 

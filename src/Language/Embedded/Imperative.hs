@@ -47,7 +47,8 @@ module Language.Embedded.Imperative
 
 import Control.Monad
 
-import Control.Monad.Operational.Compositional
+import Control.Monad.Operational.Higher
+
 import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
