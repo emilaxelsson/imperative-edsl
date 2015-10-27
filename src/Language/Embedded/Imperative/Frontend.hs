@@ -54,13 +54,24 @@ modifyRef
        , Monad m
        )
     => Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
-modifyRef r f = setRef r $ f $ unsafeFreezeRef r
+modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
 -- | Freeze the contents of reference (only safe if the reference is never written to after the
 -- first action that makes use of the resulting expression)
-unsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp) => Ref a -> exp a
-unsafeFreezeRef (RefEval r) = litExp (unsafePerformIO $ readIORef r)
-unsafeFreezeRef (RefComp v) = varExp v
+unsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp, Monad m) =>
+    Ref a -> ProgramT instr m (exp a)
+unsafeFreezeRef r = return $! freeze r
+  where
+    freeze :: (VarPred exp a, EvalExp exp, CompExp exp) => Ref a -> exp a
+    freeze (RefEval r) = litExp $! unsafePerformIO $! readIORef r
+    freeze (RefComp v) = varExp v
+  -- Strict applications are needed to force `readIORef` to be performed before
+  -- the next action.
+  --
+  -- The `modifyRef` test case fails if the strict applications are removed, so
+  -- this seems to work. If there's a problem, another possibility would be to
+  -- make `unsafeFreezeRef` an instruction in `RefCMD`. This would avoid the
+  -- need for `unsafePerformIO`.
 
 -- | Create an uninitialized an array
 newArr
