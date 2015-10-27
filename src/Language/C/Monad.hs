@@ -92,10 +92,13 @@
 module Language.C.Monad
   where
 
-import Control.Lens
+import Lens.Micro
+import Lens.Micro.Mtl
+import Lens.Micro.TH
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
+import Control.Monad.Identity
 import Control.Monad.State.Strict
 import Control.Monad.Exception
 
@@ -135,6 +138,22 @@ data CEnv = CEnv
     }
 
 makeLenses ''CEnv
+
+-- | Reimplementation of @<<%=@ from the lens package
+(<<%=) :: MonadState s m =>
+    (forall f . Functor f => LensLike' f s a) -> (a -> a) -> m a
+l <<%= f = do
+    s <- get
+    l %= f
+    return (s ^. l)
+
+-- | Reimplementation of @<<.=@ from the lens package
+(<<.=) :: MonadState s m =>
+    (forall f . Functor f => LensLike' f s a) -> a -> m a
+l <<.= f = do
+    s <- get
+    l .= f
+    return (s ^. l)
 
 -- | Default code generator state
 defaultCEnv :: Flags -> CEnv
