@@ -215,19 +215,29 @@ data Object = Object
     }
   deriving (Eq, Show, Ord, Typeable)
 
-data ObjectCMD (prog :: * -> *) a
+data ObjectCMD exp (prog :: * -> *) a
   where
     NewObject
         :: String  -- Type
-        -> ObjectCMD prog Object
+        -> ObjectCMD exp prog Object
+    InitObject
+        :: String -- Function name
+        -> String -- Object Type
+        -> [ FunArg Any exp ]
+        -> ObjectCMD exp prog Object
 
-instance HFunctor ObjectCMD
+instance HFunctor (ObjectCMD exp)
   where
-    hfmap _ (NewObject t) = NewObject t
+    hfmap _ (NewObject t)      = NewObject t
+    hfmap _ (InitObject s t a) = InitObject s t a
 
-instance DryInterp ObjectCMD
+instance DryInterp (ObjectCMD exp)
   where
-    dryInterp (NewObject t) = liftM (Object t) $ freshStr "obj"
+    dryInterp (NewObject t)      = liftM (Object t) $ freshStr "obj"
+    dryInterp (InitObject _ t _) = liftM (Object t) $ freshStr "obj"
+
+type instance IExp (ObjectCMD e)       = e
+type instance IExp (ObjectCMD e :+: i) = e
 
 --------------------------------------------------------------------------------
 -- * External function calls
@@ -361,8 +371,9 @@ runFileCMD (FGet h)   = do
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
-runObjectCMD :: ObjectCMD IO a -> IO a
+runObjectCMD :: ObjectCMD exp IO a -> IO a
 runObjectCMD (NewObject _) = error "cannot run programs involving newObject"
+runObjectCMD (InitObject _ _ _) = error "cannot run programs involving initObject"
 
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
 runCallCMD (AddInclude _)       = return ()
@@ -376,6 +387,6 @@ instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
-instance                Interp ObjectCMD        IO where interp = runObjectCMD
+instance                Interp (ObjectCMD exp)  IO where interp = runObjectCMD
 instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
 

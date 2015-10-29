@@ -159,11 +159,17 @@ namedType t = C.Type
     (C.DeclRoot noLoc)
     noLoc
 
-compObjectCMD :: ObjectCMD CGen a -> CGen a
+compObjectCMD :: CompExp exp => ObjectCMD exp CGen a -> CGen a
 compObjectCMD (NewObject t) = do
     sym <- gensym "obj"
     let t' = namedType t
     addLocal [cdecl| $ty:t' * $id:sym; |]
+    return $ Object t sym
+compObjectCMD (InitObject fun t args) = do
+    sym <- gensym "obj"
+    let t' = namedType t
+    as  <- mapM mkArg args
+    addLocal [cdecl| $ty:t' * $id:sym = $id:fun($args:as); |]
     return $ Object t sym
 
 mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
@@ -211,7 +217,7 @@ instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance                Interp ObjectCMD        CGen where interp = compObjectCMD
+instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
 -- | Compile a program to C code represented as a string

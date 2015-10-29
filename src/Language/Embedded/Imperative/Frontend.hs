@@ -228,10 +228,17 @@ printf = fprintf stdout
 
 -- | Create a pointer to an abstract object. The only thing one can do with such
 -- objects is to pass them to 'callFun' or 'callProc'.
-newObject :: (ObjectCMD :<: instr)
+newObject :: (ObjectCMD (IExp instr) :<: instr)
     => String  -- ^ Object type
     -> ProgramT instr m Object
-newObject = singleInj . NewObject
+newObject = singleE . NewObject
+
+initObject :: (ObjectCMD (IExp instr) :<: instr)
+    => String -- ^ Function name
+    -> String -- ^ Object type
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m Object
+initObject fun ty args = singleE $ InitObject fun ty args
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
