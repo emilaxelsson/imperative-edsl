@@ -164,20 +164,26 @@ compObjectCMD (NewObject t) = do
     sym <- gensym "obj"
     let t' = namedType t
     addLocal [cdecl| $ty:t' * $id:sym; |]
-    return $ Object t sym
+    return $ Object True t sym
 compObjectCMD (InitObject fun t args) = do
     sym <- gensym "obj"
     let t' = namedType t
     as  <- mapM mkArg args
     addLocal [cdecl| $ty:t' * $id:sym = $id:fun($args:as); |]
-    return $ Object t sym
+    return $ Object True t sym
+compObjectCMD (InitUObject fun t args) = do
+    sym <- gensym "obj"
+    let t' = namedType t
+    as  <- mapM mkArg args
+    addLocal [cdecl| $ty:t' $id:sym = $id:fun($args:as); |]
+    return $ Object False t sym
 
 mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
 mkArg (ValArg a) = compExp a
 mkArg (RefArg r) = return [cexp| &$id:r |]
 mkArg (ArrArg a) = return [cexp| $id:a |]
-mkArg (ObjArg     (Object _ o)) = return [cexp| $id:o |]
-mkArg (ObjAddrArg (Object _ o)) = return [cexp| &$id:o |]
+mkArg (ObjArg     (Object _ _ o)) = return [cexp| $id:o |]
+mkArg (ObjAddrArg (Object _ _ o)) = return [cexp| &$id:o |]
 mkArg (StrArg s) = return [cexp| $string:s |]
 
 mkArgParam :: forall exp . CompExp exp => FunArg (VarPred exp) exp -> CGen C.Param
@@ -190,8 +196,10 @@ mkArgParam (RefArg (r :: Ref a)) = do
 mkArgParam (ArrArg (a :: Arr n a)) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
-mkArgParam (ObjArg     (Object t _)) = let t' = namedType t in return [cparam| $ty:t'* |]
-mkArgParam (ObjAddrArg (Object t _)) = let t' = namedType t in return [cparam| $ty:t'** |]
+mkArgParam (ObjArg     (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'* |]
+mkArgParam (ObjArg     (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
+mkArgParam (ObjAddrArg (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'** |]
+mkArgParam (ObjAddrArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t'* |]
 mkArgParam (StrArg s) = return [cparam| const char* |]
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a

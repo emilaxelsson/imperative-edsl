@@ -240,6 +240,13 @@ initObject :: (ObjectCMD (IExp instr) :<: instr)
     -> ProgramT instr m Object
 initObject fun ty args = singleE $ InitObject fun ty args
 
+initUObject :: (ObjectCMD (IExp instr) :<: instr)
+    => String -- ^ Function name
+    -> String -- ^ Object type
+    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m Object
+initUObject fun ty args = singleE $ InitUObject fun ty args
+
 -- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude
