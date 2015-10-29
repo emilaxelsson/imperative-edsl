@@ -64,7 +64,8 @@ instance EvalExp Expr
     evalExp = evalExpr (const $ error "eval: free variable")
 
 compExpr :: (MonadC m) => Expr a -> m C.Exp
-compExpr (Var v) = return [cexp| $id:('v':show v) |]
+compExpr (Var v) = return [cexp| $id:var |]
+  where var = 'v':show v
 compExpr (Val v) = case show v of
     "True"  -> addSystemInclude "stdbool.h" >> return [cexp| true |]
     "False" -> addSystemInclude "stdbool.h" >> return [cexp| false |]
