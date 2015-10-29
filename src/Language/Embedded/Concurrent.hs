@@ -14,7 +14,7 @@ module Language.Embedded.Concurrent (
 import Control.Applicative
 #endif
 import Control.Monad
-import Control.Monad.Operational.Compositional
+import Control.Monad.Operational.Higher
 import Data.IORef
 import Data.Proxy
 import Data.Typeable

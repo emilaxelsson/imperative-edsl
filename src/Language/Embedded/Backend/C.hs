@@ -14,7 +14,7 @@ import Data.Loc (noLoc)
 import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
-import Control.Monad.Operational.Compositional
+import Control.Monad.Operational.Higher
 import Data.TypePredicates
 import Language.C.Monad
 import Language.Embedded.Expression
