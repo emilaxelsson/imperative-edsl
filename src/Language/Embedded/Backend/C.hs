@@ -169,13 +169,15 @@ compObjectCMD (InitObject fun t args) = do
     sym <- gensym "obj"
     let t' = namedType t
     as  <- mapM mkArg args
-    addLocal [cdecl| $ty:t' * $id:sym = $id:fun($args:as); |]
+    addLocal [cdecl| $ty:t' * $id:sym; |]
+    addStm   [cstm|  $id:sym = $id:fun($args:as); |]
     return $ Object True t sym
 compObjectCMD (InitUObject fun t args) = do
     sym <- gensym "obj"
     let t' = namedType t
     as  <- mapM mkArg args
-    addLocal [cdecl| $ty:t' $id:sym = $id:fun($args:as); |]
+    addLocal [cdecl| $ty:t' $id:sym; |]
+    addStm   [cstm|  $id:sym = $id:fun($args:as); |]
     return $ Object False t sym
 
 mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
