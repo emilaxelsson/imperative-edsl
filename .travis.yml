@@ -21,6 +21,12 @@ install:
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
  - cabal sandbox init
+ - git clone https://github.com/emilaxelsson/language-c-quote.git
+ - cd language-c-quote
+ - git checkout no-haskell-src-meta
+ - cd ..
+ - cabal sandbox add-source language-c-quote
+ - cabal install -f-full-haskell-antiquotes language-c-quote
  - cabal install --only-dependencies --enable-tests --enable-benchmarks
 
 script:
