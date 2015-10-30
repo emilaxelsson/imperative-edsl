@@ -322,7 +322,7 @@ type instance IExp (CallCMD e :+: i) = e
 runRefCMD :: forall exp prog a . EvalExp exp => RefCMD exp prog a -> IO a
 runRefCMD (InitRef a)                       = fmap RefEval $ newIORef $ evalExp a
 runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "reading uninitialized reference"
-runRefCMD (SetRef (RefEval r) a)            = writeIORef r $! evalExp a
+runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
