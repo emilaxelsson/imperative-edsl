@@ -106,7 +106,7 @@ import qualified Data.Set as Set
 import Data.Monoid
 import Text.PrettyPrint.Mainland
 import Data.Loc
-import Data.List (partition)
+import Data.List (partition,nub)
 
 -- | Code generation flags
 data Flags = Flags
@@ -187,9 +187,9 @@ cenvToCUnit env =
       where
         toInclude :: String -> C.Definition
         toInclude inc = [cedecl|$esc:("#include " ++ inc)|]
-    tds    = reverse $ _typedefs env
-    protos = reverse $ _prototypes env
-    globs  = reverse $ _globals env
+    tds    = nub $ reverse $ _typedefs env
+    protos = nub $ reverse $ _prototypes env
+    globs  = nub $ reverse $ _globals env
 
 -- | Generate a C document
 prettyCGenT :: Monad m => CGenT m a -> m Doc
