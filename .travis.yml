@@ -1,5 +1,4 @@
 # Based on: https://github.com/hvr/multi-ghc-travis
-# and:      https://raw.githubusercontent.com/haskell-suite/haskell-src-exts/master/.travis.yml
 
 cache:
   directories:
