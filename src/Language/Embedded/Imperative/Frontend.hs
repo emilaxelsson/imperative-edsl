@@ -56,17 +56,28 @@ modifyRef
     => Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
+-- | Read the value of a reference without returning in the monad
+--
+-- WARNING: Don't use this function unless you really know what you are doing.
+-- It is almost always better to use 'unsafeFreezeRef' instead.
+--
+-- 'veryUnsafeFreezeRef' behaves predictably when doing code generation, but it
+-- can give strange results when evaluating in 'IO', as explained here:
+--
+-- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
+veryUnsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp) =>
+    Ref a -> exp a
+veryUnsafeFreezeRef (RefEval r) = litExp $! unsafePerformIO $! readIORef r
+veryUnsafeFreezeRef (RefComp v) = varExp v
+
 -- | Freeze the contents of reference (only safe if the reference is never
 -- written to after the freezing)
 unsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp, Monad m) =>
     Ref a -> ProgramT instr m (exp a)
-unsafeFreezeRef r = return $! freeze r
-  where
-    freeze :: (VarPred exp a, EvalExp exp, CompExp exp) => Ref a -> exp a
-    freeze (RefEval r) = litExp $! unsafePerformIO $! readIORef r
-    freeze (RefComp v) = varExp v
-  -- Strict applications are needed to force `readIORef` to be performed before
-  -- the next action.
+unsafeFreezeRef r = return $! veryUnsafeFreezeRef r
+  -- Strict applications (here and in `veryUnsafeFreezeRef`) are needed when
+  -- evaluating in `IO` to force `readIORef` to be performed before the next
+  -- action.
   --
   -- The `modifyRef` test case fails if the strict applications are removed, so
   -- this seems to work. If there's a problem, another possibility would be to
