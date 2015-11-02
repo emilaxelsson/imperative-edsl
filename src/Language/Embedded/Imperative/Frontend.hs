@@ -56,8 +56,8 @@ modifyRef
     => Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
--- | Freeze the contents of reference (only safe if the reference is never written to after the
--- first action that makes use of the resulting expression)
+-- | Freeze the contents of reference (only safe if the reference is never
+-- written to after the freezing)
 unsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp, Monad m) =>
     Ref a -> ProgramT instr m (exp a)
 unsafeFreezeRef r = return $! freeze r
