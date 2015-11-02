@@ -9,6 +9,7 @@ env:
  - CABALVER=1.18 GHCVER=7.6.3
  - CABALVER=1.18 GHCVER=7.8.3
  - CABALVER=1.22 GHCVER=7.10.1
+ - CABALVER=head GHCVER=head
 
 before_install:
  - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
@@ -48,3 +49,7 @@ script:
       echo "expected '$SRC_TGZ.tar.gz' not found";
       exit 1;
    fi
+
+matrix:
+  allow_failures:
+   - env: CABALVER=head GHCVER=head
