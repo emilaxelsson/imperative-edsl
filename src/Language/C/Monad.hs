@@ -205,7 +205,8 @@ cenvToCUnit env =
     incs = map toInclude (Set.toList (_includes env))
       where
         toInclude :: String -> C.Definition
-        toInclude inc = [cedecl|$esc:("#include " ++ inc)|]
+        toInclude inc = [cedecl|$esc:include|]
+          where include = "#include " ++ inc
     tds    = nub $ reverse $ _typedefs env
     protos = nub $ reverse $ _prototypes env
     globs  = nub $ reverse $ _globals env
