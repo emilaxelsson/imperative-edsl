@@ -78,6 +78,7 @@ library
     mtl,
     operational-alacarte,
     tagged,
+      -- tagged needed for GHC 7.6
     BoundedChan,
     srcloc
 
