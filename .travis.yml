@@ -1,30 +1,38 @@
-# Based on: https://github.com/hvr/multi-ghc-travis
+sudo: false
+language: c
 
 cache:
   directories:
     - .cabal-sandbox
 
-env:
- - CABALVER=1.18 GHCVER=7.6.3
- - CABALVER=1.18 GHCVER=7.8.3
- - CABALVER=1.22 GHCVER=7.10.2
- - CABALVER=head GHCVER=head
+matrix:
+  include:
+    - env: CABALVER=1.18 GHCVER=7.6.3
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.18,ghc-7.6.3,happy-1.19.5,alex-3.1.4]}}
+    - env: CABALVER=1.18 GHCVER=7.8.4
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.18,ghc-7.8.4,happy-1.19.5,alex-3.1.4]}}
+    - env: CABALVER=1.22 GHCVER=7.10.2
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.22,ghc-7.10.2,happy-1.19.5,alex-3.1.4]}}
+    - env: CABALVER=head GHCVER=head
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-head,ghc-head,happy-1.19.5,alex-3.1.4]}}
+
+  allow_failures:
+    - env: CABALVER=head GHCVER=head
 
 before_install:
- - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
- - travis_retry sudo apt-get update
- - travis_retry sudo apt-get install cabal-install-$CABALVER ghc-$GHCVER happy-1.19.3 alex-3.1.4
- - export PATH=/opt/happy/1.19.3/bin:/opt/alex/3.1.4/bin:/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+  - env
+  - git clone https://github.com/emilaxelsson/language-c-quote.git --branch no-haskell-src-meta
+  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+  - export PATH=/opt/alex/3.1.4/bin:/opt/happy/1.19.5/bin:$PATH
 
 install:
- - cabal --version
- - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
- - travis_retry cabal update
- - cabal sandbox init
- - git clone https://github.com/emilaxelsson/language-c-quote.git --branch no-haskell-src-meta
- - cabal sandbox add-source language-c-quote
- - cabal install -f-full-haskell-antiquotes language-c-quote
- - cabal install --only-dependencies --enable-tests --enable-benchmarks
+  - cabal --version
+  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+  - travis_retry cabal update
+  - cabal sandbox init
+  - cabal sandbox add-source language-c-quote
+  - cabal install -f-full-haskell-antiquotes language-c-quote
+  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls
 
 script:
  - cabal configure --enable-tests --enable-benchmarks -v2
@@ -46,6 +54,3 @@ script:
       exit 1;
    fi
 
-matrix:
-  allow_failures:
-   - env: CABALVER=head GHCVER=head
