@@ -35,12 +35,16 @@ script:
  - cabal test
  - cabal check
  - cabal sdist
- - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+ - export SRC_TGZ=$(cabal info . | awk '{print $2;exit}');
    cd dist/;
-   if [ -f "$SRC_TGZ" ]; then
-      cabal sandbox init --sandbox ../.cabal-sandbox;
-      cabal install --force-reinstalls "$SRC_TGZ";
+   if [ -f "$SRC_TGZ".tar.gz ]; then
+     cabal unpack "$SRC_TGZ".tar.gz;
+     cd "$SRC_TGZ";
+     cabal sandbox init --sandbox ../../.cabal-sandbox;
+     cabal configure --disable-optimization --enable-test;
+     cabal build;
+     cabal install --disable-optimization --force-reinstalls;
    else
-      echo "expected '$SRC_TGZ' not found";
+      echo "expected '$SRC_TGZ.tar.gz' not found";
       exit 1;
    fi
