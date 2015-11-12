@@ -9,7 +9,7 @@ import System.Exit
 
 main = do let c = compile $
                  do addInclude "<stdio.h>" :: Program (CallCMD Expr) ()
-                    callProc "printf" [StrArg "Hello World!\n"]
+                    callProc "printf" [strArg "Hello World!\n"]
           (fp,h) <- openTempFile "" "temp.c"
           hPutStrLn h c
           hClose h

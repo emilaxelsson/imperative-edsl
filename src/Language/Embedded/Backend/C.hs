@@ -137,7 +137,7 @@ compFileCMD (FPrintf (HandleComp h) form as) = do
     let h'     = [cexp| $id:h |]
         form'  = show form
         form'' = [cexp| $id:form' |]
-    as' <- fmap ([h',form'']++) $ sequence [compExp a | ValArg a <- as]
+    as' <- fmap ([h',form'']++) $ sequence [compExp a | PrintfArg a <- as]
     addStm [cstm| fprintf($args:as'); |]
 compFileCMD cmd@(FGet (HandleComp h)) = do
     (v,n) <- freshVar
@@ -159,7 +159,7 @@ namedType t = C.Type
     (C.DeclRoot noLoc)
     noLoc
 
-compObjectCMD :: CompExp exp => ObjectCMD exp CGen a -> CGen a
+compObjectCMD :: ObjectCMD exp CGen a -> CGen a
 compObjectCMD (NewObject t) = do
     sym <- gensym "obj"
     let t' = namedType t
@@ -180,39 +180,15 @@ compObjectCMD (InitUObject fun t args) = do
     addStm   [cstm|  $id:sym = $id:fun($args:as); |]
     return $ Object False t sym
 
-mkArg :: CompExp exp => FunArg Any exp -> CGen C.Exp
-mkArg (ValArg a) = compExp a
-mkArg (RefArg r) = return [cexp| &$id:r |]
-mkArg (ArrArg a) = return [cexp| $id:a |]
-mkArg (ObjArg     (Object _ _ o)) = return [cexp| $id:o |]
-mkArg (ObjAddrArg (Object _ _ o)) = return [cexp| &$id:o |]
-mkArg (StrArg s) = return [cexp| $string:s |]
-
-mkArgParam :: forall exp . CompExp exp => FunArg (VarPred exp) exp -> CGen C.Param
-mkArgParam (ValArg a) = do
-    t <- compType a
-    return [cparam| $ty:t |]
-mkArgParam (RefArg (r :: Ref a)) = do
-    t <- compTypeP (Proxy :: Proxy (exp a))
-    return [cparam| $ty:t* |]
-mkArgParam (ArrArg (a :: Arr n a)) = do
-    t <- compTypeP (Proxy :: Proxy (exp a))
-    return [cparam| $ty:t* |]
-mkArgParam (ObjArg     (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'* |]
-mkArgParam (ObjArg     (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
-mkArgParam (ObjAddrArg (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'** |]
-mkArgParam (ObjAddrArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t'* |]
-mkArgParam (StrArg s) = return [cparam| const char* |]
-
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc
 compCallCMD (AddDefinition def) = addGlobal def
 compCallCMD (AddExternFun fun res args) = do
     tres  <- compTypeP res
-    targs <- mapM mkArgParam args
+    targs <- mapM mkParam args
     addGlobal [cedecl| extern $ty:tres $id:fun($params:targs); |]
 compCallCMD (AddExternProc proc args) = do
-    targs <- mapM mkArgParam args
+    targs <- mapM mkParam args
     addGlobal [cedecl| extern void $id:proc($params:targs); |]
 compCallCMD (CallFun fun as) = do
     as'   <- mapM mkArg as
@@ -227,7 +203,7 @@ instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
+instance                Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
 -- | Compile a program to C code represented as a string

@@ -27,6 +27,8 @@ module Language.Embedded.Imperative
   , ControlCMD
   , FileCMD
   , CallCMD
+    -- * Types of Printf arguments
+  , PrintfArg
     -- * Composing instruction sets
   , (:+:)
   , (:<:)

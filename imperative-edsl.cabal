@@ -31,6 +31,7 @@ library
     Language.C.Monad
     Language.Embedded.Expression
     Language.Embedded.Traversal
+    Language.Embedded.Imperative.Args
     Language.Embedded.Imperative.CMD
     Language.Embedded.Imperative.Frontend.General
     Language.Embedded.Imperative.Frontend

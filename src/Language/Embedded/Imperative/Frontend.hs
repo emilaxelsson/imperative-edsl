@@ -23,7 +23,8 @@ import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
-
+import Language.Embedded.Imperative.Args
+import qualified Text.Printf as Printf
 
 
 -- | Create an uninitialized reference
@@ -208,7 +209,7 @@ feof = singleE . FEof
 class PrintfType r
   where
     type PrintfExp r :: * -> *
-    fprf :: Handle -> String -> [FunArg Formattable (PrintfExp r)] -> r
+    fprf :: Handle -> String -> [PrintfArg (PrintfExp r)] -> r
 
 instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr m a)
   where
@@ -218,7 +219,7 @@ instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr 
 instance (Formattable a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
   where
     type PrintfExp (exp a -> r) = exp
-    fprf h form as = \a -> fprf h form (ValArg a : as)
+    fprf h form as = \a -> fprf h form (PrintfArg a : as)
 
 -- | Print to a handle. Accepts a variable number of arguments.
 fprintf :: PrintfType r => Handle -> String -> r
@@ -365,3 +366,28 @@ getTime = do
       |]
       -- From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
 
+-- Arguments
+
+strArg :: String -> FunArg pred exp
+strArg = FunArg . StrArg
+
+valArg :: (pred a, VarPred exp a, CompExp exp) =>
+    exp a -> FunArg pred exp
+valArg = FunArg . ValArg
+
+refArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
+    Ref a -> FunArg pred exp
+refArg = FunArg . RefArg
+
+arrArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
+    Arr n a -> FunArg pred exp
+arrArg = FunArg . ArrArg
+
+objArg :: Object -> FunArg pred exp
+objArg = FunArg . ObjArg
+
+addr :: FunArg pred exp -> FunArg pred exp
+addr = FunArg . Addr
+
+printfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
+printfArg = PrintfArg

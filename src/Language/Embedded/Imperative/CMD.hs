@@ -15,7 +15,6 @@ import Data.Typeable
 import Data.Word
 import System.IO (IOMode (..))
 import qualified System.IO as IO
-import Text.Printf (PrintfArg)
 import qualified Text.Printf as Printf
 
 #if __GLASGOW_HASKELL__ < 708
@@ -29,7 +28,7 @@ import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Traversal
 import qualified Language.C.Syntax as C
-
+import Language.C.Monad
 
 
 --------------------------------------------------------------------------------
@@ -162,7 +161,7 @@ stdout :: Handle
 stdout = HandleComp "stdout"
 
 -- | Values that can be printed\/scanned using @printf@\/@scanf@
-class (Typeable a, Read a, PrintfArg a) => Formattable a
+class (Typeable a, Read a, Printf.PrintfArg a) => Formattable a
   where
     formatSpecifier :: Proxy a -> String
 
@@ -184,8 +183,11 @@ data FileCMD exp (prog :: * -> *) a
     FOpen   :: FilePath -> IOMode                           -> FileCMD exp prog Handle
     FClose  :: Handle                                       -> FileCMD exp prog ()
     FEof    :: VarPred exp Bool => Handle                   -> FileCMD exp prog (exp Bool)
-    FPrintf :: Handle -> String -> [FunArg Formattable exp] -> FileCMD exp prog ()
+    FPrintf :: Handle -> String -> [PrintfArg exp] -> FileCMD exp prog ()
     FGet    :: (Formattable a, VarPred exp a) => Handle     -> FileCMD exp prog (exp a)
+
+data PrintfArg exp where
+  PrintfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
 
 instance HFunctor (FileCMD exp)
   where
@@ -254,30 +256,18 @@ type instance IExp (ObjectCMD e :+: i) = e
 -- * External function calls
 --------------------------------------------------------------------------------
 
--- | External function arguments
-data FunArg pred exp
-  where
-    -- Expression argument
-    ValArg :: pred a => exp a -> FunArg pred exp
-    -- Reference argument, passed by reference
-    RefArg :: (pred a, Typeable a) => Ref a -> FunArg pred exp
-    -- Array argument
-    ArrArg :: (pred a, Typeable a) => Arr n a -> FunArg pred exp
-    -- Object argument
-    ObjArg :: Object -> FunArg pred exp
-    -- Object address argument (address of the object pointer)
-    ObjAddrArg :: Object -> FunArg pred exp
-    -- String literal argument
-    StrArg :: String -> FunArg pred exp
+data FunArg pred exp where
+  FunArg :: Arg arg exp => arg pred exp -> FunArg pred exp
 
--- | Cast the argument predicate to 'Any'
-anyArg :: FunArg pred exp -> FunArg Any exp
-anyArg (ValArg a)     = ValArg a
-anyArg (RefArg r)     = RefArg r
-anyArg (ArrArg a)     = ArrArg a
-anyArg (ObjArg o)     = ObjArg o
-anyArg (ObjAddrArg o) = ObjAddrArg o
-anyArg (StrArg s)     = StrArg s
+class Arg arg (exp :: * -> *) where
+  mkArg   :: arg pred exp -> CGen C.Exp
+  mkParam :: arg pred exp -> CGen C.Param
+  anyArg  :: arg pred exp -> arg Any exp
+
+instance Arg FunArg exp where
+  mkArg   (FunArg arg) = mkArg arg
+  mkParam (FunArg arg) = mkParam arg
+  anyArg  (FunArg arg) = FunArg (anyArg arg)
 
 data CallCMD exp (prog :: * -> *) a
   where
@@ -365,9 +355,9 @@ readWord h = do
         return (c:cs)
 
 evalFPrintf :: EvalExp exp =>
-    [FunArg Formattable exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+    [PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
 evalFPrintf []            pf = pf
-evalFPrintf (ValArg a:as) pf = evalFPrintf as (pf $ evalExp a)
+evalFPrintf (PrintfArg a:as) pf = evalFPrintf as (pf $ evalExp a)
 
 runFileCMD :: EvalExp exp => FileCMD exp IO a -> IO a
 runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
