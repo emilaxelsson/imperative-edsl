@@ -2,6 +2,7 @@
 {-# LANGUAGE PolyKinds   #-}
 module Language.Embedded.Imperative.Args where
 
+import Data.Proxy
 import Data.Typeable
 import Language.C.Quote.C
 import Language.C.Syntax
