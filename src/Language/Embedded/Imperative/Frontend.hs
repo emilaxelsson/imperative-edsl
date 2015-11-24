@@ -240,9 +240,9 @@ fprintf h format = fprf h format []
 fput :: forall instr a m
     .  (Formattable a, FileCMD (IExp instr) :<: instr)
     => Handle
-    -> String        -- Prefix
-    -> IExp instr a  -- Expression to print
-    -> String        -- Suffix
+    -> String        -- ^ Prefix
+    -> IExp instr a  -- ^ Expression to print
+    -> String        -- ^ Suffix
     -> ProgramT instr m ()
 fput hdl prefix a suffix =
     fprintf hdl (prefix ++ formatSpecifier (Proxy :: Proxy a) ++ suffix) a
