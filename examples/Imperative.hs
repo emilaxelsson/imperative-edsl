@@ -4,6 +4,7 @@ module Imperative where
 
 
 
+import Data.Int
 import Data.Word
 
 import Language.Embedded.Expression (evalExp)
@@ -12,13 +13,13 @@ import Language.Embedded.Expr
 
 
 
-refProg :: Program (RefCMD Expr) (Expr Int)
+refProg :: Program (RefCMD Expr) (Expr Int32)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
     a  <- unsafeFreezeRef r1
     b  <- getRef r2
-    let c = Add a b
+    let c = a+b
     setRef r2 c
     return c
 
@@ -27,25 +28,25 @@ type CMD1
     :+: ArrCMD Expr
     :+: ControlCMD Expr
 
-arrProg :: Program CMD1 (Expr Int)
+arrProg :: Program CMD1 (Expr Int32)
 arrProg = do
     ref <- initRef 4
     arr <- newArr (10 :: Expr Word8)
     setArr 3 45 arr
     a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
-    let c = Add a b
-    iff (Eq a 4)
+    let c = a+b
+    iff (a <==> 4)
       (setRef ref c)
       (setRef ref b)
     return c
 
-evalRef :: IO Int
+evalRef :: IO Int32
 evalRef = fmap evalExp $ interpret refProg
 
 compRef = icompile refProg
 
-evalArr :: IO Int
+evalArr :: IO Int32
 evalArr = fmap evalExp $ interpret arrProg
 
 compArr = icompile arrProg
@@ -60,12 +61,12 @@ type CMD2
 summer :: Program CMD2 ()
 summer = do
     inp <- fopen "input" ReadMode
-    let cont = fmap Not $ feof inp
+    let cont = fmap not_ $ feof inp
     sum <- initRef (0 :: Expr Float)
     while cont $ do
         f <- fget inp
         s <- getRef sum
-        setRef sum (s+f)
+        setRef sum (s+f+(3+4+5+6))
     s <- getRef sum
     printf "The sum is: %f\n" s
 

@@ -1,186 +1,288 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
 
--- | Simple expression type for use in imperative EDSLs
+-- | Typed deep embedding of simple C expressions
+--
+-- This is a subset of C expression that don't require any control structures
+-- and can be compiled to a single-line C expression (plus possibly include
+-- statements).
 
 module Language.Embedded.Expr where
 
 
 
-import Data.Dynamic
-import Data.TypePredicates
+import Data.Int
+import Data.Maybe
+import Data.Word
+
+#if MIN_VERSION_syntactic(3,0,0)
+import Language.Syntactic
+import Language.Syntactic.Functional (Denotation)
+#elif MIN_VERSION_syntactic(2,0,0)
+import Data.Syntactic
+import Data.Syntactic.Functional (Denotation)
+#else
+import Language.Syntactic
+#endif
 
 import Language.C.Quote.C
-import qualified Language.C.Syntax as C
+import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
 
 import Language.C.Monad
 import Language.Embedded.Expression
 
 
 
-data Expr a
+--------------------------------------------------------------------------------
+-- * Types
+--------------------------------------------------------------------------------
+
+-- | Types supported by C
+class (Show a, Eq a) => CType a
   where
-    Val :: Show a     => a -> Expr a
-    Var :: Typeable a => VarId -> Expr a
+    cType :: MonadC m => proxy a -> m Type
 
-    Add :: Num a               => Expr a -> Expr a -> Expr a
-    Sub :: Num a               => Expr a -> Expr a -> Expr a
-    Mul :: Num a               => Expr a -> Expr a -> Expr a
-    Div :: Fractional a        => Expr a -> Expr a -> Expr a
-    Exp :: Floating a          => Expr a -> Expr a -> Expr a
-    Sin :: Floating a          => Expr a -> Expr a
-    Mod :: Integral a          => Expr a -> Expr a -> Expr a
-    I2N :: (Integral a, Num b) => Expr a -> Expr b
+instance CType Bool   where cType _ = addSystemInclude "stdbool.h" >> return [cty| typename bool     |]
+instance CType Int8   where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int8_t   |]
+instance CType Int16  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int16_t  |]
+instance CType Int32  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int32_t  |]
+instance CType Int64  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int64_t  |]
+instance CType Word8  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename word8_t  |]
+instance CType Word16 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename word16_t |]
+instance CType Word32 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename word32_t |]
+instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename word64_t |]
 
-    Not :: Expr Bool -> Expr Bool
-    And :: Expr Bool -> Expr Bool -> Expr Bool
-    Or  :: Expr Bool -> Expr Bool -> Expr Bool
+instance CType Float  where cType _ = return [cty| float |]
+instance CType Double where cType _ = return [cty| double |]
 
-    Eq  :: Eq a  => Expr a -> Expr a -> Expr Bool
-    LEq :: Ord a => Expr a -> Expr a -> Expr Bool
-  deriving Typeable
 
-type instance VarPred Expr = Typeable :/\: Show
 
-evalExpr :: (VarId -> Dynamic) -> Expr a -> a
-evalExpr env (Val a)   = a
-evalExpr env (Var v)
-    | Just a <- fromDynamic (env v) = a
-evalExpr env (Add a b) = evalExpr env a + evalExpr env b
-evalExpr env (Sub a b) = evalExpr env a - evalExpr env b
-evalExpr env (Mul a b) = evalExpr env a * evalExpr env b
-evalExpr env (Div a b) = evalExpr env a / evalExpr env b
-evalExpr env (Mod a b) = evalExpr env a `mod` evalExpr env b
-evalExpr env (Sin a)   = sin $ evalExpr env a
-evalExpr env (I2N a)   = fromInteger $ fromIntegral $ evalExpr env a
-evalExpr env (Not   a) = not $ evalExpr env a
-evalExpr env (And a b) = evalExpr env a && evalExpr env b
-evalExpr env (Or  a b) = evalExpr env a || evalExpr env b
-evalExpr env (Eq  a b) = evalExpr env a == evalExpr env b
-evalExpr env (LEq a b) = evalExpr env a <= evalExpr env b
+--------------------------------------------------------------------------------
+-- * Expressions
+--------------------------------------------------------------------------------
+
+-- | Syntactic symbols for C
+data Sym sig
+  where
+    -- Function or literal
+#if MIN_VERSION_syntactic(2,0,0)
+    Fun  :: Signature sig => String -> Denotation sig -> Sym sig
+#else
+    Fun  :: String -> Denotation sig -> Sym sig
+#endif
+    -- Unary operator
+    UOp  :: UnOp -> (a -> b) -> Sym (a :-> Full b)
+    -- Binary operator
+    Op   :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
+    -- Type casting (ignored when generating code)
+    Cast :: (a -> b) -> Sym (a :-> Full b)
+    -- Variable (only for compilation)
+    Var  :: String -> Sym (Full a)
+
+data T sig
+  where
+    T :: CType (DenResult sig) => { unT :: Sym sig } -> T sig
+
+-- | C expression
+newtype Expr a = Expr {unExpr :: ASTF T a}
+
+instance Syntactic (Expr a)
+  where
+    type Domain (Expr a)   = T
+    type Internal (Expr a) = a
+    desugar = unExpr
+    sugar   = Expr
+
+type instance VarPred Expr = CType
+
+evalSym :: Sym sig -> Denotation sig
+evalSym (Fun _ a) = a
+evalSym (UOp _ f) = f
+evalSym (Op  _ f) = f
+evalSym (Cast f)  = f
+evalSym (Var v)   = error $ "evalExpr: cannot evaluate variable " ++ v
+
+-- | Evaluate an expression
+evalExpr :: Expr a -> a
+evalExpr (Expr e) = go e
+  where
+    go :: AST T sig -> Denotation sig
+    go (Sym (T s)) = evalSym s
+    go (f :$ a)    = go f $ go a
 
 instance EvalExp Expr
   where
-    litExp  = Val
-    evalExp = evalExpr (const $ error "eval: free variable")
+    litExp a = Expr $ Sym $ T $ Fun (show a) a
+    evalExp  = evalExpr
 
-compExpr :: (MonadC m) => Expr a -> m C.Exp
-compExpr (Var v) = return [cexp| $id:var |]
-  where var = 'v':show v
-compExpr (Val v) = case show v of
-    "True"  -> addSystemInclude "stdbool.h" >> return [cexp| true |]
-    "False" -> addSystemInclude "stdbool.h" >> return [cexp| false |]
-    v'      -> return [cexp| $id:v' |]
-compExpr (Add a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' + $b' |]
-compExpr (Sub a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' - $b' |]
-compExpr (Mul a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' * $b' |]
-compExpr (Div a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' / $b' |]
-compExpr (Exp a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' ^ $b' |]
-compExpr (Sin a)   = do
-  a' <- compExpr a
-  return [cexp| sin( $a' ) |]
-compExpr (Mod a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' % $b'|]
-compExpr (I2N a) = do
-  a' <- compExpr a
-  return [cexp| $a' |]
-compExpr (Not  a)  = do
-  a' <- compExpr a
-  return [cexp| ! $a' |]
-compExpr (And a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| ($a' && $b') |]
-compExpr (Or a b)  = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| ($a' || $b') |]
-compExpr (Eq a b)  = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' == $b' |]
-compExpr (LEq a b) = do
-  a' <- compExpr a
-  b' <- compExpr b
-  return [cexp| $a' <= $b' |]
+-- | Compile an expression
+compExpr :: forall m a . MonadC m => Expr a -> m Exp
+compExpr = simpleMatch (go . unT) . unExpr
+  where
+    compExpr' :: ASTF T b -> m Exp
+    compExpr' = compExpr . Expr
 
--- | Translate an expression into a C type
-compTypeImpl :: forall proxy m a. (MonadC m, VarPred Expr a)
-             => proxy (Expr a) -> m C.Type
-compTypeImpl a = case show (typeOf (undefined :: a)) of
-    "Bool" -> addSystemInclude "stdbool.h" >> return [cty| typename bool |]
-    "Int"  -> return [cty| int |]
-    'I':'n':'t':xs -> do
-      addSystemInclude "stdint.h"
-      case xs of
-        "8"  -> return [cty| typename int8_t  |]
-        "16" -> return [cty| typename int16_t |]
-        "32" -> return [cty| typename int32_t |]
-        "64" -> return [cty| typename int64_t |]
-    'W':'o':'r':'d':xs -> do
-      addSystemInclude "stdint.h"
-      case xs of
-        "8"  -> return [cty| typename uint8_t  |]
-        "16" -> return [cty| typename uint16_t |]
-        "32" -> return [cty| typename uint32_t |]
-        "64" -> return [cty| typename uint64_t |]
-    "Float"  -> return [cty| float |]
-    "Double" -> return [cty| double |]
-    t -> do
-      error $ "compTypeImpl, unsupported type: " ++ t
+    go :: Sym sig -> Args (AST T) sig -> m Exp
+    go (Var v) Nil = return [cexp| $id:v |]
+    go (Fun lit _) Nil = case lit of
+      "True"  -> addSystemInclude "stdbool.h" >> return [cexp| true |]
+      "False" -> addSystemInclude "stdbool.h" >> return [cexp| false |]
+      l       -> return [cexp| $id:l |]
+    go (Fun fun _) args = do
+      as <- sequence $ listArgs compExpr' args
+      return [cexp| $id:fun($args:as) |]
+    go (UOp op _) (a :* Nil) = do
+      a' <- compExpr' a
+      return $ UnOp op a' mempty
+    go (Op op _) (a :* b :* Nil) = do
+      a' <- compExpr' a
+      b' <- compExpr' b
+      return $ BinOp op a' b' mempty
+    go (Cast f) (a :* Nil) = do
+      a' <- compExpr' a
+      return [cexp| $a' |]
 
 instance CompExp Expr
   where
-    varExp    = Var
-    compExp   = compExpr
-    compTypeP = compTypeImpl
+    varExp = Expr . Sym . T . Var . showVar
+      where showVar v = 'v' : show v
+    compExp  = compExpr
+    compType = cType
 
-instance (Show a, Num a, Eq a) => Num (Expr a)
+-- | One-level constant folding: if all immediate sub-expressions are literals,
+-- the expression is reduced to a single literal
+constFold :: Expr a -> Expr a
+constFold = Expr . match go . unExpr
   where
-    fromInteger   = Val . fromInteger
-    Val a + Val b = Val (a+b)
-    Val 0 + b     = b
-    a     + Val 0 = a
-    a     + b     = Add a b
-    Val a - Val b = Val (a-b)
-    Val 0 - b     = b
-    a     - Val 0 = a
-    a     - b     = Sub a b
-    Val a * Val b = Val (a*b)
-    Val 0 * b     = Val 0
-    a     * Val 0 = Val 0
-    Val 1 * b     = b
-    a     * Val 1 = a
-    a     * b     = Mul a b
+    go :: T sig -> Args (AST T) sig -> AST T (Full (DenResult sig))
+    go (T s) as = res
+      where
+        e   = appArgs (Sym $ T s) as
+        res = if and $ listArgs (isJust . viewLit . Expr) as
+                then unExpr $ value $ evalExpr $ Expr e
+                else e
+  -- Deeper constant folding would require a way to witness `Show` for arbitrary
+  -- sub-expressions. This is certainly doable, but seems to complicate things
+  -- for not much gain (currently).
+
+-- | Get the value of a literal expression
+viewLit :: Expr a -> Maybe a
+viewLit (Expr (Sym (T (Fun _ a)))) = Just a
+viewLit _ = Nothing
+
+
+
+--------------------------------------------------------------------------------
+-- * User interface
+--------------------------------------------------------------------------------
+
+-- | Construct a literal expression
+value :: CType a => a -> Expr a
+value a = Expr $ Sym $ T $ Fun (show a) a
+
+true, false :: Expr Bool
+true  = value True
+false = value False
+
+instance (Num a, CType a) => Num (Expr a)
+  where
+    fromInteger = value . fromInteger
+
+    a + b
+      | Just 0 <- viewLit a = b
+      | Just 0 <- viewLit b = a
+      | otherwise           = constFold $ sugarSym (T $ Op Add (+)) a b
+
+    a - b
+      | Just 0 <- viewLit a = negate b
+      | Just 0 <- viewLit b = a
+      | otherwise           = constFold $ sugarSym (T $ Op Sub (-)) a b
+
+    a * b
+      | Just 0 <- viewLit a = value 0
+      | Just 0 <- viewLit b = value 0
+      | Just 1 <- viewLit a = b
+      | Just 1 <- viewLit b = a
+      | otherwise           = constFold $ sugarSym (T $ Op Mul (*)) a b
+
+    negate a = constFold $ sugarSym (T $ UOp Negate negate) a
 
     abs    = error "abs not implemented for Expr"
     signum = error "signum not implemented for Expr"
 
-instance (Show a, Fractional a, Eq a) => Fractional (Expr a)
+instance (Fractional a, CType a) => Fractional (Expr a)
   where
-    fromRational  = Val . fromRational
-    Val a / Val b = Val (a/b)
-    a     / b     = Div a b
+    fromRational = value . fromRational
+    a / b = constFold $ sugarSym (T $ Op Div (/)) a b
 
     recip = error "recip not implemented for Expr"
 
-true, false :: Expr Bool
-true  = Val True
-false = Val False
+-- | Boolean negation
+not_ :: Expr Bool -> Expr Bool
+not_ a = constFold $ sugarSym (T $ UOp Not not) a
+
+-- | Equality
+(<==>) :: Eq a => Expr a -> Expr a -> Expr Bool
+a <==> b = constFold $ sugarSym (T $ Op Eq (==)) a b
+
+-- | Integral type casting
+i2n :: (Integral a, Num b, CType b) => Expr a -> Expr b
+i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+-- * Boilerplate instances
+--------------------------------------------------------------------------------
+
+-- These can be derived in Syntactic >= 3.1
+
+#if MIN_VERSION_syntactic(2,0,0)
+instance Symbol Sym
+  where
+    symSig (Fun _ _) = signature
+    symSig (UOp _ _) = signature
+    symSig (Op _ _)  = signature
+    symSig (Cast _)  = signature
+    symSig (Var _)   = signature
+
+instance Render Sym
+  where
+    renderSym (Fun name _) = name
+    renderSym (UOp op _)   = show op
+    renderSym (Op op _)    = show op
+    renderSym (Cast _)     = "cast"
+    renderSym (Var v)      = v
+    renderArgs = renderArgsSmart
+
+instance Equality Sym
+  where
+    equal = equalDefault
+    hash  = hashDefault
+
+instance StringTree Sym
+
+instance Symbol T where symSig (T s) = symSig s
+
+instance Render T
+  where
+    renderSym (T s)     = renderSym s
+    renderArgs as (T s) = renderArgs as s
+
+instance Equality T
+  where
+    equal (T s) (T t) = equal s t
+    hash (T s)        = hash s
+
+instance StringTree T
+  where
+    stringTreeSym as (T s) = stringTreeSym as s
+#endif
 

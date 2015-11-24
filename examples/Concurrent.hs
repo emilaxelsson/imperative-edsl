@@ -25,10 +25,10 @@ deadlock :: Program L ()
 deadlock = do
   c <- newChan 1
   t <- fork $ readChan c >>= printf "%d\n"
-  writeChan c (1 :: Expr Int)
+  writeChan c (1 :: Expr Int32)
   writeChan c 2
   writeChan c 3
-  printf "This never happens: %d\n" (4 :: Expr Int)
+  printf "This never happens: %d\n" (4 :: Expr Int32)
 
 -- | Map a function over a file, then print the results. Mapping and printing
 --   happen in separate threads.
@@ -51,7 +51,7 @@ mapFile f i = do
       readChan c2 >>= printf "%f\n"
 
   t3 <- fork $ do
-    while (Not <$> feof fi) $ do
+    while (not_ <$> feof fi) $ do
       fget fi >>= void . writeChan c1
     fclose fi
     closeChan c1
@@ -60,17 +60,17 @@ mapFile f i = do
 -- | Waiting for thread completion.
 waiting :: Program L ()
 waiting = do
-  t <- fork $ printf "Forked thread printing %d\n" (0 :: Expr Int)
+  t <- fork $ printf "Forked thread printing %d\n" (0 :: Expr Int32)
   waitThread t
-  printf "Main thread printing %d\n" (1 :: Expr Int)
+  printf "Main thread printing %d\n" (1 :: Expr Int32)
 
 -- | A thread kills itself using its own thread ID.
 suicide :: Program L ()
 suicide = do
   tid <- forkWithId $ \tid -> do
-    printf "This is printed. %d\n" (0 :: Expr Int)
+    printf "This is printed. %d\n" (0 :: Expr Int32)
     killThread tid
-    printf "This is not. %d\n" (0 :: Expr Int)
+    printf "This is not. %d\n" (0 :: Expr Int32)
   waitThread tid
-  printf "The thread is dead, long live the thread! %d\n" (0 :: Expr Int)
+  printf "The thread is dead, long live the thread! %d\n" (0 :: Expr Int32)
 

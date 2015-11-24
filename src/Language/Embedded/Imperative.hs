@@ -16,6 +16,8 @@
 
 module Language.Embedded.Imperative
   ( module Control.Monad
+  , module Data.Int
+  , module Data.Word
     -- * Program monad
   , ProgramT
   , Program
@@ -48,6 +50,8 @@ module Language.Embedded.Imperative
 
 
 import Control.Monad
+import Data.Int
+import Data.Word
 
 import Control.Monad.Operational.Higher
 

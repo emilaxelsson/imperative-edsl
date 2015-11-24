@@ -78,6 +78,7 @@ library
     microlens-th,
     mtl,
     operational-alacarte,
+    syntactic,
     tagged,
       -- tagged needed for GHC 7.6
     BoundedChan,
