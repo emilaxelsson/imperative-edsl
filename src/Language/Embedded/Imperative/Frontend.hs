@@ -97,6 +97,17 @@ newArr
     => IExp instr i -> ProgramT instr m (Arr i a)
 newArr n = singleE $ NewArr n
 
+newArr_
+    :: ( pred a
+       , pred i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , pred ~ VarPred (IExp instr)
+       )
+    => ProgramT instr m (Arr i a)
+newArr_ = singleE $ NewArr_
+
 -- | Set the contents of an array
 getArr
     :: ( VarPred (IExp instr) a

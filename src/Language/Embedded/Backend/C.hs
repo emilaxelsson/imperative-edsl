@@ -70,6 +70,11 @@ compArrCMD cmd@(NewArr size) = do
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     addLocal [cdecl| $ty:t $id:sym[ $v ]; |]
     return $ ArrComp sym
+compArrCMD cmd@(NewArr_) = do
+    sym <- gensym "a"
+    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    addLocal [cdecl| $ty:t * $id:sym; |]
+    return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar
     i     <- compExp expi
