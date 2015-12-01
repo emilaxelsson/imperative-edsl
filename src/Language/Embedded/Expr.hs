@@ -14,6 +14,9 @@ module Language.Embedded.Expr where
 import Data.Int
 import Data.Maybe
 import Data.Word
+#if __GLASGOW_HASKELL__ < 710
+import Data.Monoid
+#endif
 
 #if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic
