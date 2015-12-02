@@ -2,6 +2,12 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- Front end for imperative instructions
+--
+-- These instructions are general imperative constructs independent of the back
+-- end, except for the stuff under \"External function calls\" which is
+-- C-specific.
+
 module Language.Embedded.Imperative.Frontend where
 
 
@@ -26,6 +32,10 @@ import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Args
 import qualified Text.Printf as Printf
 
+
+--------------------------------------------------------------------------------
+-- * References
+--------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
 newRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) => ProgramT instr m (Ref a)
@@ -85,6 +95,12 @@ unsafeFreezeRef r = return $! veryUnsafeFreezeRef r
   -- make `unsafeFreezeRef` an instruction in `RefCMD`. This would avoid the
   -- need for `unsafePerformIO`.
 
+
+
+--------------------------------------------------------------------------------
+-- * Arrays
+--------------------------------------------------------------------------------
+
 -- | Create an uninitialized an array
 newArr
     :: ( pred a
@@ -127,6 +143,12 @@ setArr
        )
     => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
+
+
+
+--------------------------------------------------------------------------------
+-- * Control flow
+--------------------------------------------------------------------------------
 
 -- | Conditional statement
 iff :: (ControlCMD (IExp instr) :<: instr)
@@ -204,6 +226,12 @@ forE lo hi body = do
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
+
+
+--------------------------------------------------------------------------------
+-- * File handling
+--------------------------------------------------------------------------------
+
 -- | Open a file
 fopen :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
 fopen file = singleE . FOpen file
@@ -260,6 +288,12 @@ fget = singleE . FGet
 printf :: PrintfType r => String -> r
 printf = fprintf stdout
 
+
+
+--------------------------------------------------------------------------------
+-- * Abstract objects
+--------------------------------------------------------------------------------
+
 -- | Create a pointer to an abstract object. The only thing one can do with such
 -- objects is to pass them to 'callFun' or 'callProc'.
 newObject :: (ObjectCMD (IExp instr) :<: instr)
@@ -282,6 +316,12 @@ initUObject :: (ObjectCMD (IExp instr) :<: instr)
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
 initUObject fun ty args = singleE $ InitObject fun False ty args
+
+
+
+--------------------------------------------------------------------------------
+-- * External function calls (C-specific)
+--------------------------------------------------------------------------------
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
@@ -381,24 +421,30 @@ getTime = do
 
 -- Arguments
 
+-- | Constant string argument
 strArg :: String -> FunArg pred exp
 strArg = FunArg . StrArg
 
+-- | Value argument
 valArg :: (pred a, VarPred exp a, CompExp exp) =>
     exp a -> FunArg pred exp
 valArg = FunArg . ValArg
 
+-- | Reference argument
 refArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
     Ref a -> FunArg pred exp
 refArg = FunArg . RefArg
 
+-- | Array argument
 arrArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
     Arr n a -> FunArg pred exp
 arrArg = FunArg . ArrArg
 
+-- | Abstract object argument
 objArg :: Object -> FunArg pred exp
 objArg = FunArg . ObjArg
 
+-- | Modifier that takes the address of another argument
 addr :: FunArg pred exp -> FunArg pred exp
 addr = FunArg . Addr
 

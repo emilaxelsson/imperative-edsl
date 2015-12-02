@@ -1,8 +1,8 @@
 -- | Exports the general parts of imperative front ends. The motivation for this
 -- module is to support making specialized front ends (e.g. like
--- "Language.Embedded.Imperative.Frontend" but specialized for a specific
--- instruction set). These exports are the parts of the front end that are
--- independent of the instruction set and/or expression language.
+-- "Language.Embedded.Imperative.Frontend" but for a specific instruction set).
+-- These exports are the parts of the front end that are independent of the
+-- instruction set and/or expression language.
 
 module Language.Embedded.Imperative.Frontend.General
   ( Any
