@@ -3,7 +3,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Generate C code from @Language.Embedded.Imperative@ programs
-module Language.Embedded.Backend.C where
+module Language.Embedded.Backend.C
+  ( namedType
+  , compile
+  , icompile
+  ) where
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
@@ -15,7 +19,6 @@ import Language.C.Quote.C
 import qualified Language.C.Syntax as C
 
 import Control.Monad.Operational.Higher
-import Data.TypePredicates
 import Language.C.Monad
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
