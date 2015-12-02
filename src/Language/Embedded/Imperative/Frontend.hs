@@ -448,3 +448,15 @@ objArg = FunArg . ObjArg
 addr :: FunArg pred exp -> FunArg pred exp
 addr = FunArg . Addr
 
+
+
+--------------------------------------------------------------------------------
+-- * Running programs
+--------------------------------------------------------------------------------
+
+-- | Run a program in 'IO'. Note that not all instructions are supported for
+-- running in 'IO'. For example, calls to external C functions are not
+-- supported.
+runIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO a
+runIO = interpret
+

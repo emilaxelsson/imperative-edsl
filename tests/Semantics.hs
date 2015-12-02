@@ -14,7 +14,7 @@ modifyRefProg = do
     getRef r
 
 testModifyRef = do
-    1 <- fmap evalExp $ interpret modifyRefProg
+    1 <- fmap evalExp $ runIO modifyRefProg
     return ()
 
 main = do

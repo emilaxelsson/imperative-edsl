@@ -43,12 +43,12 @@ arrProg = do
     return c
 
 evalRef :: IO Int32
-evalRef = fmap evalExp $ interpret refProg
+evalRef = fmap evalExp $ runIO refProg
 
 compRef = icompile refProg
 
 evalArr :: IO Int32
-evalArr = fmap evalExp $ interpret arrProg
+evalArr = fmap evalExp $ runIO arrProg
 
 compArr = icompile arrProg
 
@@ -74,7 +74,7 @@ summer = do
 runSummer :: IO ()
 runSummer = do
     writeFile "input" $ unwords $ map show ([-5..4] :: [Float])
-    interpret summer
+    runIO summer
 
 compSummer = icompile summer
 
