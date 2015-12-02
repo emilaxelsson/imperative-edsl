@@ -448,5 +448,3 @@ objArg = FunArg . ObjArg
 addr :: FunArg pred exp -> FunArg pred exp
 addr = FunArg . Addr
 
-printfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
-printfArg = PrintfArg
