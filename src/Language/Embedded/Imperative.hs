@@ -57,4 +57,5 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Frontend
+import Language.Embedded.Imperative.Backend.C ()
 

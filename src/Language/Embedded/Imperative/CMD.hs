@@ -54,6 +54,7 @@ import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Traversal
 import qualified Language.C.Syntax as C
+import Language.C.Quote.C (ToIdent (..))
 import Language.C.Monad
 
 
@@ -66,6 +67,11 @@ data Ref a
     = RefComp VarId
     | RefEval (IORef a)
   deriving Typeable
+
+-- | Identifiers from references
+instance ToIdent (Ref a)
+  where
+    toIdent (RefComp r) = C.Id ('v' : show r)
 
 -- | Commands for mutable references
 data RefCMD exp (prog :: * -> *) a
@@ -109,6 +115,11 @@ data Arr n a
     = ArrComp String
     | ArrEval (IOArray n a)
   deriving Typeable
+
+-- | Identifiers from arrays
+instance ToIdent (Arr i a)
+  where
+    toIdent (ArrComp arr) = C.Id arr
 
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a

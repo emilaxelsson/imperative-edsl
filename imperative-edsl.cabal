@@ -41,7 +41,9 @@ library
     Language.Embedded.Concurrent
     Language.Embedded.Expr
 
-  -- other-modules:
+  other-modules:
+    Language.Embedded.Imperative.Backend.C
+      -- No need to export since only the instances are interesting
 
   default-language: Haskell2010
 

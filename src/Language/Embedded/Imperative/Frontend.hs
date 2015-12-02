@@ -30,7 +30,7 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Args
-import qualified Text.Printf as Printf
+
 
 
 --------------------------------------------------------------------------------
