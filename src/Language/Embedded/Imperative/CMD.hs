@@ -1,6 +1,10 @@
 {-# LANGUAGE CPP #-}
 
--- | Imperative commands
+-- | Imperative commands. These commands can be used with the 'Program' monad,
+-- and different command types can be combined using (':+:').
+--
+-- These commands are general imperative constructs independent of the back end,
+-- except for 'CallCMD' which is C-specific.
 
 module Language.Embedded.Imperative.CMD where
   -- TODO There's probably no need to export the stuff under "Running commands"
@@ -252,7 +256,7 @@ type instance IExp (ObjectCMD e :+: i) = e
 
 
 --------------------------------------------------------------------------------
--- * External function calls
+-- * External function calls (C-specific)
 --------------------------------------------------------------------------------
 
 data FunArg pred exp where
