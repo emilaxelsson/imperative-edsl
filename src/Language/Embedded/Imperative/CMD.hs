@@ -6,8 +6,30 @@
 -- These commands are general imperative constructs independent of the back end,
 -- except for 'CallCMD' which is C-specific.
 
-module Language.Embedded.Imperative.CMD where
-  -- TODO There's probably no need to export the stuff under "Running commands"
+module Language.Embedded.Imperative.CMD
+  ( -- * References
+    Ref (..)
+  , RefCMD (..)
+    -- * Arrays
+  , Arr (..)
+  , ArrCMD (..)
+    -- * Control flow
+  , ControlCMD (..)
+    -- * File handling
+  , Handle (..)
+  , stdin
+  , stdout
+  , Formattable (..)
+  , FileCMD (..)
+  , PrintfArg (..)
+    -- * Abstract objects
+  , Object (..)
+  , ObjectCMD (..)
+    -- * External function calls (C-specific)
+  , FunArg (..)
+  , Arg (..)
+  , CallCMD (..)
+  ) where
 
 
 
