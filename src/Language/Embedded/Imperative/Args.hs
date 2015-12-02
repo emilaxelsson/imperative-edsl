@@ -1,5 +1,8 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE PolyKinds   #-}
+
+-- | Various types of function arguments
+
 module Language.Embedded.Imperative.Args where
 
 import Data.Proxy
@@ -10,6 +13,7 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Backend.C
 
+-- | Value argument
 data ValArg pred exp where
   ValArg :: (pred a, VarPred exp a) => exp a -> ValArg pred exp
 
@@ -20,6 +24,7 @@ instance CompExp exp => Arg ValArg exp where
     return [cparam| $ty:t |]
   anyArg  (ValArg a) = ValArg a
 
+-- | Reference argument
 data RefArg pred exp where
   RefArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
     Ref a -> RefArg pred exp
@@ -31,6 +36,7 @@ instance CompExp exp => Arg RefArg exp where
     return [cparam| $ty:t* |]
   anyArg  (RefArg r) = RefArg r
 
+-- | Array argument
 data ArrArg pred exp where
   ArrArg :: (pred a, Typeable a, VarPred exp a) =>
     Arr n a -> ArrArg pred exp
@@ -42,6 +48,7 @@ instance CompExp exp => Arg ArrArg exp where
     return [cparam| $ty:t* |]
   anyArg  (ArrArg a) = ArrArg a
 
+-- | Abstract object argument
 data ObjArg pred exp where
   ObjArg :: Object -> ObjArg pred exp
 
@@ -51,6 +58,7 @@ instance Arg ObjArg exp where
   mkParam (ObjArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
   anyArg  (ObjArg o) = ObjArg o
 
+-- | Constant string argument
 data StrArg pred exp where
   StrArg :: String -> StrArg pred exp
 
@@ -59,6 +67,7 @@ instance Arg StrArg exp where
   mkParam (StrArg s) = return [cparam| const char* |]
   anyArg  (StrArg s) = StrArg s
 
+-- | Modifier that takes the address of another argument
 data Addr arg pred exp where
   Addr :: Arg arg exp => arg pred exp -> Addr arg pred exp
 
@@ -70,5 +79,5 @@ instance Arg arg exp => Arg (Addr arg) exp where
     p <- mkParam arg
     case p of
        Param mid spec decl loc -> return $ Param mid spec (Ptr [] decl loc) loc
-       _ -> error "Cannot deal with antiquotes" 
+       _ -> error "Cannot deal with antiquotes"
   anyArg (Addr arg) = Addr (anyArg arg)
