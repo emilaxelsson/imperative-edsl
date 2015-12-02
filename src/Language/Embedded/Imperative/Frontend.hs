@@ -267,19 +267,21 @@ newObject :: (ObjectCMD (IExp instr) :<: instr)
     -> ProgramT instr m Object
 newObject = singleE . NewObject
 
+-- | Call a function to create a pointed object
 initObject :: (ObjectCMD (IExp instr) :<: instr)
     => String -- ^ Function name
     -> String -- ^ Object type
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
-initObject fun ty args = singleE $ InitObject fun ty args
+initObject fun ty args = singleE $ InitObject fun True ty args
 
+-- | Call a function to create an object
 initUObject :: (ObjectCMD (IExp instr) :<: instr)
     => String -- ^ Function name
     -> String -- ^ Object type
     -> [FunArg Any (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
-initUObject fun ty args = singleE $ InitUObject fun ty args
+initUObject fun ty args = singleE $ InitObject fun False ty args
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()

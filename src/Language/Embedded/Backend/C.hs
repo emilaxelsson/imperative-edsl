@@ -170,20 +170,13 @@ compObjectCMD (NewObject t) = do
     let t' = namedType t
     addLocal [cdecl| $ty:t' * $id:sym; |]
     return $ Object True t sym
-compObjectCMD (InitObject fun t args) = do
+compObjectCMD (InitObject fun pnt t args) = do
     sym <- gensym "obj"
     let t' = namedType t
     as  <- mapM mkArg args
     addLocal [cdecl| $ty:t' * $id:sym; |]
     addStm   [cstm|  $id:sym = $id:fun($args:as); |]
-    return $ Object True t sym
-compObjectCMD (InitUObject fun t args) = do
-    sym <- gensym "obj"
-    let t' = namedType t
-    as  <- mapM mkArg args
-    addLocal [cdecl| $ty:t' $id:sym; |]
-    addStm   [cstm|  $id:sym = $id:fun($args:as); |]
-    return $ Object False t sym
+    return $ Object pnt t sym
 
 compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
 compCallCMD (AddInclude inc)    = addInclude inc

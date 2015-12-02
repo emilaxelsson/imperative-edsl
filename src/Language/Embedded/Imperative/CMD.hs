@@ -227,33 +227,29 @@ data Object = Object
 data ObjectCMD exp (prog :: * -> *) a
   where
     NewObject
-        :: String  -- Type
+        :: String  -- ^ Type
         -> ObjectCMD exp prog Object
     InitObject
-        :: String -- Function name
-        -> String -- Object Type
-        -> [ FunArg Any exp ]
-        -> ObjectCMD exp prog Object
-    InitUObject
-        :: String -- Function name
-        -> String -- Object Type
+        :: String -- ^ Function name
+        -> Bool   -- ^ Pointed object?
+        -> String -- ^ Object Type
         -> [ FunArg Any exp ]
         -> ObjectCMD exp prog Object
 
 instance HFunctor (ObjectCMD exp)
   where
-    hfmap _ (NewObject t)       = NewObject t
-    hfmap _ (InitObject s t a)  = InitObject s t a
-    hfmap _ (InitUObject s t a) = InitUObject s t a
+    hfmap _ (NewObject t)        = NewObject t
+    hfmap _ (InitObject s p t a) = InitObject s p t a
 
 instance DryInterp (ObjectCMD exp)
   where
-    dryInterp (NewObject t)       = liftM (Object True t) $ freshStr "obj"
-    dryInterp (InitObject _ t _)  = liftM (Object True t) $ freshStr "obj"
-    dryInterp (InitUObject _ t _) = liftM (Object False t) $ freshStr "obj"
+    dryInterp (NewObject t)        = liftM (Object True t) $ freshStr "obj"
+    dryInterp (InitObject _ _ t _) = liftM (Object True t) $ freshStr "obj"
 
 type instance IExp (ObjectCMD e)       = e
 type instance IExp (ObjectCMD e :+: i) = e
+
+
 
 --------------------------------------------------------------------------------
 -- * External function calls
@@ -379,8 +375,7 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runObjectCMD :: ObjectCMD exp IO a -> IO a
 runObjectCMD (NewObject _) = error "cannot run programs involving newObject"
-runObjectCMD (InitObject _ _ _) = error "cannot run programs involving initObject"
-runObjectCMD (InitUObject _ _ _) = error "cannot run programs involving initUObject"
+runObjectCMD (InitObject _ _ _ _) = error "cannot run programs involving initObject"
 
 runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
 runCallCMD (AddInclude _)       = return ()
