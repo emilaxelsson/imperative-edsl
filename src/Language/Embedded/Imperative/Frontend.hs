@@ -346,7 +346,7 @@ externFun :: forall instr m exp res
     -> ProgramT instr m (exp res)
 externFun fun args = do
     addExternFun fun (Proxy :: Proxy (exp res)) args
-    callFun fun $ map anyArg args
+    callFun fun $ map weakenArg args
 
 -- | Declare and call an external procedure
 externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
@@ -355,7 +355,7 @@ externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
     -> ProgramT instr m ()
 externProc proc args = do
     addExternProc proc args
-    callProc proc $ map anyArg args
+    callProc proc $ map weakenArg args
 
 -- | Get current time as number of seconds passed today
 getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>

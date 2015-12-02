@@ -263,14 +263,15 @@ data FunArg pred exp where
   FunArg :: Arg arg exp => arg pred exp -> FunArg pred exp
 
 class Arg arg (exp :: * -> *) where
-  mkArg   :: arg pred exp -> CGen C.Exp
-  mkParam :: arg pred exp -> CGen C.Param
-  anyArg  :: arg pred exp -> arg Any exp
+  mkArg     :: arg pred exp -> CGen C.Exp
+  mkParam   :: arg pred exp -> CGen C.Param
+  -- | Weaken the constraint on an argument
+  weakenArg :: arg pred exp -> arg Any exp
 
 instance Arg FunArg exp where
-  mkArg   (FunArg arg) = mkArg arg
-  mkParam (FunArg arg) = mkParam arg
-  anyArg  (FunArg arg) = FunArg (anyArg arg)
+  mkArg     (FunArg arg) = mkArg arg
+  mkParam   (FunArg arg) = mkParam arg
+  weakenArg (FunArg arg) = FunArg (weakenArg arg)
 
 data CallCMD exp (prog :: * -> *) a
   where
