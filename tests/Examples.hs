@@ -2,6 +2,7 @@ import Imperative ()
 import Concurrent ()
 import Language.Embedded.Expr
 import Language.Embedded.Imperative
+import Language.Embedded.Backend.C
 import System.IO
 import System.Process
 import System.Directory

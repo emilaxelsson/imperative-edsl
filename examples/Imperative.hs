@@ -9,6 +9,7 @@ import Data.Word
 
 import Language.Embedded.Expression (evalExp)
 import Language.Embedded.Imperative
+import Language.Embedded.Backend.C
 import Language.Embedded.Expr
 
 

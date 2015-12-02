@@ -42,9 +42,6 @@ module Language.Embedded.Imperative
     -- * Front end
   , module Language.Embedded.Imperative.Frontend.General
   , module Language.Embedded.Imperative.Frontend
-    -- * C code generation
-  , compile
-  , icompile
   ) where
 
 
@@ -60,5 +57,4 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Frontend
-import Language.Embedded.Backend.C
 
