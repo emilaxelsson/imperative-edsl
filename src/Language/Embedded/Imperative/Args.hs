@@ -53,7 +53,7 @@ data ObjArg pred exp where
   ObjArg :: Object -> ObjArg pred exp
 
 instance Arg ObjArg exp where
-  mkArg     (ObjArg (Object _ _ o)) = return [cexp| $id:o |]
+  mkArg     (ObjArg o) = return [cexp| $id:o |]
   mkParam   (ObjArg (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'* |]
   mkParam   (ObjArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
   weakenArg (ObjArg o) = ObjArg o

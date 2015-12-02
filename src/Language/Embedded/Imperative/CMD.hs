@@ -192,6 +192,11 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
+-- | Identifiers from handles
+instance ToIdent Handle
+  where
+    toIdent (HandleComp h) = C.Id h
+
 -- | Handle to stdin
 stdin :: Handle
 stdin = HandleComp "stdin"
@@ -260,6 +265,11 @@ data Object = Object
     , objectId   :: String
     }
   deriving (Eq, Show, Ord, Typeable)
+
+-- | Identifiers from objects
+instance ToIdent Object
+  where
+    toIdent (Object _ _ o) = C.Id o
 
 data ObjectCMD exp (prog :: * -> *) a
   where
