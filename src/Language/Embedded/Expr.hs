@@ -17,6 +17,7 @@ import Data.Word
 #if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
 #endif
+import Data.Typeable
 
 #if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic
@@ -41,7 +42,7 @@ import Language.Embedded.Expression
 --------------------------------------------------------------------------------
 
 -- | Types supported by C
-class (Show a, Eq a) => CType a
+class (Show a, Eq a, Typeable a) => CType a
   where
     cType :: MonadC m => proxy a -> m Type
 
@@ -220,8 +221,17 @@ instance (Fractional a, CType a) => Fractional (Expr a)
 
     recip = error "recip not implemented for Expr"
 
+castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
+castAST a = simpleMatch go a
+  where
+    go :: (DenResult sig ~ a) => T sig -> Args (AST T) sig -> Maybe (ASTF T b)
+    go (T _) _ = cast a
+
 -- | Boolean negation
 not_ :: Expr Bool -> Expr Bool
+not_ (Expr (nt :$ a))
+    | Just (T (UOp Not _)) <- prj nt
+    , Just a' <- castAST a = Expr a'
 not_ a = constFold $ sugarSym (T $ UOp Not not) a
 
 -- | Equality
