@@ -274,12 +274,12 @@ instance ToIdent Object
 data ObjectCMD exp (prog :: * -> *) a
   where
     NewObject
-        :: String  -- ^ Type
+        :: String  -- Type
         -> ObjectCMD exp prog Object
     InitObject
-        :: String -- ^ Function name
-        -> Bool   -- ^ Pointed object?
-        -> String -- ^ Object Type
+        :: String -- Function name
+        -> Bool   -- Pointed object?
+        -> String -- Object Type
         -> [ FunArg Any exp ]
         -> ObjectCMD exp prog Object
 
