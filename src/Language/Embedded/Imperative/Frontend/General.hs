@@ -16,6 +16,7 @@ module Language.Embedded.Imperative.Frontend.General
   , Object
   , FunArg (..)
   , Definition
+  , cedecl
   ) where
   -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,
   -- since the user is not supposed to inspect such values.
@@ -26,4 +27,5 @@ import Data.TypePredicates
 import Language.Embedded.Imperative.CMD
 
 import Language.C.Syntax
+import Language.C.Quote.C
 
