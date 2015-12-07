@@ -25,7 +25,6 @@ import Data.Proxy
 import Language.C.Quote.C
 
 import Control.Monad.Operational.Higher
-import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
@@ -303,17 +302,17 @@ newObject = singleE . NewObject
 
 -- | Call a function to create a pointed object
 initObject :: (ObjectCMD (IExp instr) :<: instr)
-    => String -- ^ Function name
-    -> String -- ^ Object type
-    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    => String                 -- ^ Function name
+    -> String                 -- ^ Object type
+    -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
 initObject fun ty args = singleE $ InitObject fun True ty args
 
 -- | Call a function to create an object
 initUObject :: (ObjectCMD (IExp instr) :<: instr)
-    => String -- ^ Function name
-    -> String -- ^ Object type
-    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    => String                 -- ^ Function name
+    -> String                 -- ^ Object type
+    -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
 initUObject fun ty args = singleE $ InitObject fun False ty args
 
@@ -353,51 +352,51 @@ addDefinition = singleE . AddDefinition
 
 -- | Declare an external function
 addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr)
-    => String                      -- ^ Function name
-    -> proxy (exp res)             -- ^ Proxy for expression and result type
-    -> [FunArg (VarPred exp) exp]  -- ^ Arguments (only used to determine types)
+    => String           -- ^ Function name
+    -> proxy (exp res)  -- ^ Proxy for expression and result type
+    -> [FunArg exp]     -- ^ Arguments (only used to determine types)
     -> ProgramT instr m ()
 addExternFun fun res args = singleE $ AddExternFun fun res args
 
 -- | Declare an external procedure
 addExternProc :: (CallCMD exp :<: instr, exp ~ IExp instr)
-    => String                      -- ^ Procedure name
-    -> [FunArg (VarPred exp) exp]  -- ^ Arguments (only used to determine types)
+    => String        -- ^ Procedure name
+    -> [FunArg exp]  -- ^ Arguments (only used to determine types)
     -> ProgramT instr m ()
 addExternProc proc args = singleE $ AddExternProc proc args
 
 -- | Call a function
 callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
-    => String                     -- ^ Function name
-    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    => String                 -- ^ Function name
+    -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m (IExp instr a)
 callFun fun as = singleE $ CallFun fun as
 
 -- | Call a procedure
 callProc :: (CallCMD (IExp instr) :<: instr)
-    => String                     -- ^ Procedure name
-    -> [FunArg Any (IExp instr)]  -- ^ Arguments
+    => String                 -- ^ Procedure name
+    -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
 callProc fun as = singleE $ CallProc fun as
 
 -- | Declare and call an external function
 externFun :: forall instr m exp res
     .  (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
-    => String                      -- ^ Function name
-    -> [FunArg (VarPred exp) exp]  -- ^ Arguments
+    => String        -- ^ Function name
+    -> [FunArg exp]  -- ^ Arguments
     -> ProgramT instr m (exp res)
 externFun fun args = do
     addExternFun fun (Proxy :: Proxy (exp res)) args
-    callFun fun $ map weakenArg args
+    callFun fun args
 
 -- | Declare and call an external procedure
 externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
-    => String                      -- ^ Procedure name
-    -> [FunArg (VarPred exp) exp]  -- ^ Arguments
+    => String        -- ^ Procedure name
+    -> [FunArg exp]  -- ^ Arguments
     -> ProgramT instr m ()
 externProc proc args = do
     addExternProc proc args
-    callProc proc $ map weakenArg args
+    callProc proc args
 
 -- | Get current time as number of seconds passed today
 getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
@@ -422,30 +421,30 @@ getTime = do
 -- Arguments
 
 -- | Constant string argument
-strArg :: String -> FunArg pred exp
+strArg :: String -> FunArg exp
 strArg = FunArg . StrArg
 
 -- | Value argument
-valArg :: (pred a, VarPred exp a, CompExp exp) =>
-    exp a -> FunArg pred exp
+valArg :: (VarPred exp a, CompExp exp) =>
+    exp a -> FunArg exp
 valArg = FunArg . ValArg
 
 -- | Reference argument
-refArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
-    Ref a -> FunArg pred exp
+refArg :: (Typeable a, VarPred exp a, CompExp exp) =>
+    Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
 -- | Array argument
-arrArg :: (pred a, Typeable a, VarPred exp a, CompExp exp) =>
-    Arr n a -> FunArg pred exp
+arrArg :: (Typeable a, VarPred exp a, CompExp exp) =>
+    Arr n a -> FunArg exp
 arrArg = FunArg . ArrArg
 
 -- | Abstract object argument
-objArg :: Object -> FunArg pred exp
+objArg :: Object -> FunArg exp
 objArg = FunArg . ObjArg
 
 -- | Modifier that takes the address of another argument
-addr :: FunArg pred exp -> FunArg pred exp
+addr :: FunArg exp -> FunArg exp
 addr = FunArg . Addr
 
 

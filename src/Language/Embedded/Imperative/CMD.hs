@@ -50,7 +50,6 @@ import Data.Proxy
 import Control.Monad.Operational.Higher
 
 import Control.Monads
-import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Traversal
 import qualified Language.C.Syntax as C
@@ -280,7 +279,7 @@ data ObjectCMD exp (prog :: * -> *) a
         :: String -- Function name
         -> Bool   -- Pointed object?
         -> String -- Object Type
-        -> [ FunArg Any exp ]
+        -> [FunArg exp]
         -> ObjectCMD exp prog Object
 
 instance HFunctor (ObjectCMD exp)
@@ -302,19 +301,16 @@ type instance IExp (ObjectCMD e :+: i) = e
 -- * External function calls (C-specific)
 --------------------------------------------------------------------------------
 
-data FunArg pred exp where
-  FunArg :: Arg arg exp => arg pred exp -> FunArg pred exp
+data FunArg exp where
+  FunArg :: Arg arg exp => arg exp -> FunArg exp
 
 class Arg arg (exp :: * -> *) where
-  mkArg     :: arg pred exp -> CGen C.Exp
-  mkParam   :: arg pred exp -> CGen C.Param
-  -- | Weaken the constraint on an argument
-  weakenArg :: arg pred exp -> arg Any exp
+  mkArg   :: arg exp -> CGen C.Exp
+  mkParam :: arg exp -> CGen C.Param
 
 instance Arg FunArg exp where
-  mkArg     (FunArg arg) = mkArg arg
-  mkParam   (FunArg arg) = mkParam arg
-  weakenArg (FunArg arg) = FunArg (weakenArg arg)
+  mkArg   (FunArg arg) = mkArg arg
+  mkParam (FunArg arg) = mkParam arg
 
 data CallCMD exp (prog :: * -> *) a
   where
@@ -323,11 +319,11 @@ data CallCMD exp (prog :: * -> *) a
     AddExternFun  :: VarPred exp res
                   => String
                   -> proxy (exp res)
-                  -> [FunArg (VarPred exp) exp]
+                  -> [FunArg exp]
                   -> CallCMD exp prog ()
-    AddExternProc :: String -> [FunArg (VarPred exp) exp] -> CallCMD exp prog ()
-    CallFun       :: VarPred exp a => String -> [FunArg Any exp] -> CallCMD exp prog (exp a)
-    CallProc      ::                  String -> [FunArg Any exp] -> CallCMD exp prog ()
+    AddExternProc :: String -> [FunArg exp] -> CallCMD exp prog ()
+    CallFun       :: VarPred exp a => String -> [FunArg exp] -> CallCMD exp prog (exp a)
+    CallProc      ::                  String -> [FunArg exp] -> CallCMD exp prog ()
 
 instance HFunctor (CallCMD exp)
   where
