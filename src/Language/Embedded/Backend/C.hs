@@ -21,11 +21,29 @@ import Text.PrettyPrint.Mainland (pretty)
 
 
 
+--------------------------------------------------------------------------------
+-- * Utilities
+--------------------------------------------------------------------------------
+
+-- | Create a named type
 namedType :: String -> C.Type
 namedType t = C.Type
     (C.DeclSpec [] [] (C.Tnamed (C.Id t noLoc) [] noLoc) noLoc)
     (C.DeclRoot noLoc)
     noLoc
+
+-- | Return the argument of a boolean negation expression
+viewNotExp :: C.Exp -> Maybe C.Exp
+viewNotExp (C.UnOp C.Lnot a _)                     = Just a
+viewNotExp (C.FnCall (C.Var (C.Id "!" _) _) [a] _) = Just a
+  -- Apparently this is what `!` parses to
+viewNotExp _ = Nothing
+
+
+
+--------------------------------------------------------------------------------
+-- * Code generation user interface
+--------------------------------------------------------------------------------
 
 -- | Compile a program to C code represented as a string
 --

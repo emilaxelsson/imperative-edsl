@@ -10,6 +10,7 @@ module Language.Embedded.Imperative.Backend.C where
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
+import Control.Monad.State
 import Data.Proxy
 
 import Language.C.Quote.C
@@ -88,14 +89,24 @@ compControlCMD (If c t f) = do
       ([],_ ) -> addStm [cstm| if ( ! $cc) {$items:cf} |]
       (_ ,_ ) -> addStm [cstm| if (   $cc) {$items:ct} else {$items:cf} |]
 compControlCMD (While cont body) = do
+    s <- get
+    noop <- do
+        conte <- cont
+        contc <- compExp conte
+        case contc of
+          C.Var (C.Id "false"  _) _ -> return True
+          _ -> return False
+    put s
     bodyc <- inNewBlock_ $ do
         conte <- cont
         contc <- compExp conte
         case contc of
-          C.Var (C.Id "true" _) _ -> return ()
-          _ -> addStm [cstm| if (! $contc) {break;} |]
+          C.Var (C.Id "true"  _) _ -> return ()
+          _ -> case viewNotExp contc of
+              Just a -> addStm [cstm| if ($a) {break;} |]
+              _      -> addStm [cstm| if (! $contc) {break;} |]
         body
-    addStm [cstm| while (1) {$items:bodyc} |]
+    when (not noop) $ addStm [cstm| while (1) {$items:bodyc} |]
 compControlCMD (For lo hi body) = do
     loe   <- compExp lo
     hie   <- compExp hi
