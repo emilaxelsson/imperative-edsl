@@ -230,9 +230,9 @@ castAST a = simpleMatch go a
 -- | Boolean negation
 not_ :: Expr Bool -> Expr Bool
 not_ (Expr (nt :$ a))
-    | Just (T (UOp Not _)) <- prj nt
+    | Just (T (UOp Lnot _)) <- prj nt
     , Just a' <- castAST a = Expr a'
-not_ a = constFold $ sugarSym (T $ UOp Not not) a
+not_ a = constFold $ sugarSym (T $ UOp Lnot not) a
 
 -- | Equality
 (<==>) :: Eq a => Expr a -> Expr a -> Expr Bool
