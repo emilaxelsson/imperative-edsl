@@ -40,7 +40,7 @@ library
     Language.Embedded.Concurrent
     Language.Embedded.Signature
     Language.Embedded.Backend.C
-    Language.Embedded.Expr
+    Language.Embedded.CExp
 
   other-modules:
     Language.Embedded.Imperative.Backend.C

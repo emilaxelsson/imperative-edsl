@@ -7,7 +7,7 @@
 -- and can be compiled to a single-line C expression (plus possibly include
 -- statements).
 
-module Language.Embedded.Expr where
+module Language.Embedded.CExp where
 
 
 
@@ -88,43 +88,43 @@ data T sig
     T :: CType (DenResult sig) => { unT :: Sym sig } -> T sig
 
 -- | C expression
-newtype Expr a = Expr {unExpr :: ASTF T a}
+newtype CExp a = CExp {unCExp :: ASTF T a}
 
-instance Syntactic (Expr a)
+instance Syntactic (CExp a)
   where
-    type Domain (Expr a)   = T
-    type Internal (Expr a) = a
-    desugar = unExpr
-    sugar   = Expr
+    type Domain (CExp a)   = T
+    type Internal (CExp a) = a
+    desugar = unCExp
+    sugar   = CExp
 
-type instance VarPred Expr = CType
+type instance VarPred CExp = CType
 
 evalSym :: Sym sig -> Denotation sig
 evalSym (Fun _ a) = a
 evalSym (UOp _ f) = f
 evalSym (Op  _ f) = f
 evalSym (Cast f)  = f
-evalSym (Var v)   = error $ "evalExpr: cannot evaluate variable " ++ v
+evalSym (Var v)   = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
-evalExpr :: Expr a -> a
-evalExpr (Expr e) = go e
+evalCExp :: CExp a -> a
+evalCExp (CExp e) = go e
   where
     go :: AST T sig -> Denotation sig
     go (Sym (T s)) = evalSym s
     go (f :$ a)    = go f $ go a
 
-instance EvalExp Expr
+instance EvalExp CExp
   where
-    litExp a = Expr $ Sym $ T $ Fun (show a) a
-    evalExp  = evalExpr
+    litExp a = CExp $ Sym $ T $ Fun (show a) a
+    evalExp  = evalCExp
 
 -- | Compile an expression
-compExpr :: forall m a . MonadC m => Expr a -> m Exp
-compExpr = simpleMatch (go . unT) . unExpr
+compCExp :: forall m a . MonadC m => CExp a -> m Exp
+compCExp = simpleMatch (go . unT) . unCExp
   where
-    compExpr' :: ASTF T b -> m Exp
-    compExpr' = compExpr . Expr
+    compCExp' :: ASTF T b -> m Exp
+    compCExp' = compCExp . CExp
 
     go :: Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil = return [cexp| $id:v |]
@@ -133,45 +133,45 @@ compExpr = simpleMatch (go . unT) . unExpr
       "False" -> addSystemInclude "stdbool.h" >> return [cexp| false |]
       l       -> return [cexp| $id:l |]
     go (Fun fun _) args = do
-      as <- sequence $ listArgs compExpr' args
+      as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
     go (UOp op _) (a :* Nil) = do
-      a' <- compExpr' a
+      a' <- compCExp' a
       return $ UnOp op a' mempty
     go (Op op _) (a :* b :* Nil) = do
-      a' <- compExpr' a
-      b' <- compExpr' b
+      a' <- compCExp' a
+      b' <- compCExp' b
       return $ BinOp op a' b' mempty
     go (Cast f) (a :* Nil) = do
-      a' <- compExpr' a
+      a' <- compCExp' a
       return [cexp| $a' |]
 
-instance CompExp Expr
+instance CompExp CExp
   where
-    varExp = Expr . Sym . T . Var . showVar
+    varExp = CExp . Sym . T . Var . showVar
       where showVar v = 'v' : show v
-    compExp  = compExpr
+    compExp  = compCExp
     compType = cType
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal
-constFold :: Expr a -> Expr a
-constFold = Expr . match go . unExpr
+constFold :: CExp a -> CExp a
+constFold = CExp . match go . unCExp
   where
     go :: T sig -> Args (AST T) sig -> AST T (Full (DenResult sig))
     go (T s) as = res
       where
         e   = appArgs (Sym $ T s) as
-        res = if and $ listArgs (isJust . viewLit . Expr) as
-                then unExpr $ value $ evalExpr $ Expr e
+        res = if and $ listArgs (isJust . viewLit . CExp) as
+                then unCExp $ value $ evalCExp $ CExp e
                 else e
   -- Deeper constant folding would require a way to witness `Show` for arbitrary
   -- sub-expressions. This is certainly doable, but seems to complicate things
   -- for not much gain (currently).
 
 -- | Get the value of a literal expression
-viewLit :: Expr a -> Maybe a
-viewLit (Expr (Sym (T (Fun _ a)))) = Just a
+viewLit :: CExp a -> Maybe a
+viewLit (CExp (Sym (T (Fun _ a)))) = Just a
 viewLit _ = Nothing
 
 
@@ -181,14 +181,14 @@ viewLit _ = Nothing
 --------------------------------------------------------------------------------
 
 -- | Construct a literal expression
-value :: CType a => a -> Expr a
-value a = Expr $ Sym $ T $ Fun (show a) a
+value :: CType a => a -> CExp a
+value a = CExp $ Sym $ T $ Fun (show a) a
 
-true, false :: Expr Bool
+true, false :: CExp Bool
 true  = value True
 false = value False
 
-instance (Num a, CType a) => Num (Expr a)
+instance (Num a, CType a) => Num (CExp a)
   where
     fromInteger = value . fromInteger
 
@@ -211,15 +211,15 @@ instance (Num a, CType a) => Num (Expr a)
 
     negate a = constFold $ sugarSym (T $ UOp Negate negate) a
 
-    abs    = error "abs not implemented for Expr"
-    signum = error "signum not implemented for Expr"
+    abs    = error "abs not implemented for CExp"
+    signum = error "signum not implemented for CExp"
 
-instance (Fractional a, CType a) => Fractional (Expr a)
+instance (Fractional a, CType a) => Fractional (CExp a)
   where
     fromRational = value . fromRational
     a / b = constFold $ sugarSym (T $ Op Div (/)) a b
 
-    recip = error "recip not implemented for Expr"
+    recip = error "recip not implemented for CExp"
 
 castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
 castAST a = simpleMatch go a
@@ -228,18 +228,18 @@ castAST a = simpleMatch go a
     go (T _) _ = gcast a
 
 -- | Boolean negation
-not_ :: Expr Bool -> Expr Bool
-not_ (Expr (nt :$ a))
+not_ :: CExp Bool -> CExp Bool
+not_ (CExp (nt :$ a))
     | Just (T (UOp Lnot _)) <- prj nt
-    , Just a' <- castAST a = Expr a'
+    , Just a' <- castAST a = CExp a'
 not_ a = constFold $ sugarSym (T $ UOp Lnot not) a
 
 -- | Equality
-(<==>) :: Eq a => Expr a -> Expr a -> Expr Bool
+(<==>) :: Eq a => CExp a -> CExp a -> CExp Bool
 a <==> b = constFold $ sugarSym (T $ Op Eq (==)) a b
 
 -- | Integral type casting
-i2n :: (Integral a, Num b, CType b) => Expr a -> Expr b
+i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
 i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 

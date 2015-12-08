@@ -11,27 +11,27 @@ import Control.Applicative
 
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
-import Language.Embedded.Expr
+import Language.Embedded.CExp
 
 type L =
   ThreadCMD :+:
-  ChanCMD Expr :+:
-  ControlCMD Expr :+:
-  FileCMD Expr
+  ChanCMD CExp :+:
+  ControlCMD CExp :+:
+  FileCMD CExp
 
 -- | Deadlocks due to channel becoming full.
 deadlock :: Program L ()
 deadlock = do
   c <- newChan 1
   t <- fork $ readChan c >>= printf "%d\n"
-  writeChan c (1 :: Expr Int32)
+  writeChan c (1 :: CExp Int32)
   writeChan c 2
   writeChan c 3
-  printf "This never happens: %d\n" (4 :: Expr Int32)
+  printf "This never happens: %d\n" (4 :: CExp Int32)
 
 -- | Map a function over a file, then print the results. Mapping and printing
 --   happen in separate threads.
-mapFile :: (Expr Float -> Expr Float) -> FilePath -> Program L ()
+mapFile :: (CExp Float -> CExp Float) -> FilePath -> Program L ()
 mapFile f i = do
   c1 <- newCloseableChan 5
   c2 <- newCloseableChan 5
@@ -59,17 +59,17 @@ mapFile f i = do
 -- | Waiting for thread completion.
 waiting :: Program L ()
 waiting = do
-  t <- fork $ printf "Forked thread printing %d\n" (0 :: Expr Int32)
+  t <- fork $ printf "Forked thread printing %d\n" (0 :: CExp Int32)
   waitThread t
-  printf "Main thread printing %d\n" (1 :: Expr Int32)
+  printf "Main thread printing %d\n" (1 :: CExp Int32)
 
 -- | A thread kills itself using its own thread ID.
 suicide :: Program L ()
 suicide = do
   tid <- forkWithId $ \tid -> do
-    printf "This is printed. %d\n" (0 :: Expr Int32)
+    printf "This is printed. %d\n" (0 :: CExp Int32)
     killThread tid
-    printf "This is not. %d\n" (0 :: Expr Int32)
+    printf "This is not. %d\n" (0 :: CExp Int32)
   waitThread tid
-  printf "The thread is dead, long live the thread! %d\n" (0 :: Expr Int32)
+  printf "The thread is dead, long live the thread! %d\n" (0 :: CExp Int32)
 

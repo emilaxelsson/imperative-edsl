@@ -10,11 +10,11 @@ import Data.Word
 import Language.Embedded.Expression (evalExp)
 import Language.Embedded.Imperative
 import Language.Embedded.Backend.C
-import Language.Embedded.Expr
+import Language.Embedded.CExp
 
 
 
-refProg :: Program (RefCMD Expr) (Expr Int32)
+refProg :: Program (RefCMD CExp) (CExp Int32)
 refProg = do
     r1 <- initRef 4
     r2 <- initRef 5
@@ -25,14 +25,14 @@ refProg = do
     return c
 
 type CMD1
-    =   RefCMD Expr
-    :+: ArrCMD Expr
-    :+: ControlCMD Expr
+    =   RefCMD CExp
+    :+: ArrCMD CExp
+    :+: ControlCMD CExp
 
-arrProg :: Program CMD1 (Expr Int32)
+arrProg :: Program CMD1 (CExp Int32)
 arrProg = do
     ref <- initRef 4
-    arr <- newArr (10 :: Expr Word8)
+    arr <- newArr (10 :: CExp Word8)
     setArr 3 45 arr
     a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
@@ -55,15 +55,15 @@ compArr = icompile arrProg
 
 
 type CMD2
-    =   RefCMD Expr
-    :+: ControlCMD Expr
-    :+: FileCMD Expr
+    =   RefCMD CExp
+    :+: ControlCMD CExp
+    :+: FileCMD CExp
 
 summer :: Program CMD2 ()
 summer = do
     inp <- fopen "input" ReadMode
     let cont = fmap not_ $ feof inp
-    sum <- initRef (0 :: Expr Float)
+    sum <- initRef (0 :: CExp Float)
     while cont $ do
         f <- fget inp
         s <- getRef sum
