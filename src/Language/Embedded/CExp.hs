@@ -4,9 +4,11 @@
 
 -- | Typed deep embedding of simple C expressions
 --
--- This is a subset of C expression that don't require any control structures
--- and can be compiled to a single-line C expression (plus possibly include
--- statements).
+-- This is a subset of C expressions that only have simple non-compound and
+-- non-pointed types, and that don't contain any control structures.
+--
+-- (Of course, nothing stops one from translating 'CExp' to something other than
+-- C, but its constructors and set of supported types is inspired by C.)
 
 module Language.Embedded.CExp where
 
