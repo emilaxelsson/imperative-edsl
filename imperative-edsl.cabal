@@ -27,7 +27,6 @@ source-repository head
 library
   exposed-modules:
     Control.Monads
-    Data.TypePredicates
     Language.C.Monad
     Language.Embedded.Expression
     Language.Embedded.Traversal

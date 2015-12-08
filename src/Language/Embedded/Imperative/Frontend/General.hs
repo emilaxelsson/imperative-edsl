@@ -5,8 +5,7 @@
 -- instruction set and/or expression language.
 
 module Language.Embedded.Imperative.Frontend.General
-  ( Any
-  , Ref
+  ( Ref
   , Arr
   , IO.IOMode (..)
   , Handle
@@ -23,7 +22,6 @@ module Language.Embedded.Imperative.Frontend.General
 
 import qualified System.IO as IO
 
-import Data.TypePredicates
 import Language.Embedded.Imperative.CMD
 
 import Language.C.Syntax

@@ -52,7 +52,6 @@ import Data.Word
 
 import Control.Monad.Operational.Higher
 
-import Data.TypePredicates
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
