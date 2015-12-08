@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- | Typed deep embedding of simple C expressions
 --
@@ -22,6 +23,7 @@ import Data.Typeable
 #if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic
 import Language.Syntactic.Functional (Denotation)
+import Language.Syntactic.TH
 #elif MIN_VERSION_syntactic(2,0,0)
 import Data.Syntactic
 import Data.Syntactic.Functional (Denotation)
@@ -244,20 +246,13 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 
 
-
-
-
-
-
-
-
 --------------------------------------------------------------------------------
--- * Boilerplate instances
+-- * Syntactic instances
 --------------------------------------------------------------------------------
 
--- These can be derived in Syntactic >= 3.1
-
-#if MIN_VERSION_syntactic(2,0,0)
+#if MIN_VERSION_syntactic(3,1,0)
+deriveSymbol ''Sym
+#elif MIN_VERSION_syntactic(2,0,0)
 instance Symbol Sym
   where
     symSig (Fun _ _) = signature
@@ -265,7 +260,9 @@ instance Symbol Sym
     symSig (Op _ _)  = signature
     symSig (Cast _)  = signature
     symSig (Var _)   = signature
+#endif
 
+#if MIN_VERSION_syntactic(2,0,0)
 instance Render Sym
   where
     renderSym (Fun name _) = name
