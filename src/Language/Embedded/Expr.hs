@@ -225,7 +225,7 @@ castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
 castAST a = simpleMatch go a
   where
     go :: (DenResult sig ~ a) => T sig -> Args (AST T) sig -> Maybe (ASTF T b)
-    go (T _) _ = cast a
+    go (T _) _ = gcast a
 
 -- | Boolean negation
 not_ :: Expr Bool -> Expr Bool
