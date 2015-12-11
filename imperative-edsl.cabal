@@ -80,6 +80,7 @@ library
     microlens-mtl,
     microlens-th,
     mtl,
+    open-typerep,
     operational-alacarte,
     syntactic,
     tagged,

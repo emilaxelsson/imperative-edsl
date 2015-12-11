@@ -33,6 +33,12 @@ import Data.Syntactic.Functional (Denotation)
 import Language.Syntactic
 #endif
 
+import Data.TypeRep hiding (Typeable, gcast)
+import Data.TypeRep.TH
+import Data.TypeRep.Types.Basic
+import Data.TypeRep.Types.Tuple
+import Data.TypeRep.Types.IntWord
+
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
 
@@ -62,6 +68,26 @@ instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [ct
 
 instance CType Float  where cType _ = return [cty| float |]
 instance CType Double where cType _ = return [cty| double |]
+
+instance ShowClass CType where showClass _ = "CType"
+
+pCType :: Proxy CType
+pCType = Proxy
+
+deriveWitness ''CType ''BoolType
+deriveWitness ''CType ''FloatType
+deriveWitness ''CType ''DoubleType
+deriveWitness ''CType ''IntWordType
+
+derivePWitness ''CType ''BoolType
+derivePWitness ''CType ''FloatType
+derivePWitness ''CType ''DoubleType
+derivePWitness ''CType ''IntWordType
+
+instance PWitness CType CharType t
+instance PWitness CType ListType t
+instance PWitness CType TupleType t
+instance PWitness CType FunType t
 
 
 
