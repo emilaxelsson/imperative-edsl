@@ -33,11 +33,13 @@ import Data.Syntactic.Functional (Denotation)
 import Language.Syntactic
 #endif
 
+#if MIN_VERSION_syntactic(2,0,0)
 import Data.TypeRep hiding (Typeable, gcast)
 import Data.TypeRep.TH
 import Data.TypeRep.Types.Basic
 import Data.TypeRep.Types.Tuple
 import Data.TypeRep.Types.IntWord
+#endif
 
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
@@ -69,6 +71,7 @@ instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [ct
 instance CType Float  where cType _ = return [cty| float |]
 instance CType Double where cType _ = return [cty| double |]
 
+#if MIN_VERSION_syntactic(2,0,0)
 instance ShowClass CType where showClass _ = "CType"
 
 pCType :: Proxy CType
@@ -88,6 +91,7 @@ instance PWitness CType CharType t
 instance PWitness CType ListType t
 instance PWitness CType TupleType t
 instance PWitness CType FunType t
+#endif
 
 -- | Return whether the type of the expression is a floating-point numeric type
 isFloat :: forall a . CType a => CExp a -> Bool
@@ -362,6 +366,31 @@ instance Equality T
 instance StringTree T
   where
     stringTreeSym as (T s) = stringTreeSym as s
+
+#else
+
+instance Semantic Sym
+  where
+    semantics (Fun name f) = Sem name f
+    semantics (UOp op f)   = Sem (show op) f
+    semantics (Op op f)    = Sem (show op) f
+    semantics (Cast f)     = Sem "cast" f
+    semantics (Var v)      = Sem v undefined
+
+instance Equality Sym
+  where
+    equal    = equalDefault
+    exprHash = exprHashDefault
+
+instance Semantic T
+  where
+    semantics (T s) = semantics s
+
+instance Equality T
+  where
+    equal (T s) (T t) = equal s t
+    exprHash (T s)    = exprHash s
+
 #endif
 
 deriving instance Eq (CExp a)

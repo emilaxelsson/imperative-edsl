@@ -24,6 +24,10 @@ source-repository head
   type:     git
   location: git@github.com:emilaxelsson/imperative-edsl.git
 
+Flag old-syntactic
+  Description: Use syntactic < 2
+  Default:     False
+
 library
   exposed-modules:
     Control.Monads
@@ -81,13 +85,19 @@ library
     microlens-mtl,
     microlens-th,
     mtl,
-    open-typerep,
     operational-alacarte,
-    syntactic,
     tagged,
       -- tagged needed for GHC 7.6
     BoundedChan,
     srcloc
+
+  if flag(old-syntactic)
+    build-depends:
+      open-typerep >= 0.4,
+      syntactic
+  else
+    build-depends:
+      syntactic < 2
 
   hs-source-dirs: src
 
