@@ -224,14 +224,14 @@ instance Formattable Double where formatSpecifier _ = "%f"
 
 data FileCMD exp (prog :: * -> *) a
   where
-    FOpen   :: FilePath -> IOMode                           -> FileCMD exp prog Handle
-    FClose  :: Handle                                       -> FileCMD exp prog ()
-    FEof    :: VarPred exp Bool => Handle                   -> FileCMD exp prog (exp Bool)
-    FPrintf :: Handle -> String -> [PrintfArg exp] -> FileCMD exp prog ()
-    FGet    :: (Formattable a, VarPred exp a) => Handle     -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                       -> FileCMD exp prog Handle
+    FClose  :: Handle                                   -> FileCMD exp prog ()
+    FEof    :: VarPred exp Bool => Handle               -> FileCMD exp prog (exp Bool)
+    FPrintf :: Handle -> String -> [PrintfArg exp]      -> FileCMD exp prog ()
+    FGet    :: (Formattable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
 
 data PrintfArg exp where
-  PrintfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
+  PrintfArg :: (Printf.PrintfArg a, VarPred exp a) => exp a -> PrintfArg exp
 
 instance HFunctor (FileCMD exp)
   where

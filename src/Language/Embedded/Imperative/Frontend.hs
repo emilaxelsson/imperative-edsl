@@ -254,7 +254,8 @@ instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr 
     type PrintfExp (ProgramT instr m a) = IExp instr
     fprf h form as = singleE $ FPrintf h form (reverse as)
 
-instance (Formattable a, PrintfType r, exp ~ PrintfExp r) => PrintfType (exp a -> r)
+instance (Formattable a, VarPred exp a, PrintfType r, exp ~ PrintfExp r) =>
+    PrintfType (exp a -> r)
   where
     type PrintfExp (exp a -> r) = exp
     fprf h form as = \a -> fprf h form (PrintfArg a : as)
@@ -265,7 +266,7 @@ fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
 fput :: forall instr a m
-    .  (Formattable a, FileCMD (IExp instr) :<: instr)
+    .  (Formattable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr)
     => Handle
     -> String        -- ^ Prefix
     -> IExp instr a  -- ^ Expression to print
