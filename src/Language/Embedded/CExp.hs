@@ -43,6 +43,7 @@ import Data.TypeRep.Types.IntWord
 
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
+import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
@@ -127,6 +128,8 @@ data Sym sig
     Op   :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
     -- Type casting (ignored when generating code)
     Cast :: (a -> b) -> Sym (a :-> Full b)
+    -- Conditional
+    Cond :: Sym (Bool :-> a :-> a :-> Full a)
     -- Variable (only for compilation)
     Var  :: String -> Sym (Full a)
 
@@ -151,6 +154,7 @@ evalSym (Fun _ a) = a
 evalSym (UOp _ f) = f
 evalSym (Op  _ f) = f
 evalSym (Cast f)  = f
+evalSym Cond      = \c t f -> if c then t else f
 evalSym (Var v)   = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
@@ -192,6 +196,11 @@ compCExp = simpleMatch (go . unT) . unCExp
     go (Cast f) (a :* Nil) = do
       a' <- compCExp' a
       return [cexp| $a' |]
+    go Cond (c :* t :* f :* Nil) = do
+      c' <- compCExp' c
+      t' <- compCExp' t
+      f' <- compCExp' f
+      return $ C.Cond c' t' f' mempty
 
 instance CompExp CExp
   where
@@ -315,6 +324,35 @@ a #== b
 a #!= b
     | a == b, isExact a = false
     | otherwise         = constFold $ sugarSym (T $ Op Eq (/=)) a b
+
+-- | Conditional expression
+cond :: CType a
+    => CExp Bool  -- ^ Condition
+    -> CExp a     -- ^ True branch
+    -> CExp a     -- ^ False branch
+    -> CExp a
+cond c t f
+    | Just c' <- viewLit c = if c' then t else f
+    | t == f = t
+cond (CExp (nt :$ a)) t f
+    | Just (T (UOp Lnot _)) <- prj nt
+    , Just a' <- castAST a = cond (CExp a') f t
+cond c t f = constFold $ sugarSym (T Cond) c t f
+
+-- | Condition operator; use as follows:
+--
+-- > cond1 ? a $
+-- > cond2 ? b $
+-- > cond3 ? c $
+-- >         default
+(?) :: CType a
+    => CExp Bool  -- ^ Condition
+    -> CExp a     -- ^ True branch
+    -> CExp a     -- ^ False branch
+    -> CExp a
+(?) = cond
+
+infixl 1 ?
 
 
 

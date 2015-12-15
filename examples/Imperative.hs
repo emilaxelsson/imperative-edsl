@@ -20,7 +20,7 @@ refProg = do
     r2 <- initRef 5
     a  <- unsafeFreezeRef r1
     b  <- getRef r2
-    let c = a+b
+    let c = (a #== 10 ? a+b $ b+a) + 3
     setRef r2 c
     return c
 
