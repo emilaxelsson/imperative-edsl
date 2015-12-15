@@ -323,7 +323,7 @@ a #== b
 (#!=) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
 a #!= b
     | a == b, isExact a = false
-    | otherwise         = constFold $ sugarSym (T $ Op Eq (/=)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op Ne (/=)) a b
 
 -- | Conditional expression
 cond :: CType a
