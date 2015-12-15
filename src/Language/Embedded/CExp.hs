@@ -275,7 +275,7 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 
 --------------------------------------------------------------------------------
--- * Syntactic instances
+-- Instances
 --------------------------------------------------------------------------------
 
 #if MIN_VERSION_syntactic(3,1,0)
@@ -323,4 +323,8 @@ instance StringTree T
   where
     stringTreeSym as (T s) = stringTreeSym as s
 #endif
+
+deriving instance Eq (CExp a)
+  -- Must be placed here due to the sequential dependencies introduced by
+  -- Template Haskell
 

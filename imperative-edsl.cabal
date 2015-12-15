@@ -60,6 +60,7 @@ library
     MultiParamTypeClasses
     Rank2Types
     ScopedTypeVariables
+    StandaloneDeriving
     TypeFamilies
     TypeOperators
 
