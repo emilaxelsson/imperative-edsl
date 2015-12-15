@@ -325,6 +325,28 @@ a #!= b
     | a == b, isExact a = false
     | otherwise         = constFold $ sugarSym (T $ Op Ne (/=)) a b
 
+(#<) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
+a #< b
+    | a == b, isExact a = false
+    | otherwise         = constFold $ sugarSym (T $ Op Lt (<)) a b
+
+(#>) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
+a #> b
+    | a == b, isExact a = false
+    | otherwise         = constFold $ sugarSym (T $ Op Gt (>)) a b
+
+(#<=) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
+a #<= b
+    | a == b, isExact a = true
+    | otherwise         = constFold $ sugarSym (T $ Op Le (<=)) a b
+
+(#>=) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
+a #>= b
+    | a == b, isExact a = true
+    | otherwise         = constFold $ sugarSym (T $ Op Ge (>=)) a b
+
+infix 4 #==, #!=, #<, #>, #<=, #>=
+
 -- | Conditional expression
 cond :: CType a
     => CExp Bool  -- ^ Condition
