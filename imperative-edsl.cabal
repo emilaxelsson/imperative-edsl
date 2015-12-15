@@ -93,11 +93,11 @@ library
 
   if flag(old-syntactic)
     build-depends:
-      open-typerep >= 0.4,
-      syntactic
+      syntactic < 2
   else
     build-depends:
-      syntactic < 2
+      open-typerep >= 0.4,
+      syntactic
 
   hs-source-dirs: src
 
