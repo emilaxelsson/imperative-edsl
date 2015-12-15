@@ -37,7 +37,7 @@ arrProg = do
     a   <- unsafeFreezeRef ref
     b   <- getArr 3 arr
     let c = a+b
-    iff (a <==> 4)
+    iff (a #== 4)
       (setRef ref c)
       (setRef ref b)
     return c

@@ -89,6 +89,19 @@ instance PWitness CType ListType t
 instance PWitness CType TupleType t
 instance PWitness CType FunType t
 
+-- | Return whether the type of the expression is a floating-point numeric type
+isFloat :: forall a . CType a => CExp a -> Bool
+isFloat a
+    | t == typeOf (undefined :: Float)  = True
+    | t == typeOf (undefined :: Double) = True
+    | otherwise = False
+  where
+    t = typeOf (undefined :: a)
+
+-- | Return whether the type of the expression is a non-floating-point type
+isExact :: CType a => CExp a -> Bool
+isExact = not . isFloat
+
 
 
 --------------------------------------------------------------------------------
@@ -204,6 +217,12 @@ viewLit :: CExp a -> Maybe a
 viewLit (CExp (Sym (T (Fun _ a)))) = Just a
 viewLit _ = Nothing
 
+castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
+castAST a = simpleMatch go a
+  where
+    go :: (DenResult sig ~ a) => T sig -> Args (AST T) sig -> Maybe (ASTF T b)
+    go (T _) _ = gcast a
+
 
 
 --------------------------------------------------------------------------------
@@ -223,21 +242,22 @@ instance (Num a, CType a) => Num (CExp a)
     fromInteger = value . fromInteger
 
     a + b
-      | Just 0 <- viewLit a = b
-      | Just 0 <- viewLit b = a
-      | otherwise           = constFold $ sugarSym (T $ Op Add (+)) a b
+      | Just 0 <- viewLit a, isExact a = b
+      | Just 0 <- viewLit b, isExact a = a
+      | otherwise = constFold $ sugarSym (T $ Op Add (+)) a b
 
     a - b
-      | Just 0 <- viewLit a = negate b
-      | Just 0 <- viewLit b = a
-      | otherwise           = constFold $ sugarSym (T $ Op Sub (-)) a b
+      | Just 0 <- viewLit a, isExact a = negate b
+      | Just 0 <- viewLit b, isExact a = a
+      | a == b,              isExact a = 0
+      | otherwise = constFold $ sugarSym (T $ Op Sub (-)) a b
 
     a * b
-      | Just 0 <- viewLit a = value 0
-      | Just 0 <- viewLit b = value 0
-      | Just 1 <- viewLit a = b
-      | Just 1 <- viewLit b = a
-      | otherwise           = constFold $ sugarSym (T $ Op Mul (*)) a b
+      | Just 0 <- viewLit a, isExact a = value 0
+      | Just 0 <- viewLit b, isExact a = value 0
+      | Just 1 <- viewLit a, isExact a = b
+      | Just 1 <- viewLit b, isExact a = a
+      | otherwise = constFold $ sugarSym (T $ Op Mul (*)) a b
 
     negate a = constFold $ sugarSym (T $ UOp Negate negate) a
 
@@ -251,11 +271,27 @@ instance (Fractional a, CType a) => Fractional (CExp a)
 
     recip = error "recip not implemented for CExp"
 
-castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
-castAST a = simpleMatch go a
-  where
-    go :: (DenResult sig ~ a) => T sig -> Args (AST T) sig -> Maybe (ASTF T b)
-    go (T _) _ = gcast a
+-- | Integer division truncated toward zero
+quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
+quot_ a b
+    | Just 0 <- viewLit a = 0
+    | Just 1 <- viewLit b = a
+    | a == b              = 1
+    | otherwise           = constFold $ sugarSym (T $ Op Div quot) a b
+
+-- | Integer remainder satisfying
+--
+-- > (x `quot_` y)*y + (x #% y) == x
+(#%) :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
+a #% b
+    | Just 0 <- viewLit a = 0
+    | Just 1 <- viewLit b = 0
+    | a == b              = 0
+    | otherwise           = constFold $ sugarSym (T $ Op Mod rem) a b
+
+-- | Integral type casting
+i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
+i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
@@ -265,12 +301,16 @@ not_ (CExp (nt :$ a))
 not_ a = constFold $ sugarSym (T $ UOp Lnot not) a
 
 -- | Equality
-(<==>) :: Eq a => CExp a -> CExp a -> CExp Bool
-a <==> b = constFold $ sugarSym (T $ Op Eq (==)) a b
+(#==) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
+a #== b
+    | a == b, isExact a = true
+    | otherwise         = constFold $ sugarSym (T $ Op Eq (==)) a b
 
--- | Integral type casting
-i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
-i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
+-- | In-equality
+(#!=) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
+a #!= b
+    | a == b, isExact a = false
+    | otherwise         = constFold $ sugarSym (T $ Op Eq (/=)) a b
 
 
 
