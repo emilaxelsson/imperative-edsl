@@ -242,6 +242,10 @@ castAST a = simpleMatch go a
 -- * User interface
 --------------------------------------------------------------------------------
 
+-- | Create a named variable
+variable :: CType a => String -> CExp a
+variable = CExp . Sym . T . Var
+
 -- | Construct a literal expression
 value :: CType a => a -> CExp a
 value a = CExp $ Sym $ T $ Fun (show a) a
