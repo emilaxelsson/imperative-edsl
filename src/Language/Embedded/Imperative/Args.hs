@@ -24,7 +24,7 @@ instance CompExp exp => Arg ValArg exp where
 
 -- | Reference argument
 data RefArg exp where
-  RefArg :: (VarPred exp a, CompExp exp) => Ref a -> RefArg exp
+  RefArg :: VarPred exp a => Ref a -> RefArg exp
 
 instance CompExp exp => Arg RefArg exp where
   mkArg   (RefArg r) = return [cexp| &$id:r |]
