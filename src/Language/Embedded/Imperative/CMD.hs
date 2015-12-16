@@ -330,7 +330,7 @@ instance Arg FunArg where
   mkArg   (FunArg arg) = mkArg arg
   mkParam (FunArg arg) = mkParam arg
   mapArg  predCast f (FunArg arg) = FunArg (mapArg predCast f arg)
-  mapMArg predCast f (FunArg arg) = fmap FunArg (mapMArg predCast f arg)
+  mapMArg predCast f (FunArg arg) = liftM FunArg (mapMArg predCast f arg)
 
 data CallCMD exp (prog :: * -> *) a
   where

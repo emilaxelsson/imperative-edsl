@@ -26,7 +26,7 @@ instance Arg ValArg where
     predCast (Proxy :: Proxy a) $ ValArg (f a)
 
   mapMArg predCast f (ValArg (a :: exp a)) =
-    predCast (Proxy :: Proxy a) $ fmap ValArg (f a)
+    predCast (Proxy :: Proxy a) $ liftM ValArg (f a)
 
 -- | Reference argument
 data RefArg exp where
@@ -95,5 +95,5 @@ instance Arg arg => Arg (Addr arg) where
        Param mid spec decl loc -> return $ Param mid spec (Ptr [] decl loc) loc
        _ -> error "Cannot deal with antiquotes"
   mapArg  predCast f (Addr arg) = Addr (mapArg predCast f arg)
-  mapMArg predCast f (Addr arg) = fmap Addr (mapMArg predCast f arg)
+  mapMArg predCast f (Addr arg) = liftM Addr (mapMArg predCast f arg)
 
