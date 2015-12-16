@@ -60,8 +60,7 @@ instance Arg StrArg where
   mkParam (StrArg s) = return [cparam| const char* |]
 
 -- | Modifier that takes the address of another argument
-data Addr arg exp where
-  Addr :: Arg arg => arg exp -> Addr arg exp
+newtype Addr arg exp = Addr (arg exp)
 
 instance Arg arg => Arg (Addr arg) where
   mkArg (Addr arg) = do
