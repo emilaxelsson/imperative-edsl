@@ -16,7 +16,7 @@ import Language.Embedded.Backend.C
 data ValArg exp where
   ValArg :: VarPred exp a => exp a -> ValArg exp
 
-instance CompExp exp => Arg ValArg exp where
+instance Arg ValArg exp where
   mkArg   (ValArg a) = compExp a
   mkParam (ValArg a) = do
     t <- compType a
@@ -26,7 +26,7 @@ instance CompExp exp => Arg ValArg exp where
 data RefArg exp where
   RefArg :: VarPred exp a => Ref a -> RefArg exp
 
-instance CompExp exp => Arg RefArg exp where
+instance Arg RefArg exp where
   mkArg   (RefArg r) = return [cexp| &$id:r |]
   mkParam (RefArg (r :: Ref a)) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
@@ -36,7 +36,7 @@ instance CompExp exp => Arg RefArg exp where
 data ArrArg exp where
   ArrArg :: VarPred exp a => Arr n a -> ArrArg exp
 
-instance CompExp exp => Arg ArrArg exp where
+instance Arg ArrArg exp where
   mkArg   (ArrArg a) = return [cexp| $id:a |]
   mkParam (ArrArg (a :: Arr n a)) = do
     t <- compTypeP (Proxy :: Proxy (exp a))

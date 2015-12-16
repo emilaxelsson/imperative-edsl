@@ -426,15 +426,15 @@ strArg :: String -> FunArg exp
 strArg = FunArg . StrArg
 
 -- | Value argument
-valArg :: (VarPred exp a, CompExp exp) => exp a -> FunArg exp
+valArg :: VarPred exp a => exp a -> FunArg exp
 valArg = FunArg . ValArg
 
 -- | Reference argument
-refArg :: (VarPred exp a, CompExp exp) => Ref a -> FunArg exp
+refArg :: VarPred exp a => Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
 -- | Array argument
-arrArg :: (VarPred exp a, CompExp exp) => Arr n a -> FunArg exp
+arrArg :: VarPred exp a => Arr n a -> FunArg exp
 arrArg = FunArg . ArrArg
 
 -- | Abstract object argument

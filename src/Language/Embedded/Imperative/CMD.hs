@@ -304,9 +304,9 @@ type instance IExp (ObjectCMD e :+: i) = e
 data FunArg exp where
   FunArg :: Arg arg exp => arg exp -> FunArg exp
 
-class Arg arg (exp :: * -> *) where
-  mkArg   :: arg exp -> CGen C.Exp
-  mkParam :: arg exp -> CGen C.Param
+class Arg arg exp where
+  mkArg   :: CompExp exp => arg exp -> CGen C.Exp
+  mkParam :: CompExp exp => arg exp -> CGen C.Param
 
 instance Arg FunArg exp where
   mkArg   (FunArg arg) = mkArg arg

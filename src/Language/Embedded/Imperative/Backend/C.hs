@@ -158,7 +158,7 @@ compFileCMD (FEof h) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
-compObjectCMD :: ObjectCMD exp CGen a -> CGen a
+compObjectCMD :: CompExp exp => ObjectCMD exp CGen a -> CGen a
 compObjectCMD (NewObject t) = do
     sym <- gensym "obj"
     let t' = namedType t
@@ -195,6 +195,6 @@ instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance                Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
+instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
 
