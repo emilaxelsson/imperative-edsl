@@ -27,6 +27,7 @@ module Language.Embedded.Imperative.CMD
   , ObjectCMD (..)
     -- * External function calls (C-specific)
   , FunArg (..)
+  , VarPredCast
   , Arg (..)
   , CallCMD (..)
   ) where
@@ -304,13 +305,32 @@ type instance IExp (ObjectCMD e :+: i) = e
 data FunArg exp where
   FunArg :: Arg arg => arg exp -> FunArg exp
 
+-- | Evidence that @`VarPred` exp1@ implies @`VarPred` exp2@
+type VarPredCast exp1 exp2 = forall a b .
+    VarPred exp1 a => Proxy a -> (VarPred exp2 a => b) -> b
+
 class Arg arg where
   mkArg   :: CompExp exp => arg exp -> CGen C.Exp
   mkParam :: CompExp exp => arg exp -> CGen C.Param
 
+  -- | Map over the expression(s) in an argument
+  mapArg  :: VarPredCast exp1 exp2
+          -> (forall a . VarPred exp1 a => exp1 a -> exp2 a)
+          -> arg exp1
+          -> arg exp2
+
+  -- | Monadic map over the expression(s) in an argument
+  mapMArg :: Monad m
+          => VarPredCast exp1 exp2
+          -> (forall a . VarPred exp1 a => exp1 a -> m (exp2 a))
+          -> arg exp1
+          -> m (arg exp2)
+
 instance Arg FunArg where
   mkArg   (FunArg arg) = mkArg arg
   mkParam (FunArg arg) = mkParam arg
+  mapArg  predCast f (FunArg arg) = FunArg (mapArg predCast f arg)
+  mapMArg predCast f (FunArg arg) = fmap FunArg (mapMArg predCast f arg)
 
 data CallCMD exp (prog :: * -> *) a
   where
