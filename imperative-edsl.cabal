@@ -97,7 +97,7 @@ library
   else
     build-depends:
       open-typerep >= 0.4,
-      syntactic
+      syntactic >= 3.2
 
   hs-source-dirs: src
 

@@ -26,14 +26,11 @@ import Data.Typeable
 import Language.Syntactic
 import Language.Syntactic.Functional (Denotation)
 import Language.Syntactic.TH
-#elif MIN_VERSION_syntactic(2,0,0)
-import Data.Syntactic
-import Data.Syntactic.Functional (Denotation)
 #else
 import Language.Syntactic
 #endif
 
-#if MIN_VERSION_syntactic(2,0,0)
+#if MIN_VERSION_syntactic(3,0,0)
 import Data.TypeRep hiding (Typeable, gcast)
 import Data.TypeRep.TH
 import Data.TypeRep.Types.Basic
@@ -72,7 +69,7 @@ instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [ct
 instance CType Float  where cType _ = return [cty| float |]
 instance CType Double where cType _ = return [cty| double |]
 
-#if MIN_VERSION_syntactic(2,0,0)
+#if MIN_VERSION_syntactic(3,0,0)
 instance ShowClass CType where showClass _ = "CType"
 
 pCType :: Proxy CType
@@ -117,7 +114,7 @@ isExact = not . isFloat
 data Sym sig
   where
     -- Function or literal
-#if MIN_VERSION_syntactic(2,0,0)
+#if MIN_VERSION_syntactic(3,0,0)
     Fun  :: Signature sig => String -> Denotation sig -> Sym sig
 #else
     Fun  :: String -> Denotation sig -> Sym sig
@@ -386,19 +383,11 @@ infixl 1 ?
 -- Instances
 --------------------------------------------------------------------------------
 
-#if MIN_VERSION_syntactic(3,1,0)
+#if MIN_VERSION_syntactic(3,0,0)
 deriveSymbol ''Sym
-#elif MIN_VERSION_syntactic(2,0,0)
-instance Symbol Sym
-  where
-    symSig (Fun _ _) = signature
-    symSig (UOp _ _) = signature
-    symSig (Op _ _)  = signature
-    symSig (Cast _)  = signature
-    symSig (Var _)   = signature
 #endif
 
-#if MIN_VERSION_syntactic(2,0,0)
+#if MIN_VERSION_syntactic(3,0,0)
 instance Render Sym
   where
     renderSym (Fun name _) = name
