@@ -9,15 +9,15 @@ matrix:
   include:
     - env: CABALVER=1.18 GHCVER=7.6.3
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.18,ghc-7.6.3,happy-1.19.5,alex-3.1.4]}}
-    - env: CABALVER=1.18 GHCVER=7.8.4
+    - env: CABALVER=1.18 GHCVER=7.8.4 SYNTACTICVER="syntactic>=3"
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.18,ghc-7.8.4,happy-1.19.5,alex-3.1.4]}}
-    - env: CABALVER=1.22 GHCVER=7.10.2
+    - env: CABALVER=1.22 GHCVER=7.10.2 SYNTACTICVER="syntactic>=3"
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.22,ghc-7.10.2,happy-1.19.5,alex-3.1.4]}}
-    - env: CABALVER=1.22 GHCVER=7.10.2 SYNTACTICVER=-1.16.2
+    - env: CABALVER=1.22 GHCVER=7.10.2 SYNTACTICVER="syntactic<2"
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.22,ghc-7.10.2,happy-1.19.5,alex-3.1.4]}}
-    - env: CABALVER=1.22 GHCVER=7.10.2 SYNTACTICVER=-2.1
+    - env: CABALVER=1.22 GHCVER=7.10.2 SYNTACTICVER="syntactic==2.*"
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.22,ghc-7.10.2,happy-1.19.5,alex-3.1.4]}}
-    - env: CABALVER=head GHCVER=head
+    - env: CABALVER=head GHCVER=head SYNTACTICVER="syntactic>=3"
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-head,ghc-head,happy-1.19.5,alex-3.1.4]}}
 
   allow_failures:
@@ -36,8 +36,7 @@ install:
   - cabal sandbox init
   - cabal sandbox add-source language-c-quote
   - cabal install -f-full-haskell-antiquotes language-c-quote --force-reinstalls
-  - cabal install syntactic$SYNTACTICVER
-  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls
+  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --constraint $SYNTACTICVER
 
 script:
   - cabal configure --enable-tests --enable-benchmarks -v2
