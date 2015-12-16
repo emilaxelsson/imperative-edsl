@@ -5,6 +5,7 @@
 
 module Language.Embedded.Imperative.Args where
 
+import Control.Monad
 import Data.Proxy
 import Language.C.Quote.C
 import Language.C.Syntax
