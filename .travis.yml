@@ -20,7 +20,7 @@ matrix:
 
   allow_failures:
     - env: CABALVER=head GHCVER=head
-    - env: GHCVER=7.6.3
+    - env: CABALVER=1.18 GHCVER=7.6.3 SYNTACTICVER="syntactic>=3"
 
 before_install:
   - env
