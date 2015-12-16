@@ -16,7 +16,7 @@ import Language.Embedded.Backend.C
 data ValArg exp where
   ValArg :: VarPred exp a => exp a -> ValArg exp
 
-instance Arg ValArg exp where
+instance Arg ValArg where
   mkArg   (ValArg a) = compExp a
   mkParam (ValArg a) = do
     t <- compType a
@@ -26,9 +26,9 @@ instance Arg ValArg exp where
 data RefArg exp where
   RefArg :: VarPred exp a => Ref a -> RefArg exp
 
-instance Arg RefArg exp where
+instance Arg RefArg where
   mkArg   (RefArg r) = return [cexp| &$id:r |]
-  mkParam (RefArg (r :: Ref a)) = do
+  mkParam (RefArg (r :: Ref a) :: RefArg exp) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
 
@@ -36,9 +36,9 @@ instance Arg RefArg exp where
 data ArrArg exp where
   ArrArg :: VarPred exp a => Arr n a -> ArrArg exp
 
-instance Arg ArrArg exp where
+instance Arg ArrArg where
   mkArg   (ArrArg a) = return [cexp| $id:a |]
-  mkParam (ArrArg (a :: Arr n a)) = do
+  mkParam (ArrArg (a :: Arr n a) :: ArrArg exp) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
 
@@ -46,7 +46,7 @@ instance Arg ArrArg exp where
 data ObjArg exp where
   ObjArg :: Object -> ObjArg exp
 
-instance Arg ObjArg exp where
+instance Arg ObjArg where
   mkArg   (ObjArg o) = return [cexp| $id:o |]
   mkParam (ObjArg (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'* |]
   mkParam (ObjArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
@@ -55,15 +55,15 @@ instance Arg ObjArg exp where
 data StrArg exp where
   StrArg :: String -> StrArg exp
 
-instance Arg StrArg exp where
+instance Arg StrArg where
   mkArg   (StrArg s) = return [cexp| $string:s |]
   mkParam (StrArg s) = return [cparam| const char* |]
 
 -- | Modifier that takes the address of another argument
 data Addr arg exp where
-  Addr :: Arg arg exp => arg exp -> Addr arg exp
+  Addr :: Arg arg => arg exp -> Addr arg exp
 
-instance Arg arg exp => Arg (Addr arg) exp where
+instance Arg arg => Arg (Addr arg) where
   mkArg (Addr arg) = do
     e <- mkArg arg
     return [cexp| &$e |]

@@ -302,13 +302,13 @@ type instance IExp (ObjectCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 data FunArg exp where
-  FunArg :: Arg arg exp => arg exp -> FunArg exp
+  FunArg :: Arg arg => arg exp -> FunArg exp
 
-class Arg arg exp where
+class Arg arg where
   mkArg   :: CompExp exp => arg exp -> CGen C.Exp
   mkParam :: CompExp exp => arg exp -> CGen C.Param
 
-instance Arg FunArg exp where
+instance Arg FunArg where
   mkArg   (FunArg arg) = mkArg arg
   mkParam (FunArg arg) = mkParam arg
 
