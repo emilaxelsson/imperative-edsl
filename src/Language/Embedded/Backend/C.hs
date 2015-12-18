@@ -124,8 +124,7 @@ runCompiled :: (Interp instr CGen, HFunctor instr)
 runCompiled flags prog postFlags = do
     exe <- compileC False flags prog postFlags
     putStrLn ""
-    putStrLn "#### Now running:"
-    putStrLn exe
+    putStrLn "#### Running:"
     system exe
     removeFileNiceIfPossible exe
     return ()
