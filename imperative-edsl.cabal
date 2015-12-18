@@ -120,9 +120,7 @@ test-suite Examples
   build-depends:
     base,
     imperative-edsl,
-    mainland-pretty,
-    directory,
-    process
+    mainland-pretty
 
 test-suite Semantics
   type: exitcode-stdio-1.0
