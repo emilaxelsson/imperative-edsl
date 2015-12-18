@@ -10,6 +10,12 @@ module Language.Embedded.Backend.C where
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
+import Control.Exception
+import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
+import System.Directory (getTemporaryDirectory, removeFile)
+import System.Exit (ExitCode (..))
+import System.IO
+import System.Process (system)
 
 import Data.Loc (noLoc)
 import qualified Language.C.Syntax as C
@@ -64,4 +70,63 @@ compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
+
+removeFileNiceIfPossible :: FilePath -> IO ()
+removeFileNiceIfPossible file =
+    catch (removeFile file) (\(_ :: SomeException) -> return ())
+
+-- | Generate C code and use GCC to compile it
+compileC :: (Interp instr CGen, HFunctor instr)
+    => Bool             -- ^ Keep generated files?
+    -> [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
+    -> Program instr a  -- ^ Program to compile
+    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
+    -> IO FilePath      -- ^ Path to the generated executable
+compileC keep flags prog postFlags = do
+    tmp <- getTemporaryDirectory
+    t   <- fmap (formatTime defaultTimeLocale format) getCurrentTime
+    (exeFile,exeh) <- openTempFile tmp ("feldspar_" ++ t)
+    hClose exeh
+    let cFile = exeFile ++ ".c"
+    writeFile cFile $ compile prog
+    when keep $ putStrLn $ "Created temporary file: " ++ cFile
+    let compileCMD = unwords
+          $  ["gcc", "-std=c99"]
+          ++ flags
+          ++ [cFile, "-o", exeFile]
+          ++ postFlags
+    putStrLn compileCMD
+    exit <- system compileCMD
+    unless keep $ removeFileNiceIfPossible cFile
+    case exit of
+      ExitSuccess -> return exeFile
+      err -> do removeFileNiceIfPossible exeFile
+                error "compileC: failed to compile generated C code"
+  where
+    format = if keep then "%a-%H-%M-%S_" else ""
+
+-- | Generate C code and use GCC to check that it compiles (no linking)
+compileAndCheck :: (Interp instr CGen, HFunctor instr)
+    => [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
+    -> Program instr a  -- ^ Program to compile
+    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
+    -> IO ()
+compileAndCheck flags prog postFlags = do
+    exe <- compileC False ("-c":flags) prog postFlags
+    removeFileNiceIfPossible exe
+
+-- | Generate C code, use GCC to compile it, and run the resulting executable
+compileAndRun :: (Interp instr CGen, HFunctor instr)
+    => [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
+    -> Program instr a  -- ^ Program to compile
+    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
+    -> IO ()
+compileAndRun flags prog postFlags = do
+    exe <- compileC False flags prog postFlags
+    putStrLn ""
+    putStrLn "#### Now running:"
+    putStrLn exe
+    system exe
+    removeFileNiceIfPossible exe
+    return ()
 
