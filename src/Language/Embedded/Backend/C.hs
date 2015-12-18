@@ -116,12 +116,12 @@ compileAndCheck flags prog postFlags = do
     removeFileNiceIfPossible exe
 
 -- | Generate C code, use GCC to compile it, and run the resulting executable
-compileAndRun :: (Interp instr CGen, HFunctor instr)
+runCompiled :: (Interp instr CGen, HFunctor instr)
     => [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
     -> Program instr a  -- ^ Program to compile
     -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
     -> IO ()
-compileAndRun flags prog postFlags = do
+runCompiled flags prog postFlags = do
     exe <- compileC False flags prog postFlags
     putStrLn ""
     putStrLn "#### Now running:"

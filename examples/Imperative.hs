@@ -71,5 +71,5 @@ sumInput = do
           (modifyRef sum (+n))
     printf "The sum of your numbers is %d.\n" =<< getRef sum
 
-run_sumInput = compileAndRun [] sumInput []
+run_sumInput = runCompiled [] sumInput []
 
