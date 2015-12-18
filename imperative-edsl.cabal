@@ -5,7 +5,7 @@ description:         Deep embedding of imperative programs with code generation.
                      .
                      The main module for users who want to write imperative
                      programs is "Language.Embedded.Imperative" (and optionally
-                     "Language.Embedded.Expr" which provides a simple expression
+                     "Language.Embedded.CExp" which provides a simple expression
                      language).
                      .
                      Examples can be found in the @examples@ directory.
