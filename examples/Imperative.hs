@@ -24,6 +24,11 @@ refProg = do
     setRef r2 c
     return c
 
+evalRef :: IO Int32
+evalRef = fmap evalExp $ runIO refProg
+
+compRef = icompile refProg
+
 type CMD1
     =   RefCMD CExp
     :+: ArrCMD CExp
@@ -42,11 +47,6 @@ arrProg = do
       (setRef ref b)
     return c
 
-evalRef :: IO Int32
-evalRef = fmap evalExp $ runIO refProg
-
-compRef = icompile refProg
-
 evalArr :: IO Int32
 evalArr = fmap evalExp $ runIO arrProg
 
@@ -59,22 +59,17 @@ type CMD2
     :+: ControlCMD CExp
     :+: FileCMD CExp
 
-summer :: Program CMD2 ()
-summer = do
-    inp <- fopen "input" ReadMode
-    let cont = fmap not_ $ feof inp
-    sum <- initRef (0 :: CExp Float)
-    while cont $ do
-        f <- fget inp
-        s <- getRef sum
-        setRef sum (s+f+(3+4+5+6))
-    s <- getRef sum
-    printf "The sum is: %f\n" s
+sumInput :: Program CMD2 ()
+sumInput = do
+    done <- initRef false
+    sum  <- initRef (0 :: CExp Word32)
+    while (not_ <$> getRef done) $ do
+        printf "Enter a number (0 means done): "
+        n <- fget stdin
+        iff (n #== 0)
+          (setRef done true)
+          (modifyRef sum (+n))
+    printf "The sum of your numbers is %d.\n" =<< getRef sum
 
-runSummer :: IO ()
-runSummer = do
-    writeFile "input" $ unwords $ map show ([-5..4] :: [Float])
-    runIO summer
-
-compSummer = icompile summer
+run_sumInput = compileAndRun [] sumInput []
 
