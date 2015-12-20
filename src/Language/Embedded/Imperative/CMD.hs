@@ -111,10 +111,26 @@ type instance IExp (RefCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 -- | Mutable array
-data Arr n a
+data Arr i a
     = ArrComp String
-    | ArrEval (IOArray n a)
+    | ArrEval (IOArray i a)
   deriving Typeable
+
+-- In a way, it's not terribly useful to have `Arr` parameterized on the index
+-- type, since it's required to be an integer type, and it doesn't really matter
+-- which integer type is used since we can always cast between them.
+--
+-- Another option would be to remove the parameter and allow any integer type
+-- when indexing (and use e.g. `IOArray Word32` for evaluation). However this
+-- has the big downside of losing type inference. E.g. the statement
+-- `getArr arr 0` would be ambiguously typed.
+--
+-- Yet another option is to hard-code a specific index type. But this would
+-- limit the use of arrays to specific platforms.
+--
+-- So in the end, the above representation seems like a good trade-off. A client
+-- of `imperative-edsl` may always chose to make a wrapper interface that uses
+-- a specific index type.
 
 -- | Identifiers from arrays
 instance ToIdent (Arr i a)
