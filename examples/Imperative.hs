@@ -74,3 +74,12 @@ sumInput = do
 
 run_sumInput = runCompiled [] sumInput []
 
+
+
+----------------------------------------
+
+testAll = do
+    runCompiled [] refProg  []
+    runCompiled [] arrProg  []
+    compileAndCheck [] sumInput []
+

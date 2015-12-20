@@ -11,6 +11,7 @@ import Control.Applicative
 
 import Language.Embedded.Imperative
 import Language.Embedded.Concurrent
+import Language.Embedded.Backend.C
 import Language.Embedded.CExp
 
 type L =
@@ -72,4 +73,12 @@ suicide = do
     printf "This is not. %d\n" (0 :: CExp Int32)
   waitThread tid
   printf "The thread is dead, long live the thread! %d\n" (0 :: CExp Int32)
+
+
+
+----------------------------------------
+
+testAll = do
+    runCompiled [] waiting ["-lpthread"]
+    runCompiled [] suicide ["-lpthread"]
 
