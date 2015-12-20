@@ -4,6 +4,7 @@ module Imperative where
 
 
 
+import Control.Applicative ((<$>))
 import Data.Int
 import Data.Word
 
