@@ -9,6 +9,7 @@ module Language.Embedded.Backend.C where
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+import Data.Monoid
 #endif
 import Control.Exception
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
