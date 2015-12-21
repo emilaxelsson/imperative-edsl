@@ -71,8 +71,8 @@ compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
 
-removeFileNiceIfPossible :: FilePath -> IO ()
-removeFileNiceIfPossible file =
+removeFileIfPossible :: FilePath -> IO ()
+removeFileIfPossible file =
     catch (removeFile file) (\(_ :: SomeException) -> return ())
 
 data ExternalCompilerOpts = ExternalCompilerOpts
@@ -114,10 +114,10 @@ compileC (ExternalCompilerOpts {..}) prog = do
           ++ externalFlagsPost
     putStrLn compileCMD
     exit <- system compileCMD
-    unless externalKeepFiles $ removeFileNiceIfPossible cFile
+    unless externalKeepFiles $ removeFileIfPossible cFile
     case exit of
       ExitSuccess -> return exeFile
-      err -> do removeFileNiceIfPossible exeFile
+      err -> do removeFileIfPossible exeFile
                 error "compileC: failed to compile generated C code"
   where
     format = if externalKeepFiles then "%a-%H-%M-%S_" else ""
@@ -127,7 +127,7 @@ compileAndCheck' :: (Interp instr CGen, HFunctor instr) =>
     ExternalCompilerOpts -> Program instr a -> IO ()
 compileAndCheck' opts prog = do
     exe <- compileC opts prog
-    removeFileNiceIfPossible exe
+    removeFileIfPossible exe
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
 compileAndCheck :: (Interp instr CGen, HFunctor instr) =>
@@ -142,7 +142,7 @@ runCompiled' opts prog = do
     putStrLn ""
     putStrLn "#### Running:"
     system exe
-    removeFileNiceIfPossible exe
+    removeFileIfPossible exe
     return ()
 
 -- | Generate C code, use GCC to compile it, and run the resulting executable
