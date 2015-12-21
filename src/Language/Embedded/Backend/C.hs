@@ -21,6 +21,8 @@ import System.Process (system)
 import Data.Loc (noLoc)
 import qualified Language.C.Syntax as C
 
+import System.IO.Silently
+
 import Control.Monad.Operational.Higher
 import Language.C.Monad
 
@@ -149,4 +151,39 @@ runCompiled' opts prog = do
 -- | Generate C code, use GCC to compile it, and run the resulting executable
 runCompiled :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 runCompiled = runCompiled' mempty
+
+-- | Like 'runCompiled'' but capture everything written to 'stdout'
+captureCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr a -> IO String
+captureCompiled' opts prog = do
+    exe <- compileC opts prog
+    out <- capture_ $ system exe
+    removeFileIfPossible exe
+    return out
+
+-- | Like 'runCompiled' but capture everything written to 'stdout'
+captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
+    Program instr a -> IO String
+captureCompiled = captureCompiled' defaultExtCompilerOpts
+
+-- | Compare the content written to 'stdout' from interpretation in 'IO' and
+-- from running the compiled C code.
+compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr a -> IO ()
+compareCompiled' opts prog = do
+    putStrLn "#### runIO:"
+    outIO <- capture_ $ interpret prog
+    putStrLn outIO
+    putStrLn "#### runCompiled:"
+    outComp <- captureCompiled' opts prog
+    putStrLn outComp
+    if outIO /= outComp
+      then error "#### runIO and runCompiled differ"
+      else putStrLn "#### runIO and runCompiled are consistent"
+
+-- | Compare the content written to 'stdout' from interpretation in 'IO' and
+-- from running the compiled C code.
+compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
+    Program instr a -> IO ()
+compareCompiled = compareCompiled' defaultExtCompilerOpts
 

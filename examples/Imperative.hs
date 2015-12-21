@@ -100,10 +100,10 @@ loop3 = for (0, 2, Excl 10) $ \i ->
 ----------------------------------------
 
 testAll = do
-    runCompiled refProg
-    runCompiled arrProg
+    compareCompiled refProg
+    compareCompiled arrProg
     compileAndCheck sumInput
-    runCompiled loop1
-    runCompiled loop2
-    runCompiled loop3
+    compareCompiled loop1
+    compareCompiled loop2
+    compareCompiled loop3
 

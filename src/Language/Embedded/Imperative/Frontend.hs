@@ -24,6 +24,8 @@ import Data.Proxy
 #endif
 import Language.C.Quote.C
 
+import System.IO.Silently
+
 import Control.Monad.Operational.Higher
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
@@ -459,4 +461,8 @@ addr = FunArg . Addr
 -- supported.
 runIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO a
 runIO = interpret
+
+-- | Like 'runIO' but capture everything written to 'stdout'
+captureIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO String
+captureIO = capture_ . runIO
 
