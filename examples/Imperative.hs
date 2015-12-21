@@ -55,6 +55,8 @@ compArr = icompile arrProg
 
 
 
+----------------------------------------
+
 type CMD2
     =   RefCMD CExp
     :+: ControlCMD CExp
@@ -78,8 +80,30 @@ run_sumInput = runCompiled [] sumInput []
 
 ----------------------------------------
 
+-- Loop from 0 to 9 in steps of 1
+loop1 :: Program CMD2 ()
+loop1 = for (0,1,9) $ \i ->
+    printf "%d\n" (i :: CExp Int8)
+
+-- Loop from 9 to 0 in steps of 2
+loop2 :: Program CMD2 ()
+loop2 = for (9,-2,0) $ \i ->
+    printf "%d\n" (i :: CExp Int8)
+
+-- Loop from 0 to but excluding 10 in steps of 2
+loop3 :: Program CMD2 ()
+loop3 = for (0, 2, Excl 10) $ \i ->
+    printf "%d\n" (i :: CExp Int8)
+
+
+
+----------------------------------------
+
 testAll = do
-    runCompiled [] refProg  []
-    runCompiled [] arrProg  []
+    runCompiled [] refProg []
+    runCompiled [] arrProg []
     compileAndCheck [] sumInput []
+    runCompiled [] loop1 []
+    runCompiled [] loop2 []
+    runCompiled [] loop3 []
 

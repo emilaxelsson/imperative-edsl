@@ -107,12 +107,24 @@ compControlCMD (While cont body) = do
               _      -> addStm [cstm| if (! $contc) {break;} |]
         body
     when (not noop) $ addStm [cstm| while (1) {$items:bodyc} |]
-compControlCMD (For lo hi body) = do
+compControlCMD (For (lo,step,hi) body) = do
     loe   <- compExp lo
-    hie   <- compExp hi
+    hie   <- compExp $ borderVal hi
     (i,n) <- freshVar
     bodyc <- inNewBlock_ (body i)
-    addStm [cstm| for ($id:n=$loe; $id:n<=$hie; $id:n++) {$items:bodyc} |]
+    let incl = borderIncl hi
+    let conte
+          | incl && (step>=0) = [cexp| $id:n<=$hie |]
+          | incl && (step<0)  = [cexp| $id:n>=$hie |]
+          | step >= 0         = [cexp| $id:n< $hie |]
+          | step < 0          = [cexp| $id:n> $hie |]
+    let stepe
+          | step == 1    = [cexp| $id:n++ |]
+          | step == (-1) = [cexp| $id:n-- |]
+          | step == 0    = [cexp| 0 |]
+          | step >  0    = [cexp| $id:n = $id:n + $step |]
+          | step <  0    = [cexp| $id:n = $id:n - $(negate step) |]
+    addStm [cstm| for ($id:n=$loe; $conte; $stepe) {$items:bodyc} |]
 compControlCMD Break = addStm [cstm| break; |]
 
 compIOMode :: IOMode -> String

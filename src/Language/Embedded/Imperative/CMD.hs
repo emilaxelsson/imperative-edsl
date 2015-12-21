@@ -14,6 +14,10 @@ module Language.Embedded.Imperative.CMD
   , Arr (..)
   , ArrCMD (..)
     -- * Control flow
+  , Border (..)
+  , borderVal
+  , borderIncl
+  , IxRange
   , ControlCMD (..)
     -- * File handling
   , Handle (..)
@@ -171,26 +175,55 @@ type instance IExp (ArrCMD e :+: i) = e
 -- * Control flow
 --------------------------------------------------------------------------------
 
+data Border i = Incl i | Excl i
+  deriving (Eq, Show)
+
+-- | 'fromInteger' gives an inclusive border. No other methods defined.
+instance Num i => Num (Border i)
+  where
+    fromInteger = Incl . fromInteger
+    (+) = error "(+) not defined for Border"
+    (-) = error "(-) not defined for Border"
+    (*) = error "(*) not defined for Border"
+    abs    = error "abs not defined for Border"
+    signum = error "signum not defined for Border"
+
+borderVal :: Border i -> i
+borderVal (Incl i) = i
+borderVal (Excl i) = i
+
+borderIncl :: Border i -> Bool
+borderIncl (Incl _) = True
+borderIncl _        = False
+
+-- | Index range
+--
+-- @(lo,step,hi)@
+--
+-- @lo@ gives the start index; @step@ gives the step length; @hi@ gives the stop
+-- index which may be inclusive or exclusive.
+type IxRange i = (i, Int, Border i)
+
 data ControlCMD exp prog a
   where
     If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
     While :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
     For   :: (VarPred exp n, Integral n) =>
-             exp n -> exp n -> (exp n -> prog ()) -> ControlCMD exp prog ()
+             IxRange (exp n) -> (exp n -> prog ()) -> ControlCMD exp prog ()
     Break :: ControlCMD exp prog ()
 
 instance HFunctor (ControlCMD exp)
   where
     hfmap g (If c t f)        = If c (g t) (g f)
     hfmap g (While cont body) = While (g cont) (g body)
-    hfmap g (For lo hi body)  = For lo hi (g . body)
+    hfmap g (For ir body)     = For ir (g . body)
     hfmap _ Break             = Break
 
 instance DryInterp (ControlCMD exp)
   where
     dryInterp (If _ _ _)  = return ()
     dryInterp (While _ _) = return ()
-    dryInterp (For _ _ _) = return ()
+    dryInterp (For _ _)   = return ()
     dryInterp Break       = return ()
 
 type instance IExp (ControlCMD e)       = e
@@ -408,11 +441,17 @@ runControlCMD (While cont body) = loop
   where loop = do
           c <- cont
           when (evalExp c) $ body >> loop
-runControlCMD (For lo hi body) = loop (evalExp lo)
+runControlCMD (For (lo,step,hi) body) = loop (evalExp lo)
   where
-    hi' = evalExp hi
+    incl = borderIncl hi
+    hi'  = evalExp $ borderVal hi
+    cont i
+      | incl && (step>=0) = i <= hi'
+      | incl && (step<0)  = i >= hi'
+      | step >= 0         = i <  hi'
+      | step < 0          = i >  hi'
     loop i
-      | i <= hi'  = body (litExp i) >> loop (i+1)
+      | cont i    = body (litExp i) >> loop (i + fromIntegral step)
       | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
 

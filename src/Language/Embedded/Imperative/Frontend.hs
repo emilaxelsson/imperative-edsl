@@ -196,30 +196,33 @@ whileE b t = do
     getRef r
 
 -- | For loop
-for :: (ControlCMD (IExp instr) :<: instr, Integral n, VarPred (IExp instr) n)
-    => IExp instr n                           -- ^ Start index
-    -> IExp instr n                           -- ^ Stop index
+for
+    :: ( ControlCMD (IExp instr) :<: instr
+       , Integral n
+       , VarPred (IExp instr) n
+       )
+    => IxRange (IExp instr n)                 -- ^ Index range
     -> (IExp instr n -> ProgramT instr m ())  -- ^ Loop body
     -> ProgramT instr m ()
-for lo hi body = singleE $ For lo hi body
+for range = singleE . For range
 
--- | For loop
-forE
-    :: ( Integral n
-       , VarPred (IExp instr) n
-       , VarPred (IExp instr) a
-       , ControlCMD (IExp instr) :<: instr
-       , RefCMD (IExp instr)     :<: instr
-       , Monad m
-       )
-    => IExp instr n                                       -- ^ Start index
-    -> IExp instr n                                       -- ^ Stop index
-    -> (IExp instr n -> ProgramT instr m (IExp instr a))  -- ^ Loop body
-    -> ProgramT instr m (IExp instr a)
-forE lo hi body = do
-    r <- newRef
-    for lo hi (body >=> setRef r)
-    getRef r
+-- -- | For loop
+-- forE
+--     :: ( Integral n
+--        , VarPred (IExp instr) n
+--        , VarPred (IExp instr) a
+--        , ControlCMD (IExp instr) :<: instr
+--        , RefCMD (IExp instr)     :<: instr
+--        , Monad m
+--        )
+--     => IExp instr n                                       -- ^ Start index
+--     -> IExp instr n                                       -- ^ Stop index
+--     -> (IExp instr n -> ProgramT instr m (IExp instr a))  -- ^ Loop body
+--     -> ProgramT instr m (IExp instr a)
+-- forE lo hi body = do
+--     r <- newRef
+--     for lo hi (body >=> setRef r)
+--     getRef r
 
 -- | Break out from a loop
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
