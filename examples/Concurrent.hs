@@ -79,6 +79,8 @@ suicide = do
 ----------------------------------------
 
 testAll = do
-    runCompiled [] waiting ["-lpthread"]
-    runCompiled [] suicide ["-lpthread"]
+    runCompiled' opts waiting
+    runCompiled' opts suicide
+  where
+    opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}
 

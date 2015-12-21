@@ -75,57 +75,77 @@ removeFileNiceIfPossible :: FilePath -> IO ()
 removeFileNiceIfPossible file =
     catch (removeFile file) (\(_ :: SomeException) -> return ())
 
+data ExternalCompilerOpts = ExternalCompilerOpts
+      { externalKeepFiles  :: Bool      -- ^ Keep generated files?
+      , externalFlagsPre   :: [String]  -- ^ External compiler flags (e.g. @["-Ipath"]@)
+      , externalFlagsPost  :: [String]  -- ^ External compiler flags after C source (e.g. @["-lm","-lpthread"]@)
+      }
+
+defaultExtCompilerOpts :: ExternalCompilerOpts
+defaultExtCompilerOpts = ExternalCompilerOpts
+    { externalKeepFiles = False
+    , externalFlagsPre  = []
+    , externalFlagsPost = []
+    }
+
+instance Monoid ExternalCompilerOpts
+  where
+    mempty = defaultExtCompilerOpts
+    mappend (ExternalCompilerOpts keep1 pre1 post1) (ExternalCompilerOpts keep2 pre2 post2) =
+        ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2)
+
 -- | Generate C code and use GCC to compile it
 compileC :: (Interp instr CGen, HFunctor instr)
-    => Bool             -- ^ Keep generated files?
-    -> [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
+    => ExternalCompilerOpts
     -> Program instr a  -- ^ Program to compile
-    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
     -> IO FilePath      -- ^ Path to the generated executable
-compileC keep flags prog postFlags = do
+compileC (ExternalCompilerOpts {..}) prog = do
     tmp <- getTemporaryDirectory
     t   <- fmap (formatTime defaultTimeLocale format) getCurrentTime
     (exeFile,exeh) <- openTempFile tmp ("feldspar_" ++ t)
     hClose exeh
     let cFile = exeFile ++ ".c"
     writeFile cFile $ compile prog
-    when keep $ putStrLn $ "Created temporary file: " ++ cFile
+    when externalKeepFiles $ putStrLn $ "Created temporary file: " ++ cFile
     let compileCMD = unwords
           $  ["gcc", "-std=c99"]
-          ++ flags
+          ++ externalFlagsPre
           ++ [cFile, "-o", exeFile]
-          ++ postFlags
+          ++ externalFlagsPost
     putStrLn compileCMD
     exit <- system compileCMD
-    unless keep $ removeFileNiceIfPossible cFile
+    unless externalKeepFiles $ removeFileNiceIfPossible cFile
     case exit of
       ExitSuccess -> return exeFile
       err -> do removeFileNiceIfPossible exeFile
                 error "compileC: failed to compile generated C code"
   where
-    format = if keep then "%a-%H-%M-%S_" else ""
+    format = if externalKeepFiles then "%a-%H-%M-%S_" else ""
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
-compileAndCheck :: (Interp instr CGen, HFunctor instr)
-    => [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
-    -> Program instr a  -- ^ Program to compile
-    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
-    -> IO ()
-compileAndCheck flags prog postFlags = do
-    exe <- compileC False ("-c":flags) prog postFlags
+compileAndCheck' :: (Interp instr CGen, HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr a -> IO ()
+compileAndCheck' opts prog = do
+    exe <- compileC opts prog
     removeFileNiceIfPossible exe
 
+-- | Generate C code and use GCC to check that it compiles (no linking)
+compileAndCheck :: (Interp instr CGen, HFunctor instr) =>
+    Program instr a -> IO ()
+compileAndCheck = compileAndCheck' mempty
+
 -- | Generate C code, use GCC to compile it, and run the resulting executable
-runCompiled :: (Interp instr CGen, HFunctor instr)
-    => [String]         -- ^ GCC flags (e.g. @["-Ipath"]@)
-    -> Program instr a  -- ^ Program to compile
-    -> [String]         -- ^ GCC flags after C source (e.g. @["-lm","-lpthread"]@)
-    -> IO ()
-runCompiled flags prog postFlags = do
-    exe <- compileC False flags prog postFlags
+runCompiled' :: (Interp instr CGen, HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr a -> IO ()
+runCompiled' opts prog = do
+    exe <- compileC opts prog
     putStrLn ""
     putStrLn "#### Running:"
     system exe
     removeFileNiceIfPossible exe
     return ()
+
+-- | Generate C code, use GCC to compile it, and run the resulting executable
+runCompiled :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
+runCompiled = runCompiled' mempty
 

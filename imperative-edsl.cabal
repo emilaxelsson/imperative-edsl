@@ -63,6 +63,7 @@ library
     GeneralizedNewtypeDeriving
     MultiParamTypeClasses
     Rank2Types
+    RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
     TypeFamilies
