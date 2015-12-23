@@ -100,10 +100,10 @@ loop3 = for (0, 2, Excl 10) $ \i ->
 ----------------------------------------
 
 testAll = do
-    compareCompiled refProg
-    compareCompiled arrProg
-    compileAndCheck sumInput
-    compareCompiled loop1
-    compareCompiled loop2
-    compareCompiled loop3
+    compareCompiled refProg ""
+    compareCompiled arrProg ""
+    compareCompiled sumInput (unlines $ map show $ reverse [0..20])
+    compareCompiled loop1 ""
+    compareCompiled loop2 ""
+    compareCompiled loop3 ""
 

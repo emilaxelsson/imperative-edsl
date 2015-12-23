@@ -79,8 +79,8 @@ suicide = do
 ----------------------------------------
 
 testAll = do
-    compareCompiled' opts waiting
-    compareCompiled' opts suicide
+    compareCompiled' opts waiting ""
+    compareCompiled' opts suicide ""
   where
     opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}
 

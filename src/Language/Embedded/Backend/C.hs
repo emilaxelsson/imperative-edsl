@@ -20,13 +20,11 @@ import System.Process (system)
 
 import Data.Loc (noLoc)
 import qualified Language.C.Syntax as C
-
-import System.IO.Silently
+import Text.PrettyPrint.Mainland (pretty)
 
 import Control.Monad.Operational.Higher
+import System.IO.Fake
 import Language.C.Monad
-
-import Text.PrettyPrint.Mainland (pretty)
 
 
 
@@ -152,30 +150,32 @@ runCompiled' opts prog = do
 runCompiled :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 runCompiled = runCompiled' mempty
 
--- | Like 'runCompiled'' but capture everything written to 'stdout'
+-- | Like 'runCompiled'' but with explicit input/output connected to
+-- @stdin@/@stdout@
 captureCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> IO String
-captureCompiled' opts prog = do
+    ExternalCompilerOpts -> Program instr a -> String -> IO String
+captureCompiled' opts prog inp = do
     exe <- compileC opts prog
-    out <- capture_ $ system exe
+    out <- fakeIO (system exe) inp
     removeFileIfPossible exe
     return out
 
--- | Like 'runCompiled' but capture everything written to 'stdout'
+-- | Like 'runCompiled' but with explicit input/output connected to
+-- @stdin@/@stdout@
 captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    Program instr a -> IO String
+    Program instr a -> String -> IO String
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
 -- | Compare the content written to 'stdout' from interpretation in 'IO' and
 -- from running the compiled C code.
 compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> IO ()
-compareCompiled' opts prog = do
+    ExternalCompilerOpts -> Program instr a -> String -> IO ()
+compareCompiled' opts prog inp = do
     putStrLn "#### runIO:"
-    outIO <- capture_ $ interpret prog
+    outIO <- fakeIO (interpret prog) inp
     putStrLn outIO
     putStrLn "#### runCompiled:"
-    outComp <- captureCompiled' opts prog
+    outComp <- captureCompiled' opts prog inp
     putStrLn outComp
     if outIO /= outComp
       then error "#### runIO and runCompiled differ"
@@ -184,6 +184,6 @@ compareCompiled' opts prog = do
 -- | Compare the content written to 'stdout' from interpretation in 'IO' and
 -- from running the compiled C code.
 compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    Program instr a -> IO ()
+    Program instr a -> String -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 

@@ -24,9 +24,8 @@ import Data.Proxy
 #endif
 import Language.C.Quote.C
 
-import System.IO.Silently
-
 import Control.Monad.Operational.Higher
+import System.IO.Fake
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
@@ -429,7 +428,10 @@ addr = FunArg . Addr
 runIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO a
 runIO = interpret
 
--- | Like 'runIO' but capture everything written to 'stdout'
-captureIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO String
-captureIO = capture_ . runIO
+-- | Like 'runIO' but with explicit input/output connected to @stdin@/@stdout@
+captureIO :: (Interp instr IO, HFunctor instr)
+    => Program instr a  -- ^ Program to run
+    -> String           -- ^ Faked @stdin@
+    -> IO String        -- ^ Captured @stdout@
+captureIO = fakeIO . runIO
 

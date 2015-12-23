@@ -31,6 +31,7 @@ Flag old-syntactic
 library
   exposed-modules:
     Control.Monads
+    System.IO.Fake
     Language.C.Monad
     Language.Embedded.Expression
     Language.Embedded.Traversal
@@ -79,6 +80,7 @@ library
     base >=4 && <5,
     constraints,
     containers,
+    deepseq,
     directory,
     exception-transformers,
     language-c-quote >= 0.11 && < 0.12,
@@ -89,7 +91,6 @@ library
     mtl,
     process,
     operational-alacarte,
-    silently,
     tagged,
       -- tagged needed for GHC 7.6
     BoundedChan,
