@@ -50,6 +50,7 @@ compRefCMD (SetRef ref exp) = do
     v <- compExp exp
     touchVar ref
     addStm [cstm| $id:ref = $v; |]
+compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. CompExp exp

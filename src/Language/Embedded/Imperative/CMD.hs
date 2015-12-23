@@ -87,6 +87,9 @@ data RefCMD exp (prog :: * -> *) a
       -- `VarPred` for `SetRef` is not needed for code generation, but it can be useful when
       -- interpreting with a dynamically typed store. `VarPred` can then be used to supply a
       -- `Typeable` dictionary for casting.
+    UnsafeFreezeRef :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
+      -- Like `GetRef` but without using a fresh variable for the result. This
+      -- is only safe if the reference is never written to after the freezing.
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -97,6 +100,7 @@ instance HFunctor (RefCMD exp)
     hfmap _ (InitRef a)  = InitRef a
     hfmap _ (GetRef r)   = GetRef r
     hfmap _ (SetRef r a) = SetRef r a
+    hfmap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
 instance CompExp exp => DryInterp (RefCMD exp)
   where
@@ -104,6 +108,7 @@ instance CompExp exp => DryInterp (RefCMD exp)
     dryInterp (InitRef _)  = liftM RefComp fresh
     dryInterp (GetRef _)   = liftM varExp fresh
     dryInterp (SetRef _ _) = return ()
+    dryInterp (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
 type instance IExp (RefCMD e)       = e
 type instance IExp (RefCMD e :+: i) = e
@@ -426,6 +431,7 @@ runRefCMD (InitRef a)                       = fmap RefEval $ newIORef $ evalExp 
 runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "reading uninitialized reference"
 runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
+runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n) = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
