@@ -182,21 +182,6 @@ while :: (ControlCMD (IExp instr) :<: instr)
     -> ProgramT instr m ()
 while b t = singleE $ While b t
 
--- | While loop that returns an expression
-whileE
-    :: ( VarPred (IExp instr) a
-       , ControlCMD (IExp instr) :<: instr
-       , RefCMD (IExp instr)     :<: instr
-       , Monad m
-       )
-    => ProgramT instr m (IExp instr Bool)  -- ^ Continue condition
-    -> ProgramT instr m (IExp instr a)     -- ^ Loop body
-    -> ProgramT instr m (IExp instr a)
-whileE b t = do
-    r <- newRef
-    while b (t >>= setRef r)
-    getRef r
-
 -- | For loop
 for
     :: ( ControlCMD (IExp instr) :<: instr
@@ -207,24 +192,6 @@ for
     -> (IExp instr n -> ProgramT instr m ())  -- ^ Loop body
     -> ProgramT instr m ()
 for range = singleE . For range
-
--- -- | For loop
--- forE
---     :: ( Integral n
---        , VarPred (IExp instr) n
---        , VarPred (IExp instr) a
---        , ControlCMD (IExp instr) :<: instr
---        , RefCMD (IExp instr)     :<: instr
---        , Monad m
---        )
---     => IExp instr n                                       -- ^ Start index
---     -> IExp instr n                                       -- ^ Stop index
---     -> (IExp instr n -> ProgramT instr m (IExp instr a))  -- ^ Loop body
---     -> ProgramT instr m (IExp instr a)
--- forE lo hi body = do
---     r <- newRef
---     for lo hi (body >=> setRef r)
---     getRef r
 
 -- | Break out from a loop
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
