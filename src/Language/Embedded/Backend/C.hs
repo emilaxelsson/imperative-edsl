@@ -152,8 +152,11 @@ runCompiled = runCompiled' mempty
 
 -- | Like 'runCompiled'' but with explicit input/output connected to
 -- @stdin@/@stdout@
-captureCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> String -> IO String
+captureCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+    => ExternalCompilerOpts
+    -> Program instr a  -- ^ Program to run
+    -> String           -- ^ Input to send to @stdin@
+    -> IO String        -- ^ Result from @stdout@
 captureCompiled' opts prog inp = do
     exe <- compileC opts prog
     out <- fakeIO (system exe) inp
@@ -162,14 +165,19 @@ captureCompiled' opts prog inp = do
 
 -- | Like 'runCompiled' but with explicit input/output connected to
 -- @stdin@/@stdout@
-captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    Program instr a -> String -> IO String
+captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+    => Program instr a  -- ^ Program to run
+    -> String           -- ^ Input to send to @stdin@
+    -> IO String        -- ^ Result from @stdout@
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
 -- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code.
-compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> String -> IO ()
+-- from running the compiled C code
+compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+    => ExternalCompilerOpts
+    -> Program instr a  -- ^ Program to run
+    -> String           -- ^ Input to send to @stdin@
+    -> IO ()
 compareCompiled' opts prog inp = do
     putStrLn "#### runIO:"
     outIO <- fakeIO (interpret prog) inp
@@ -182,8 +190,10 @@ compareCompiled' opts prog inp = do
       else putStrLn "#### runIO and runCompiled are consistent"
 
 -- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code.
-compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr) =>
-    Program instr a -> String -> IO ()
+-- from running the compiled C code
+compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+    => Program instr a  -- ^ Program to run
+    -> String           -- ^ Input to send to @stdin@
+    -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 
