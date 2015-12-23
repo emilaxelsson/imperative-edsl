@@ -32,8 +32,7 @@ install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
   - travis_retry cabal update
   - cabal sandbox init
-  - cabal install -f-full-haskell-antiquotes language-c-quote --force-reinstalls
-  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --constraint $SYNTACTICVER
+  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --constraint="language-c-quote -full-haskell-antiquotes" --constraint $SYNTACTICVER
 
 script:
   - cabal configure --enable-tests --enable-benchmarks -v2
