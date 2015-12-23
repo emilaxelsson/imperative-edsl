@@ -24,7 +24,6 @@ matrix:
 
 before_install:
   - env
-  - git clone https://github.com/emilaxelsson/language-c-quote.git --branch no-haskell-src-meta
   - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
   - export PATH=/opt/alex/3.1.4/bin:/opt/happy/1.19.5/bin:$PATH
 
@@ -33,7 +32,6 @@ install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
   - travis_retry cabal update
   - cabal sandbox init
-  - cabal sandbox add-source language-c-quote
   - cabal install -f-full-haskell-antiquotes language-c-quote --force-reinstalls
   - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --constraint $SYNTACTICVER
 
