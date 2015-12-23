@@ -181,7 +181,7 @@ type instance IExp (ArrCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 data Border i = Incl i | Excl i
-  deriving (Eq, Show)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 -- | 'fromInteger' gives an inclusive border. No other methods defined.
 instance Num i => Num (Border i)
