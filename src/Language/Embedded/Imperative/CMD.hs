@@ -48,6 +48,11 @@ import System.IO (IOMode (..))
 import qualified System.IO as IO
 import qualified Text.Printf as Printf
 
+#if __GLASGOW_HASKELL__ < 710
+import Data.Foldable
+import Data.Traversable
+#endif
+
 #if __GLASGOW_HASKELL__ < 708
 import Data.Proxy
 #endif
