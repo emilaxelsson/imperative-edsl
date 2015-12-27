@@ -28,6 +28,7 @@ module Language.Embedded.Imperative
   , ArrCMD
   , ControlCMD
   , FileCMD
+  , ObjectCMD
   , CallCMD
     -- * Types of Printf arguments
   , PrintfArg
