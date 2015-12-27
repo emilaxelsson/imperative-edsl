@@ -125,16 +125,3 @@ test-suite Tests
   build-depends:
     base,
     imperative-edsl
-
-test-suite Semantics
-  type: exitcode-stdio-1.0
-
-  hs-source-dirs: tests
-
-  main-is: Semantics.hs
-
-  default-language: Haskell2010
-
-  build-depends:
-    base,
-    imperative-edsl
