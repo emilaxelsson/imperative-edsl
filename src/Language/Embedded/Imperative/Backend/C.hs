@@ -53,7 +53,7 @@ compRefCMD (SetRef ref exp) = do
 compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
 -- | Compile `ArrCMD`
-compArrCMD :: forall exp prog a. CompExp exp
+compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
@@ -65,6 +65,12 @@ compArrCMD cmd@(NewArr_) = do
     sym <- gensym "a"
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     addLocal [cdecl| $ty:t * $id:sym; |]
+    return $ ArrComp sym
+compArrCMD cmd@(InitArr as) = do
+    sym <- gensym "a"
+    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    as' <- sequence [compExp (litExp a :: exp a') | (a :: a') <- as]
+    addLocal [cdecl| $ty:t $id:sym[] = $init:(arrayInit as');|]
     return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar
@@ -204,10 +210,10 @@ compCallCMD (CallProc fun as) = do
     as' <- mapM mkArg as
     addStm [cstm| $id:fun($args:as'); |]
 
-instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
-instance CompExp exp => Interp (ArrCMD exp)     CGen where interp = compArrCMD
-instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
-instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
+instance CompExp exp                => Interp (RefCMD exp)     CGen where interp = compRefCMD
+instance (CompExp exp, EvalExp exp) => Interp (ArrCMD exp)     CGen where interp = compArrCMD
+instance CompExp exp                => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance CompExp exp                => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance CompExp exp                => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
+instance CompExp exp                => Interp (CallCMD exp)    CGen where interp = compCallCMD
 

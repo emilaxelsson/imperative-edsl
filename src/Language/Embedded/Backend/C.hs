@@ -46,6 +46,11 @@ viewNotExp (C.FnCall (C.Var (C.Id "!" _) _) [a] _) = Just a
   -- Apparently this is what `!` parses to
 viewNotExp _ = Nothing
 
+arrayInit :: [C.Exp] -> C.Initializer
+arrayInit as = C.CompoundInitializer
+    [(Nothing, C.ExpInitializer a noLoc) | a <- as]
+    noLoc
+
 
 
 --------------------------------------------------------------------------------

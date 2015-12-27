@@ -95,26 +95,35 @@ veryUnsafeFreezeRef (RefComp v) = varExp v
 
 -- | Create an uninitialized an array
 newArr
-    :: ( pred a
-       , pred i
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
        , Integral i
        , Ix i
        , ArrCMD (IExp instr) :<: instr
-       , pred ~ VarPred (IExp instr)
        )
     => IExp instr i -> ProgramT instr m (Arr i a)
-newArr n = singleE $ NewArr n
+newArr = singleE . NewArr
 
 newArr_
-    :: ( pred a
-       , pred i
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
        , Integral i
        , Ix i
        , ArrCMD (IExp instr) :<: instr
-       , pred ~ VarPred (IExp instr)
        )
     => ProgramT instr m (Arr i a)
 newArr_ = singleE $ NewArr_
+
+-- | Create and initialize an array
+initArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => [a] -> ProgramT instr m (Arr i a)
+initArr = singleE . InitArr
 
 -- | Set the contents of an array
 getArr

@@ -42,6 +42,7 @@ import Data.Array.IO
 import Data.Char (isSpace)
 import Data.Int
 import Data.IORef
+import Data.List
 import Data.Typeable
 import Data.Word
 import System.IO (IOMode (..))
@@ -154,10 +155,11 @@ instance ToIdent (Arr i a)
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr :: (VarPred exp a, VarPred exp n, Integral n, Ix n) => exp n -> ArrCMD exp prog (Arr n a)
-    NewArr_ :: (VarPred exp a, VarPred exp n, Integral n, Ix n) => ArrCMD exp prog (Arr n a)
-    GetArr :: (VarPred exp a, Integral n, Ix n)                => exp n -> Arr n a -> ArrCMD exp prog (exp a)
-    SetArr :: (Integral n, Ix n)                               => exp n -> exp a -> Arr n a -> ArrCMD exp prog ()
+    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
+    NewArr_ :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
+    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
+    GetArr  :: (VarPred exp a, Integral i, Ix i)                => exp i -> Arr i a -> ArrCMD exp prog (exp a)
+    SetArr  :: (Integral i, Ix i)                               => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -166,13 +168,15 @@ instance HFunctor (ArrCMD exp)
   where
     hfmap _ (NewArr n)       = NewArr n
     hfmap _ (NewArr_)        = NewArr_
+    hfmap _ (InitArr as)     = InitArr as
     hfmap _ (GetArr i arr)   = GetArr i arr
     hfmap _ (SetArr i a arr) = SetArr i a arr
 
 instance CompExp exp => DryInterp (ArrCMD exp)
   where
-    dryInterp (NewArr _)   = liftM ArrComp $ freshStr "a"
+    dryInterp (NewArr _)     = liftM ArrComp $ freshStr "a"
     dryInterp (NewArr_)      = liftM ArrComp $ freshStr "a"
+    dryInterp (InitArr _)    = liftM ArrComp $ freshStr "a"
     dryInterp (GetArr _ _)   = liftM varExp fresh
     dryInterp (SetArr _ _ _) = return ()
 
@@ -439,8 +443,9 @@ runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr n) = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
-runArrCMD (NewArr_) = error "NewArr_ not allowed in interpreted mode"
+runArrCMD (NewArr n)   = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
+runArrCMD (NewArr_)    = error "NewArr_ not allowed in interpreted mode"
+runArrCMD (InitArr as) = fmap ArrEval $ newListArray (0, genericLength as - 1) as
 runArrCMD (SetArr i a (ArrEval arr)) =
     writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (GetArr i (ArrEval arr)) =
