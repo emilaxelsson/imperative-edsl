@@ -145,6 +145,17 @@ setArr
     => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
 
+-- | Set the contents of an array
+copyArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , ArrCMD (IExp instr) :<: instr
+       , Integral i
+       , Ix i
+       )
+    => Arr i a -> Arr i a -> IExp instr i -> ProgramT instr m ()
+copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
+
 
 
 --------------------------------------------------------------------------------

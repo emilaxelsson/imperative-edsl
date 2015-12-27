@@ -83,6 +83,11 @@ compArrCMD (SetArr expi expv arr) = do
     i <- compExp expi
     touchVar arr
     addStm [cstm| $id:arr[ $i ] = $v; |]
+compArrCMD (CopyArr arr1 arr2 expl) = do
+    addInclude "<string.h>"
+    l <- compExp expl
+    t <- compTypePP (Proxy :: Proxy exp) arr1
+    addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a

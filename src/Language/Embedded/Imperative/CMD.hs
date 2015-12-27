@@ -50,7 +50,7 @@ import qualified System.IO as IO
 import qualified Text.Printf as Printf
 
 #if __GLASGOW_HASKELL__ < 710
-import Data.Foldable
+import Data.Foldable hiding (sequence_)
 import Data.Traversable
 #endif
 
@@ -160,25 +160,28 @@ data ArrCMD exp (prog :: * -> *) a
     InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
     GetArr  :: (VarPred exp a, Integral i, Ix i)                => exp i -> Arr i a -> ArrCMD exp prog (exp a)
     SetArr  :: (Integral i, Ix i)                               => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
+    CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
 
 instance HFunctor (ArrCMD exp)
   where
-    hfmap _ (NewArr n)       = NewArr n
-    hfmap _ (NewArr_)        = NewArr_
-    hfmap _ (InitArr as)     = InitArr as
-    hfmap _ (GetArr i arr)   = GetArr i arr
-    hfmap _ (SetArr i a arr) = SetArr i a arr
+    hfmap _ (NewArr n)        = NewArr n
+    hfmap _ (NewArr_)         = NewArr_
+    hfmap _ (InitArr as)      = InitArr as
+    hfmap _ (GetArr i arr)    = GetArr i arr
+    hfmap _ (SetArr i a arr)  = SetArr i a arr
+    hfmap _ (CopyArr a1 a2 l) = CopyArr a1 a2 l
 
 instance CompExp exp => DryInterp (ArrCMD exp)
   where
-    dryInterp (NewArr _)     = liftM ArrComp $ freshStr "a"
-    dryInterp (NewArr_)      = liftM ArrComp $ freshStr "a"
-    dryInterp (InitArr _)    = liftM ArrComp $ freshStr "a"
-    dryInterp (GetArr _ _)   = liftM varExp fresh
-    dryInterp (SetArr _ _ _) = return ()
+    dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
+    dryInterp (NewArr_)       = liftM ArrComp $ freshStr "a"
+    dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
+    dryInterp (GetArr _ _)    = liftM varExp fresh
+    dryInterp (SetArr _ _ _)  = return ()
+    dryInterp (CopyArr _ _ _) = return ()
 
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
@@ -446,10 +449,14 @@ runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n)   = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
 runArrCMD (NewArr_)    = error "NewArr_ not allowed in interpreted mode"
 runArrCMD (InitArr as) = fmap ArrEval $ newListArray (0, genericLength as - 1) as
-runArrCMD (SetArr i a (ArrEval arr)) =
-    writeArray arr (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (GetArr i (ArrEval arr)) =
     fmap litExp $ readArray arr (fromIntegral (evalExp i))
+runArrCMD (SetArr i a (ArrEval arr)) =
+    writeArray arr (fromIntegral (evalExp i)) (evalExp a)
+runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = sequence_
+    [ readArray arr2 i >>= writeArray arr1 i
+      | i <- genericTake (evalExp l) [0..]
+    ]
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f
