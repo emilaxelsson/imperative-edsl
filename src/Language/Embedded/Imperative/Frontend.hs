@@ -145,7 +145,9 @@ setArr
     => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
 
--- | Set the contents of an array
+-- | Copy the contents of an array to another array. The number of elements to
+-- copy must not be greater than the number of allocated elements in either
+-- array.
 copyArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
@@ -153,7 +155,10 @@ copyArr
        , Integral i
        , Ix i
        )
-    => Arr i a -> Arr i a -> IExp instr i -> ProgramT instr m ()
+    => Arr i a       -- ^ Destination
+    -> Arr i a       -- ^ Source
+    -> IExp instr i  -- ^ Number of elements
+    -> ProgramT instr m ()
 copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
 
 
