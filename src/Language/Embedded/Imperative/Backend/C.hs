@@ -138,6 +138,10 @@ compControlCMD (For (lo,step,hi) body) = do
           | step <  0    = [cexp| $id:n = $id:n - $(negate step) |]
     addStm [cstm| for ($id:n=$loe; $conte; $stepe) {$items:bodyc} |]
 compControlCMD Break = addStm [cstm| break; |]
+compControlCMD (Assert cond msg) = do
+    addInclude "<assert.h>"
+    c <- compExp cond
+    addStm [cstm| assert($c && $msg); |]
 
 compIOMode :: IOMode -> String
 compIOMode ReadMode      = "r"

@@ -223,11 +223,12 @@ type IxRange i = (i, Int, Border i)
 
 data ControlCMD exp prog a
   where
-    If    :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
-    While :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
-    For   :: (VarPred exp n, Integral n) =>
-             IxRange (exp n) -> (exp n -> prog ()) -> ControlCMD exp prog ()
-    Break :: ControlCMD exp prog ()
+    If     :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
+    While  :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
+    For    :: (VarPred exp n, Integral n) =>
+              IxRange (exp n) -> (exp n -> prog ()) -> ControlCMD exp prog ()
+    Break  :: ControlCMD exp prog ()
+    Assert :: exp Bool -> String -> ControlCMD exp prog ()
 
 instance HFunctor (ControlCMD exp)
   where
@@ -235,13 +236,15 @@ instance HFunctor (ControlCMD exp)
     hfmap g (While cont body) = While (g cont) (g body)
     hfmap g (For ir body)     = For ir (g . body)
     hfmap _ Break             = Break
+    hfmap _ (Assert cond msg) = Assert cond msg
 
 instance DryInterp (ControlCMD exp)
   where
-    dryInterp (If _ _ _)  = return ()
-    dryInterp (While _ _) = return ()
-    dryInterp (For _ _)   = return ()
-    dryInterp Break       = return ()
+    dryInterp (If _ _ _)   = return ()
+    dryInterp (While _ _)  = return ()
+    dryInterp (For _ _)    = return ()
+    dryInterp Break        = return ()
+    dryInterp (Assert _ _) = return ()
 
 type instance IExp (ControlCMD e)       = e
 type instance IExp (ControlCMD e :+: i) = e
@@ -477,6 +480,8 @@ runControlCMD (For (lo,step,hi) body) = loop (evalExp lo)
       | cont i    = body (litExp i) >> loop (i + fromIntegral step)
       | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
+runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
+    "Assertion failed: " ++ msg
 
 evalHandle :: Handle -> IO.Handle
 evalHandle (HandleEval h)        = h

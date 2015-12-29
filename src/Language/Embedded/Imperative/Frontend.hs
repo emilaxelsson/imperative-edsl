@@ -213,6 +213,13 @@ for range = singleE . For range
 break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
 break = singleE Break
 
+-- | Assertion
+assert :: (ControlCMD (IExp instr) :<: instr)
+    => IExp instr Bool  -- ^ Expression that should be true
+    -> String           -- ^ Message in case of failure
+    -> ProgramT instr m ()
+assert cond msg = singleE $ Assert cond msg
+
 
 
 --------------------------------------------------------------------------------

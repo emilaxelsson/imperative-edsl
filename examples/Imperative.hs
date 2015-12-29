@@ -114,6 +114,13 @@ testFor3 = for (0, 2, Excl 10) $ \i ->
 
 -- While loop tested in the `sumInput` in Demo.hs.
 
+testAssert :: Prog ()
+testAssert = do
+    addInclude "<stdio.h>"
+    inp :: CExp Int32 <- fget stdin
+    assert (inp #> 0) "input too small"
+    printf "past assertion"
+
 test_strArg :: Prog ()
 test_strArg = do
     addInclude "<stdio.h>"
@@ -124,15 +131,16 @@ test_strArg = do
 ----------------------------------------
 
 testAll = do
-    compareCompiled testTypes "0\n"
-    compareCompiled testRef   ""
-    compareCompiled testCExp  "44\n"
-    compareCompiled testArr1  ""
-    compareCompiled testArr2  ""
-    compareCompiled testIf1   "12\n"
-    compareCompiled testIf2   "12\n"
-    compareCompiled testFor1  ""
-    compareCompiled testFor2  ""
-    compareCompiled testFor3  ""
+    compareCompiled testTypes  "0\n"
+    compareCompiled testRef    ""
+    compareCompiled testCExp   "44\n"
+    compareCompiled testArr1   ""
+    compareCompiled testArr2   ""
+    compareCompiled testIf1    "12\n"
+    compareCompiled testIf2    "12\n"
+    compareCompiled testFor1   ""
+    compareCompiled testFor2   ""
+    compareCompiled testFor3   ""
+    compareCompiled testAssert "45"
     runCompiled     test_strArg
 
