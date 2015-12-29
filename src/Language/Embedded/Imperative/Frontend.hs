@@ -67,8 +67,8 @@ modifyRef
     => Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
--- | Freeze the contents of reference (only safe if the reference is never
--- written to after the freezing)
+-- | Freeze the contents of reference (only safe if the reference is not updated
+-- as long as the resulting value is alive)
 unsafeFreezeRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
     Ref a -> ProgramT instr m (IExp instr a)
 unsafeFreezeRef = singleE . UnsafeFreezeRef
