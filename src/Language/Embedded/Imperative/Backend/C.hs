@@ -162,6 +162,7 @@ compFileCMD (FOpen path mode) = do
     path' = show path
     mode' = compIOMode mode
 compFileCMD (FClose h) = do
+    addInclude "<stdio.h>"
     touchVar h
     addStm [cstm| fclose($id:h); |]
 compFileCMD (FPrintf h form as) = do
@@ -173,6 +174,7 @@ compFileCMD (FPrintf h form as) = do
     as' <- fmap ([h',form'']++) $ sequence [compExp a | PrintfArg a <- as]
     addStm [cstm| fprintf($args:as'); |]
 compFileCMD cmd@(FGet h) = do
+    addInclude "<stdio.h>"
     (v,n) <- freshVar
     touchVar h
     let mkProxy = (\_ -> Proxy) :: FileCMD exp prog (exp a) -> Proxy a
@@ -181,6 +183,7 @@ compFileCMD cmd@(FGet h) = do
     return v
 compFileCMD (FEof h) = do
     addInclude "<stdbool.h>"
+    addInclude "<stdio.h>"
     (v,n) <- freshVar
     touchVar h
     addStm [cstm| $id:n = feof($id:h); |]

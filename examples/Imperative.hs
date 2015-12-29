@@ -116,10 +116,9 @@ testFor3 = for (0, 2, Excl 10) $ \i ->
 
 testAssert :: Prog ()
 testAssert = do
-    addInclude "<stdio.h>"
     inp :: CExp Int32 <- fget stdin
     assert (inp #> 0) "input too small"
-    printf "past assertion"
+    printf "past assertion\n"
 
 test_strArg :: Prog ()
 test_strArg = do
