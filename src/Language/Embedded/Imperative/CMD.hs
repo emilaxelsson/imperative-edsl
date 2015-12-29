@@ -158,12 +158,14 @@ data ArrCMD exp (prog :: * -> *) a
     NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
     NewArr_ :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
     InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
-    GetArr  :: (VarPred exp a, Integral i, Ix i)                => exp i -> Arr i a -> ArrCMD exp prog (exp a)
-    SetArr  :: (Integral i, Ix i)                               => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
+    GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
+    SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
     CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
+  -- Not all `VarPred` constraints are needed by the back ends in
+  -- imperative-edsl, but they may still be useful for other back ends.
 
 instance HFunctor (ArrCMD exp)
   where

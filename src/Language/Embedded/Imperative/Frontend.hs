@@ -128,9 +128,10 @@ initArr = singleE . InitArr
 -- | Set the contents of an array
 getArr
     :: ( VarPred (IExp instr) a
-       , ArrCMD (IExp instr) :<: instr
+       , VarPred (IExp instr) i
        , Integral i
        , Ix i
+       , ArrCMD (IExp instr) :<: instr
        )
     => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
 getArr i arr = singleE $ GetArr i arr
@@ -138,9 +139,10 @@ getArr i arr = singleE $ GetArr i arr
 -- | Set the contents of an array
 setArr
     :: ( VarPred (IExp instr) a
-       , ArrCMD (IExp instr) :<: instr
+       , VarPred (IExp instr) i
        , Integral i
        , Ix i
+       , ArrCMD (IExp instr) :<: instr
        )
     => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
 setArr i a arr = singleE (SetArr i a arr)
@@ -151,9 +153,9 @@ setArr i a arr = singleE (SetArr i a arr)
 copyArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
-       , ArrCMD (IExp instr) :<: instr
        , Integral i
        , Ix i
+       , ArrCMD (IExp instr) :<: instr
        )
     => Arr i a       -- ^ Destination
     -> Arr i a       -- ^ Source
