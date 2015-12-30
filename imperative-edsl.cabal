@@ -124,4 +124,9 @@ test-suite Tests
 
   build-depends:
     base,
-    imperative-edsl
+    imperative-edsl,
+    QuickCheck,
+    syntactic,
+    tasty-quickcheck,
+    tasty-th
+
