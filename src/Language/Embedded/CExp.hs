@@ -121,8 +121,12 @@ data Sym sig
 #endif
     -- Unary operator
     UOp  :: UnOp -> (a -> b) -> Sym (a :-> Full b)
+    -- Unary operator with same type for argument and result
+    UOp' :: UnOp -> (a -> a) -> Sym (a :-> Full a)
     -- Binary operator
     Op   :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
+    -- Binary operator with same type for arguments and result
+    Op'  :: BinOp -> (a -> a -> a) -> Sym (a :-> a :-> Full a)
     -- Type casting (ignored when generating code)
     Cast :: (a -> b) -> Sym (a :-> Full b)
     -- Conditional
@@ -147,12 +151,14 @@ instance Syntactic (CExp a)
 type instance VarPred CExp = CType
 
 evalSym :: Sym sig -> Denotation sig
-evalSym (Fun _ a) = a
-evalSym (UOp _ f) = f
-evalSym (Op  _ f) = f
-evalSym (Cast f)  = f
-evalSym Cond      = \c t f -> if c then t else f
-evalSym (Var v)   = error $ "evalCExp: cannot evaluate variable " ++ v
+evalSym (Fun _ a)  = a
+evalSym (UOp _ f)  = f
+evalSym (UOp' _ f) = f
+evalSym (Op  _ f)  = f
+evalSym (Op'  _ f) = f
+evalSym (Cast f)   = f
+evalSym Cond       = \c t f -> if c then t else f
+evalSym (Var v)    = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
 evalCExp :: CExp a -> a
@@ -186,7 +192,14 @@ compCExp = simpleMatch (go . unT) . unCExp
     go (UOp op _) (a :* Nil) = do
       a' <- compCExp' a
       return $ UnOp op a' mempty
+    go (UOp' op _) (a :* Nil) = do
+      a' <- compCExp' a
+      return $ UnOp op a' mempty
     go (Op op _) (a :* b :* Nil) = do
+      a' <- compCExp' a
+      b' <- compCExp' b
+      return $ BinOp op a' b' mempty
+    go (Op' op _) (a :* b :* Nil) = do
       a' <- compCExp' a
       b' <- compCExp' b
       return $ BinOp op a' b' mempty
@@ -258,22 +271,22 @@ instance (Num a, CType a) => Num (CExp a)
     a + b
       | Just 0 <- viewLit a, isExact a = b
       | Just 0 <- viewLit b, isExact a = a
-      | otherwise = constFold $ sugarSym (T $ Op Add (+)) a b
+      | otherwise = constFold $ sugarSym (T $ Op' Add (+)) a b
 
     a - b
       | Just 0 <- viewLit a, isExact a = negate b
       | Just 0 <- viewLit b, isExact a = a
       | a == b,              isExact a = 0
-      | otherwise = constFold $ sugarSym (T $ Op Sub (-)) a b
+      | otherwise = constFold $ sugarSym (T $ Op' Sub (-)) a b
 
     a * b
       | Just 0 <- viewLit a, isExact a = value 0
       | Just 0 <- viewLit b, isExact a = value 0
       | Just 1 <- viewLit a, isExact a = b
       | Just 1 <- viewLit b, isExact a = a
-      | otherwise = constFold $ sugarSym (T $ Op Mul (*)) a b
+      | otherwise = constFold $ sugarSym (T $ Op' Mul (*)) a b
 
-    negate a = constFold $ sugarSym (T $ UOp Negate negate) a
+    negate a = constFold $ sugarSym (T $ UOp' Negate negate) a
 
     abs    = error "abs not implemented for CExp"
     signum = error "signum not implemented for CExp"
@@ -281,7 +294,7 @@ instance (Num a, CType a) => Num (CExp a)
 instance (Fractional a, CType a) => Fractional (CExp a)
   where
     fromRational = value . fromRational
-    a / b = constFold $ sugarSym (T $ Op Div (/)) a b
+    a / b = constFold $ sugarSym (T $ Op' Div (/)) a b
 
     recip = error "recip not implemented for CExp"
 
@@ -291,7 +304,7 @@ quot_ a b
     | Just 0 <- viewLit a = 0
     | Just 1 <- viewLit b = a
     | a == b              = 1
-    | otherwise           = constFold $ sugarSym (T $ Op Div quot) a b
+    | otherwise           = constFold $ sugarSym (T $ Op' Div quot) a b
 
 -- | Integer remainder satisfying
 --
@@ -301,7 +314,7 @@ a #% b
     | Just 0 <- viewLit a = 0
     | Just 1 <- viewLit b = 0
     | a == b              = 0
-    | otherwise           = constFold $ sugarSym (T $ Op Mod rem) a b
+    | otherwise           = constFold $ sugarSym (T $ Op' Mod rem) a b
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
@@ -310,9 +323,8 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
 not_ (CExp (nt :$ a))
-    | Just (T (UOp Lnot _)) <- prj nt
-    , Just a' <- castAST a = CExp a'
-not_ a = constFold $ sugarSym (T $ UOp Lnot not) a
+    | Just (T (UOp' Lnot _)) <- prj nt = CExp a
+not_ a = constFold $ sugarSym (T $ UOp' Lnot not) a
 
 -- | Equality
 (#==) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
@@ -358,8 +370,7 @@ cond c t f
     | Just c' <- viewLit c = if c' then t else f
     | t == f = t
 cond (CExp (nt :$ a)) t f
-    | Just (T (UOp Lnot _)) <- prj nt
-    , Just a' <- castAST a = cond (CExp a') f t
+    | Just (T (UOp' Lnot _)) <- prj nt = cond (CExp a) f t
 cond c t f = constFold $ sugarSym (T Cond) c t f
 
 -- | Condition operator; use as follows:
@@ -392,7 +403,9 @@ instance Render Sym
   where
     renderSym (Fun name _) = name
     renderSym (UOp op _)   = show op
+    renderSym (UOp' op _)  = show op
     renderSym (Op op _)    = show op
+    renderSym (Op' op _)   = show op
     renderSym (Cast _)     = "cast"
     renderSym (Var v)      = v
     renderArgs = renderArgsSmart
@@ -426,7 +439,9 @@ instance Semantic Sym
   where
     semantics (Fun name f) = Sem name f
     semantics (UOp op f)   = Sem (show op) f
+    semantics (UOp' op f)  = Sem (show op) f
     semantics (Op op f)    = Sem (show op) f
+    semantics (Op' op f)   = Sem (show op) f
     semantics (Cast f)     = Sem "cast" f
     semantics (Var v)      = Sem v undefined
 
