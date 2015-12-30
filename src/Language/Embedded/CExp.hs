@@ -498,7 +498,7 @@ instance Semantic Sym
     semantics (Op op f)    = Sem (show op) f
     semantics (Op' op f)   = Sem (show op) f
     semantics (Cast f)     = Sem "cast" f
-    semantics (Var v)      = Sem v $ error "evaluating free variable: " ++ v
+    semantics (Var v)      = Sem v $ error $ "evaluating free variable: " ++ v
 
 instance Equality Sym
   where
