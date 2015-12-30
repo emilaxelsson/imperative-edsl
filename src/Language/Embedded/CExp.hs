@@ -264,19 +264,57 @@ true, false :: CExp Bool
 true  = value True
 false = value False
 
-instance (Num a, CType a) => Num (CExp a)
+instance (Num a, Ord a, CType a) => Num (CExp a)
   where
     fromInteger = value . fromInteger
 
     a + b
-      | Just 0 <- viewLit a, isExact a = b
-      | Just 0 <- viewLit b, isExact a = a
+      | Just 0  <- viewLit a, isExact a = b
+      | Just 0  <- viewLit b, isExact a = a
+
+      | Just a' <- viewLit a, Nothing <- viewLit b, isExact a = b+a
+          -- Move literals to the right
+
+      | Just b' <- viewLit b
+      , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
+      , Just d' <- viewLit (CExp d)
+      = CExp c + value (d'+b')
+          -- Simplify `(c + litd) + litb`
+
+      | Just b' <- viewLit b
+      , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
+      , Just d' <- viewLit (CExp d)
+      = CExp c + value (b'-d')
+          -- Simplify `(c - litd) + litb`
+
+      | Just b' <- viewLit b, b' < 0 = a - negate b
+          -- Simplify `a + -litb`
+
       | otherwise = constFold $ sugarSym (T $ Op' Add (+)) a b
 
     a - b
       | Just 0 <- viewLit a, isExact a = negate b
       | Just 0 <- viewLit b, isExact a = a
       | a == b,              isExact a = 0
+
+      | Just a' <- viewLit a, Nothing <- viewLit b, isExact a = negate b - negate a
+          -- Move literals to the right
+
+      | Just b' <- viewLit b
+      , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
+      , Just d' <- viewLit (CExp d)
+      = CExp c + value (d'-b')
+          -- Simplify `(c + litd) - litb`
+
+      | Just b' <- viewLit b
+      , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
+      , Just d' <- viewLit (CExp d)
+      = CExp c - value (d'+b')
+          -- Simplify `(c - litd) - litb`
+
+      | Just b' <- viewLit b, b' < 0 = a + negate b
+          -- Simplify `a - -litb`
+
       | otherwise = constFold $ sugarSym (T $ Op' Sub (-)) a b
 
     a * b
@@ -286,12 +324,16 @@ instance (Num a, CType a) => Num (CExp a)
       | Just 1 <- viewLit b, isExact a = a
       | otherwise = constFold $ sugarSym (T $ Op' Mul (*)) a b
 
-    negate a = constFold $ sugarSym (T $ UOp' Negate negate) a
+    negate a
+      | Sym (T (UOp' Negate _)) :$ b <- unCExp a  = CExp b
+      | Sym (T (Op' Add _)) :$ b :$ c <- unCExp a = negate (CExp b) - CExp c
+      | Sym (T (Op' Sub _)) :$ b :$ c <- unCExp a = CExp c - CExp b
+      | otherwise = constFold $ sugarSym (T $ UOp' Negate negate) a
 
     abs    = error "abs not implemented for CExp"
     signum = error "signum not implemented for CExp"
 
-instance (Fractional a, CType a) => Fractional (CExp a)
+instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
   where
     fromRational = value . fromRational
     a / b = constFold $ sugarSym (T $ Op' Div (/)) a b
