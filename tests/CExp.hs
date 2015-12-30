@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -12,7 +13,11 @@ import Test.Tasty.QuickCheck
 import Test.Tasty.TH
 
 import Language.Syntactic (AST (..), DenResult)
+#if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic.Functional (Denotation)
+#else
+import Language.Syntactic (Denotation)
+#endif
 
 import Language.Embedded.Imperative
 import Language.Embedded.CExp
