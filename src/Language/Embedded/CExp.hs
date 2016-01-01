@@ -309,6 +309,8 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
     negate (OpP Add a b)   | isExact' a = negate (CExp a) - CExp b
     negate (OpP Sub a b)   | isExact' a = CExp b - CExp a
     negate (OpP Mul a b)   | isExact' a = CExp a * negate (CExp b)
+      -- Negate the right operand, because literals are moved to the right
+      -- in multiplications
     negate a = constFold $ sugarSym (T $ UOp' Negate negate) a
 
     abs    = error "abs not implemented for CExp"
