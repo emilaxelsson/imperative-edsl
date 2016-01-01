@@ -38,7 +38,7 @@ script:
   - cabal configure --enable-tests --enable-benchmarks -v2
   - cabal build
   - cabal test
-  - cabal check
+  - if [ $CABALVER == 1.22 ]; then cabal check; fi # Cabal 1.18 complains about PatternSynonyms
   - cabal sdist
   - export SRC_TGZ=$(cabal info . | awk '{print $2;exit}');
     cd dist/;
