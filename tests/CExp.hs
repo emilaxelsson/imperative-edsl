@@ -93,5 +93,15 @@ prop_numExp (a,b,c,d,e) numExp =
     env1 v       = [a,b,c,d,e] !! v
     env2 ('v':v) = [a,b,c,d,e] !! read v
 
+-- Test that inexact numeric expressions are handled correctly
+--
+-- This property fails if one changes `isExact` to `const True`
+prop_numExp_inexact :: (a ~ Float) => (a,a,a,a,a) -> NumExp -> Bool
+prop_numExp_inexact (a,b,c,d,e) numExp =
+    evalNumExp env1 numExp == evalNumCExp env2 (num2CExp numExp)
+  where
+    env1 v       = [a,b,c,d,e] !! v
+    env2 ('v':v) = [a,b,c,d,e] !! read v
+
 main = $defaultMainGenerator
 
