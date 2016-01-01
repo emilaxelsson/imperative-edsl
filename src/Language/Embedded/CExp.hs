@@ -104,6 +104,10 @@ isFloat a
 isExact :: CType a => CExp a -> Bool
 isExact = not . isFloat
 
+-- | Return whether the type of the expression is a non-floating-point type
+isExact' :: CType a => ASTF T a -> Bool
+isExact' = isExact . CExp
+
 
 
 --------------------------------------------------------------------------------
@@ -235,16 +239,25 @@ constFold = CExp . match go . unCExp
   -- sub-expressions. This is certainly doable, but seems to complicate things
   -- for not much gain (currently).
 
--- | Get the value of a literal expression
-viewLit :: CExp a -> Maybe a
-viewLit (CExp (Sym (T (Fun _ a)))) = Just a
-viewLit _ = Nothing
-
 castAST :: forall a b . Typeable b => ASTF T a -> Maybe (ASTF T b)
 castAST a = simpleMatch go a
   where
     go :: (DenResult sig ~ a) => T sig -> Args (AST T) sig -> Maybe (ASTF T b)
     go (T _) _ = gcast a
+
+-- | Get the value of a literal expression
+viewLit :: CExp a -> Maybe a
+viewLit (CExp (Sym (T (Fun _ a)))) = Just a
+viewLit _ = Nothing
+
+pattern LitP a      <- CExp (Sym (T (Fun _ a)))
+pattern LitP' a     <- Sym (T (Fun _ a))
+pattern NonLitP     <- (viewLit -> Nothing)
+pattern NonLitP'    <- (CExp -> (viewLit -> Nothing))
+pattern OpP op a b  <- CExp (Sym (T (Op' op _)) :$ a :$ b)
+pattern OpP' op a b <- Sym (T (Op' op _)) :$ a :$ b
+pattern UOpP op a   <- CExp (Sym (T (UOp' op _)) :$ a)
+pattern UOpP' op a  <- Sym (T (UOp' op _)) :$ a
 
 
 
@@ -268,85 +281,35 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
   where
     fromInteger = value . fromInteger
 
-    a + b
-      | Just 0  <- viewLit a, isExact a = b
-      | Just 0  <- viewLit b, isExact a = a
+    LitP 0 + b | isExact b = b
+    a + LitP 0 | isExact a = a
+    a@(LitP _) + b@NonLitP | isExact a = b+a  -- Move literals to the right
+    OpP Add a (LitP' b) + LitP c | isExact' a = CExp a + value (b+c)
+    OpP Sub a (LitP' b) + LitP c | isExact' a = CExp a + value (c-b)
+    a + LitP b | b < 0, isExact a = a - value (negate b)
+    a + b = constFold $ sugarSym (T $ Op' Add (+)) a b
 
-      | Just a' <- viewLit a, Nothing <- viewLit b, isExact a = b+a
-          -- Move literals to the right
+    LitP 0 - b | isExact b = negate b
+    a - LitP 0 | isExact a = a
+    a@(LitP _) - b@NonLitP | isExact a = negate b - negate a  -- Move literals to the right
+    OpP Add a (LitP' b) - LitP c | isExact' a = CExp a + value (b-c)
+    OpP Sub a (LitP' b) - LitP c | isExact' a = CExp a - value (b+c)
+    a - LitP b | b < 0, isExact a = a + value (negate b)
+    a - b = constFold $ sugarSym (T $ Op' Sub (-)) a b
 
-      | Just b' <- viewLit b
-      , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
-      , Just d' <- viewLit (CExp d)
-      , isExact a
-      = CExp c + value (d'+b')
-          -- Simplify `(c + litd) + litb`
+    LitP 0 * b | isExact b = value 0
+    a * LitP 0 | isExact a = value 0
+    LitP 1 * b | isExact b = b
+    a * LitP 1 | isExact a = a
+    a@(LitP _) * b@NonLitP | isExact a = b*a  -- Move literals to the right
+    OpP Mul a (LitP' b) * LitP c | isExact' a = CExp a * value (b*c)
+    a * b = constFold $ sugarSym (T $ Op' Mul (*)) a b
 
-      | Just b' <- viewLit b
-      , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
-      , Just d' <- viewLit (CExp d)
-      , isExact a
-      = CExp c + value (b'-d')
-          -- Simplify `(c - litd) + litb`
-
-      | Just b' <- viewLit b, b' < 0, isExact a = a - negate b
-          -- Simplify `a + -litb`
-
-      | otherwise = constFold $ sugarSym (T $ Op' Add (+)) a b
-
-    a - b
-      | Just 0 <- viewLit a, isExact a = negate b
-      | Just 0 <- viewLit b, isExact a = a
-      | a == b,              isExact a = 0
-
-      | Just a' <- viewLit a, Nothing <- viewLit b, isExact a = negate b - negate a
-          -- Move literals to the right
-
-      | Just b' <- viewLit b
-      , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
-      , Just d' <- viewLit (CExp d)
-      , isExact a
-      = CExp c + value (d'-b')
-          -- Simplify `(c + litd) - litb`
-
-      | Just b' <- viewLit b
-      , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
-      , Just d' <- viewLit (CExp d)
-      , isExact a
-      = CExp c - value (d'+b')
-          -- Simplify `(c - litd) - litb`
-
-      | Just b' <- viewLit b, b' < 0, isExact a = a + negate b
-          -- Simplify `a - -litb`
-
-      | otherwise = constFold $ sugarSym (T $ Op' Sub (-)) a b
-
-    a * b
-      | Just 0 <- viewLit a, isExact a = value 0
-      | Just 0 <- viewLit b, isExact a = value 0
-      | Just 1 <- viewLit a, isExact a = b
-      | Just 1 <- viewLit b, isExact a = a
-
-      | Just a' <- viewLit a, Nothing <- viewLit b, isExact a = b*a
-          -- Move literals to the right
-
-      | Just b' <- viewLit b
-      , Sym (T (Op' Mul _)) :$ c :$ d <- unCExp a
-      , Just d' <- viewLit (CExp d)
-      , isExact a
-      = CExp c * value (d'*b')
-          -- Simplify `(c * litd) * litb`
-
-      | otherwise = constFold $ sugarSym (T $ Op' Mul (*)) a b
-
-    negate a
-      | Sym (T (UOp' Negate _)) :$ b <- unCExp a, isExact a  = CExp b
-      | Sym (T (Op' Add _)) :$ b :$ c <- unCExp a, isExact a = negate (CExp b) - CExp c
-      | Sym (T (Op' Sub _)) :$ b :$ c <- unCExp a, isExact a = CExp c - CExp b
-      | Sym (T (Op' Mul _)) :$ b :$ c <- unCExp a, isExact a = CExp b * negate (CExp c)
-          -- Negate the right operand, because literals are moved to the right
-          -- in multiplications
-      | otherwise = constFold $ sugarSym (T $ UOp' Negate negate) a
+    negate (UOpP Negate a) | isExact' a = CExp a
+    negate (OpP Add a b)   | isExact' a = negate (CExp a) - CExp b
+    negate (OpP Sub a b)   | isExact' a = CExp b - CExp a
+    negate (OpP Mul a b)   | isExact' a = CExp a * negate (CExp b)
+    negate a = constFold $ sugarSym (T $ UOp' Negate negate) a
 
     abs    = error "abs not implemented for CExp"
     signum = error "signum not implemented for CExp"

@@ -65,12 +65,14 @@ library
     GADTs
     GeneralizedNewtypeDeriving
     MultiParamTypeClasses
+    PatternSynonyms
     Rank2Types
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
     TypeFamilies
     TypeOperators
+    ViewPatterns
 
   other-extensions:
     PolyKinds
