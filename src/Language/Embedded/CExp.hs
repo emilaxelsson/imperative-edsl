@@ -278,16 +278,18 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
       | Just b' <- viewLit b
       , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
       , Just d' <- viewLit (CExp d)
+      , isExact a
       = CExp c + value (d'+b')
           -- Simplify `(c + litd) + litb`
 
       | Just b' <- viewLit b
       , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
       , Just d' <- viewLit (CExp d)
+      , isExact a
       = CExp c + value (b'-d')
           -- Simplify `(c - litd) + litb`
 
-      | Just b' <- viewLit b, b' < 0 = a - negate b
+      | Just b' <- viewLit b, b' < 0, isExact a = a - negate b
           -- Simplify `a + -litb`
 
       | otherwise = constFold $ sugarSym (T $ Op' Add (+)) a b
@@ -303,16 +305,18 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
       | Just b' <- viewLit b
       , Sym (T (Op' Add _)) :$ c :$ d <- unCExp a
       , Just d' <- viewLit (CExp d)
+      , isExact a
       = CExp c + value (d'-b')
           -- Simplify `(c + litd) - litb`
 
       | Just b' <- viewLit b
       , Sym (T (Op' Sub _)) :$ c :$ d <- unCExp a
       , Just d' <- viewLit (CExp d)
+      , isExact a
       = CExp c - value (d'+b')
           -- Simplify `(c - litd) - litb`
 
-      | Just b' <- viewLit b, b' < 0 = a + negate b
+      | Just b' <- viewLit b, b' < 0, isExact a = a + negate b
           -- Simplify `a - -litb`
 
       | otherwise = constFold $ sugarSym (T $ Op' Sub (-)) a b
@@ -329,16 +333,17 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
       | Just b' <- viewLit b
       , Sym (T (Op' Mul _)) :$ c :$ d <- unCExp a
       , Just d' <- viewLit (CExp d)
+      , isExact a
       = CExp c * value (d'*b')
           -- Simplify `(c * litd) * litb`
 
       | otherwise = constFold $ sugarSym (T $ Op' Mul (*)) a b
 
     negate a
-      | Sym (T (UOp' Negate _)) :$ b <- unCExp a  = CExp b
-      | Sym (T (Op' Add _)) :$ b :$ c <- unCExp a = negate (CExp b) - CExp c
-      | Sym (T (Op' Sub _)) :$ b :$ c <- unCExp a = CExp c - CExp b
-      | Sym (T (Op' Mul _)) :$ b :$ c <- unCExp a = CExp b * negate (CExp c)
+      | Sym (T (UOp' Negate _)) :$ b <- unCExp a, isExact a  = CExp b
+      | Sym (T (Op' Add _)) :$ b :$ c <- unCExp a, isExact a = negate (CExp b) - CExp c
+      | Sym (T (Op' Sub _)) :$ b :$ c <- unCExp a, isExact a = CExp c - CExp b
+      | Sym (T (Op' Mul _)) :$ b :$ c <- unCExp a, isExact a = CExp b * negate (CExp c)
           -- Negate the right operand, because literals are moved to the right
           -- in multiplications
       | otherwise = constFold $ sugarSym (T $ UOp' Negate negate) a
