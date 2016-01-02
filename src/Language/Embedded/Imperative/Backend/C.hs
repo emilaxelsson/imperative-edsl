@@ -57,9 +57,14 @@ compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
-    v   <- compExp size
+    n   <- compExp size
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
-    addLocal [cdecl| $ty:t $id:sym[ $v ]; |]
+    case n of
+      C.Const _ _ -> addLocal [cdecl| $ty:t $id:sym[ $n ]; |]
+      _ -> do
+        addInclude "<alloca.h>"
+        addLocal [cdecl| $ty:t * $id:sym; |]
+        addStm [cstm| $id:sym = alloca($n * sizeof($ty:t)); |]
     return $ ArrComp sym
 compArrCMD cmd@(NewArr_) = do
     sym <- gensym "a"
