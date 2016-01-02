@@ -51,8 +51,22 @@ import Language.Embedded.Expression
 -- * Types
 --------------------------------------------------------------------------------
 
+instance ToExp Bool
+  where
+    toExp True  _ = [cexp| true |]
+    toExp False _ = [cexp| false |]
+
+instance ToExp Int8   where toExp = toExp . toInteger
+instance ToExp Int16  where toExp = toExp . toInteger
+instance ToExp Int32  where toExp = toExp . toInteger
+instance ToExp Int64  where toExp = toExp . toInteger
+instance ToExp Word8  where toExp = toExp . toInteger
+instance ToExp Word16 where toExp = toExp . toInteger
+instance ToExp Word32 where toExp = toExp . toInteger
+instance ToExp Word64 where toExp = toExp . toInteger
+
 -- | Types supported by C
-class (Show a, Eq a, Typeable a) => CType a
+class (Show a, Eq a, Typeable a, ToExp a) => CType a
   where
     cType :: MonadC m => proxy a -> m Type
 
@@ -117,7 +131,9 @@ isExact' = isExact . CExp
 -- | Syntactic symbols for C
 data Sym sig
   where
-    -- Function or literal
+    -- Literal
+    Lit  :: String -> a -> Sym (Full a)
+    -- Function
 #if MIN_VERSION_syntactic(3,0,0)
     Fun  :: Signature sig => String -> Denotation sig -> Sym sig
 #else
@@ -155,7 +171,8 @@ instance Syntactic (CExp a)
 type instance VarPred CExp = CType
 
 evalSym :: Sym sig -> Denotation sig
-evalSym (Fun _ a)  = a
+evalSym (Lit _ a)  = a
+evalSym (Fun _ f)  = f
 evalSym (UOp _ f)  = f
 evalSym (UOp' _ f) = f
 evalSym (Op  _ f)  = f
@@ -174,22 +191,22 @@ evalCExp (CExp e) = go e
 
 instance EvalExp CExp
   where
-    litExp a = CExp $ Sym $ T $ Fun (show a) a
+    litExp a = CExp $ Sym $ T $ Lit (show a) a
     evalExp  = evalCExp
 
 -- | Compile an expression
 compCExp :: forall m a . MonadC m => CExp a -> m Exp
-compCExp = simpleMatch (go . unT) . unCExp
+compCExp = simpleMatch (\(T s) -> go s) . unCExp
   where
     compCExp' :: ASTF T b -> m Exp
     compCExp' = compCExp . CExp
 
-    go :: Sym sig -> Args (AST T) sig -> m Exp
+    go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil = return [cexp| $id:v |]
-    go (Fun lit _) Nil = case lit of
-      "True"  -> addSystemInclude "stdbool.h" >> return [cexp| true |]
-      "False" -> addSystemInclude "stdbool.h" >> return [cexp| false |]
-      l       -> return [cexp| $id:l |]
+    go (Lit _ a) Nil
+      | Just (_ :: Bool) <- Data.Typeable.cast a = do
+          addSystemInclude "stdbool.h" >> return (toExp a mempty)
+      | otherwise = return $ toExp a mempty
     go (Fun fun _) args = do
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
@@ -247,11 +264,11 @@ castAST a = simpleMatch go a
 
 -- | Get the value of a literal expression
 viewLit :: CExp a -> Maybe a
-viewLit (CExp (Sym (T (Fun _ a)))) = Just a
+viewLit (CExp (Sym (T (Lit _ a)))) = Just a
 viewLit _ = Nothing
 
-pattern LitP a      <- CExp (Sym (T (Fun _ a)))
-pattern LitP' a     <- Sym (T (Fun _ a))
+pattern LitP a      <- CExp (Sym (T (Lit _ a)))
+pattern LitP' a     <- Sym (T (Lit _ a))
 pattern NonLitP     <- (viewLit -> Nothing)
 pattern NonLitP'    <- (CExp -> (viewLit -> Nothing))
 pattern OpP op a b  <- CExp (Sym (T (Op' op _)) :$ a :$ b)
@@ -271,7 +288,7 @@ variable = CExp . Sym . T . Var
 
 -- | Construct a literal expression
 value :: CType a => a -> CExp a
-value a = CExp $ Sym $ T $ Fun (show a) a
+value a = CExp $ Sym $ T $ Lit (show a) a
 
 true, false :: CExp Bool
 true  = value True
@@ -426,6 +443,7 @@ deriveSymbol ''Sym
 #if MIN_VERSION_syntactic(3,0,0)
 instance Render Sym
   where
+    renderSym (Lit a _)    = a
     renderSym (Fun name _) = name
     renderSym (UOp op _)   = show op
     renderSym (UOp' op _)  = show op
@@ -462,6 +480,7 @@ instance StringTree T
 
 instance Semantic Sym
   where
+    semantics (Lit s a)    = Sem s a
     semantics (Fun name f) = Sem name f
     semantics (UOp op f)   = Sem (show op) f
     semantics (UOp' op f)  = Sem (show op) f
