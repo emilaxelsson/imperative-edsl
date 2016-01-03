@@ -125,7 +125,7 @@ initArr
     => [a] -> ProgramT instr m (Arr i a)
 initArr = singleE . InitArr
 
--- | Set the contents of an array
+-- | Get an element of an array
 getArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
@@ -136,7 +136,7 @@ getArr
     => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
 getArr i arr = singleE $ GetArr i arr
 
--- | Set the contents of an array
+-- | Set an element of an array
 setArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
