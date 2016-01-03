@@ -74,13 +74,22 @@ testArr1 = do
 
 testArr2 :: Prog ()
 testArr2 = do
-    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    n <- fget stdin
+    arr :: Arr Word32 Int32 <- newArr n  -- Array of dynamic length
+    sequence_ [setArr (i2n i) i arr | i' <- [0..3], let i = fromInteger i']
     sequence_ [getArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
     printf "\n"
     return ()
 
 testArr3 :: Prog ()
 testArr3 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    sequence_ [getArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+    return ()
+
+testArr4 :: Prog ()
+testArr4 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
     sequence_ [unsafeGetArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
     printf "\n"
@@ -141,8 +150,9 @@ testAll = do
     compareCompiled testRef    ""
     compareCompiled testCExp   "44\n"
     compareCompiled testArr1   ""
-    compareCompiled testArr2   ""
+    compareCompiled testArr2   "20\n"
     compareCompiled testArr3   ""
+    compareCompiled testArr4   ""
     compareCompiled testIf1    "12\n"
     compareCompiled testIf2    "12\n"
     compareCompiled testFor1   ""
