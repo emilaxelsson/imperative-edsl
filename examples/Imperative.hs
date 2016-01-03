@@ -69,13 +69,20 @@ testArr1 = do
     arr2 :: Arr Word32 Int32 <- newArr (10 :: CExp Word32)
     sequence_ [setArr i (i2n i+10) arr1 | i' <- [0..9], let i = fromInteger i']
     copyArr arr2 arr1 10
-    sequence_ [getArr i arr2 >>= printf "%d " | i' <- [0..9], let i = fromInteger i']
+    sequence_ [getArr i arr2 >>= printf "%d " . (*3) | i' <- [0..9], let i = fromInteger i']
     printf "\n"
 
 testArr2 :: Prog ()
 testArr2 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
-    sequence_ [getArr i arr >>= printf "%d " | i' <- [0..3], let i = fromInteger i']
+    sequence_ [getArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+    return ()
+
+testArr3 :: Prog ()
+testArr3 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    sequence_ [unsafeGetArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
     printf "\n"
     return ()
 
@@ -135,6 +142,7 @@ testAll = do
     compareCompiled testCExp   "44\n"
     compareCompiled testArr1   ""
     compareCompiled testArr2   ""
+    compareCompiled testArr3   ""
     compareCompiled testIf1    "12\n"
     compareCompiled testIf2    "12\n"
     compareCompiled testFor1   ""
