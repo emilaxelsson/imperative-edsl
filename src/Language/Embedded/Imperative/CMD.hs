@@ -12,6 +12,7 @@ module Language.Embedded.Imperative.CMD
   , RefCMD (..)
     -- * Arrays
   , Arr (..)
+  , CompArrIx (..)
   , ArrCMD (..)
     -- * Control flow
   , Border (..)
@@ -152,15 +153,23 @@ instance ToIdent (Arr i a)
   where
     toIdent (ArrComp arr) = C.Id arr
 
+-- | Expression types that support compilation of array indexing
+class CompArrIx exp
+  where
+    -- | Generate code for an array indexing operation
+    compArrIx :: VarPred exp a => exp i -> Arr i a -> Maybe (exp a)
+    compArrIx _ _ = Nothing
+
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
-    NewArr_ :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
-    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
-    GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
-    SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
-    CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
+    NewArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
+    NewArr_      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
+    InitArr      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
+    GetArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
+    SetArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
+    CopyArr      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
+    UnsafeGetArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -169,14 +178,15 @@ data ArrCMD exp (prog :: * -> *) a
 
 instance HFunctor (ArrCMD exp)
   where
-    hfmap _ (NewArr n)        = NewArr n
-    hfmap _ (NewArr_)         = NewArr_
-    hfmap _ (InitArr as)      = InitArr as
-    hfmap _ (GetArr i arr)    = GetArr i arr
-    hfmap _ (SetArr i a arr)  = SetArr i a arr
-    hfmap _ (CopyArr a1 a2 l) = CopyArr a1 a2 l
+    hfmap _ (NewArr n)           = NewArr n
+    hfmap _ (NewArr_)            = NewArr_
+    hfmap _ (InitArr as)         = InitArr as
+    hfmap _ (GetArr i arr)       = GetArr i arr
+    hfmap _ (SetArr i a arr)     = SetArr i a arr
+    hfmap _ (CopyArr a1 a2 l)    = CopyArr a1 a2 l
+    hfmap _ (UnsafeGetArr i arr) = UnsafeGetArr i arr
 
-instance CompExp exp => DryInterp (ArrCMD exp)
+instance (CompExp exp, CompArrIx exp) => DryInterp (ArrCMD exp)
   where
     dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
     dryInterp (NewArr_)       = liftM ArrComp $ freshStr "a"
@@ -184,6 +194,9 @@ instance CompExp exp => DryInterp (ArrCMD exp)
     dryInterp (GetArr _ _)    = liftM varExp fresh
     dryInterp (SetArr _ _ _)  = return ()
     dryInterp (CopyArr _ _ _) = return ()
+    dryInterp (UnsafeGetArr i arr) = case compArrIx i arr of
+        Nothing -> liftM varExp fresh
+        Just a  -> return a
 
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
@@ -462,6 +475,7 @@ runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = sequence_
     [ readArray arr2 i >>= writeArray arr1 i
       | i <- genericTake (evalExp l) [0..]
     ]
+runArrCMD (UnsafeGetArr i arr) = runArrCMD (GetArr i arr)
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f

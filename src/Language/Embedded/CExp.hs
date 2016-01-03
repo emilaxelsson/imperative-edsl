@@ -44,6 +44,7 @@ import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
+import Language.Embedded.Imperative.CMD (CompArrIx (..))
 
 
 
@@ -239,6 +240,8 @@ instance CompExp CExp
       where showVar v = 'v' : show v
     compExp  = compCExp
     compType = cType
+
+instance CompArrIx CExp
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal

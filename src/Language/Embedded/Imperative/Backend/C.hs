@@ -53,7 +53,7 @@ compRefCMD (SetRef ref exp) = do
 compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
 -- | Compile `ArrCMD`
-compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
+compArrCMD :: forall exp prog a. (CompExp exp, CompArrIx exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
@@ -93,6 +93,15 @@ compArrCMD (CopyArr arr1 arr2 expl) = do
     l <- compExp expl
     t <- compTypePP (Proxy :: Proxy exp) arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
+compArrCMD (UnsafeGetArr expi arr) = do
+    touchVar arr
+    case compArrIx expi arr of
+        Nothing -> do
+          i <- compExp expi
+          (v,n) <- freshVar
+          addStm [cstm| $id:n = $id:arr[ $i ]; |]
+          return v
+        Just e -> return e
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
@@ -227,10 +236,10 @@ compCallCMD (CallProc fun as) = do
     as' <- mapM mkArg as
     addStm [cstm| $id:fun($args:as'); |]
 
-instance CompExp exp                => Interp (RefCMD exp)     CGen where interp = compRefCMD
-instance (CompExp exp, EvalExp exp) => Interp (ArrCMD exp)     CGen where interp = compArrCMD
-instance CompExp exp                => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance CompExp exp                => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp                => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
-instance CompExp exp                => Interp (CallCMD exp)    CGen where interp = compCallCMD
+instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
+instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
+instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
+instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
+instance (CompExp exp, CompArrIx exp, EvalExp exp) => Interp (ArrCMD exp) CGen where interp = compArrCMD
 

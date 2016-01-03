@@ -163,6 +163,18 @@ copyArr
     -> ProgramT instr m ()
 copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
 
+-- | Get an element of an array without using a temporary variable (only safe if
+-- the array is not updated as long as the resulting value is alive)
+unsafeGetArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
+unsafeGetArr i arr = singleE $ UnsafeGetArr i arr
+
 
 
 --------------------------------------------------------------------------------
