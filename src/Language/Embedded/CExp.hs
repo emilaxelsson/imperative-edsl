@@ -44,7 +44,7 @@ import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
-import Language.Embedded.Imperative.CMD (CompArrIx (..))
+import Language.Embedded.Imperative.CMD (Arr, CompArrIx (..))
 
 
 
@@ -154,6 +154,8 @@ data Sym sig
     Cond :: Sym (Bool :-> a :-> a :-> Full a)
     -- Variable (only for compilation)
     Var  :: String -> Sym (Full a)
+    -- Unsafe array indexing
+    UnsafeIx :: Arr i a -> Sym (i :-> Full a)
 
 data T sig
   where
@@ -180,7 +182,8 @@ evalSym (Op  _ f)  = f
 evalSym (Op'  _ f) = f
 evalSym (Cast f)   = f
 evalSym Cond       = \c t f -> if c then t else f
-evalSym (Var v)    = error $ "evalCExp: cannot evaluate variable " ++ v
+evalSym (Var v)      = error $ "evalCExp: cannot evaluate variable " ++ v
+evalSym (UnsafeIx _) = error $ "evalCExp: cannot evaluate unsafeIx"
 
 -- | Evaluate an expression
 evalCExp :: CExp a -> a
@@ -233,6 +236,9 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       t' <- compCExp' t
       f' <- compCExp' f
       return $ C.Cond c' t' f' mempty
+    go (UnsafeIx arr) (i :* Nil) = do
+      i' <- compCExp' i
+      return [cexp| $id:arr[$i'] |]
 
 instance CompExp CExp
   where
@@ -242,6 +248,8 @@ instance CompExp CExp
     compType = cType
 
 instance CompArrIx CExp
+  where
+    compArrIx expi arr = Just (arr #! expi)
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal
@@ -432,6 +440,10 @@ cond c t f = constFold $ sugarSym (T Cond) c t f
 (?) = cond
 
 infixl 1 ?
+
+-- | Unsafe array indexing
+(#!) :: CType a => Arr i a -> CExp i -> CExp a
+arr #! i = sugarSym (T $ UnsafeIx arr) i
 
 
 
