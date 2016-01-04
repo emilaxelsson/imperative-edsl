@@ -79,6 +79,7 @@ genNumExp = sized go
 instance Arbitrary NumExp
   where
     arbitrary = genNumExp
+
     shrink (ADD a b) = a : b : [ADD a' b | a' <- shrink a] ++ [ADD a b' | b' <- shrink b]
     shrink (SUB a b) = a : b : [SUB a' b | a' <- shrink a] ++ [SUB a b' | b' <- shrink b]
     shrink (MUL a b) = a : b : [MUL a' b | a' <- shrink a] ++ [MUL a b' | b' <- shrink b]
