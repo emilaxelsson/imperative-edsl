@@ -43,8 +43,9 @@ testTypes = do
     i <- unsafeFreezeRef =<< initRef (i2n inp - 9                  :: CExp Float)
     j <- unsafeFreezeRef =<< initRef (i2n inp - 10                 :: CExp Double)
     printf "%d %d %d %ld %u %u %u %lu %.3f %.3f\n" a b c d e f g h i j
-    k <- unsafeFreezeRef =<< initRef true
-    iff k (printf "true") (printf "false")
+    k1 <- unsafeFreezeRef =<< initRef true
+    k2 <- unsafeFreezeRef =<< initRef true
+    iff ((k1 #&& k2) #|| not_ k1) (printf "true") (printf "false")
 
 testCExp :: Prog ()
 testCExp = do

@@ -390,6 +390,22 @@ not_ (CExp (nt :$ a))
     | Just (T (UOp' Lnot _)) <- prj nt = CExp a
 not_ a = constFold $ sugarSym (T $ UOp' Lnot not) a
 
+-- | Logical and
+(#&&) :: CExp Bool -> CExp Bool -> CExp Bool
+LitP True  #&& b          = b
+LitP False #&& b          = false
+a          #&& LitP True  = a
+a          #&& LitP False = false
+a          #&& b          = constFold $ sugarSym (T $ Op Land (&&)) a b
+
+-- | Logical or
+(#||) :: CExp Bool -> CExp Bool -> CExp Bool
+LitP True  #|| b          = true
+LitP False #|| b          = b
+a          #|| LitP True  = true
+a          #|| LitP False = a
+a          #|| b          = constFold $ sugarSym (T $ Op Lor (||)) a b
+
 -- | Equality
 (#==) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
 a #== b
