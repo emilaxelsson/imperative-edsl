@@ -136,9 +136,9 @@ data Sym sig
     Lit   :: String -> a -> Sym (Full a)
     -- Predefined constant. First argument is a list of supporting C includes.
     Const :: [String] -> String -> a -> Sym (Full a)
-    -- Function
+    -- Function. First argument is a list of supporting C includes.
 #if MIN_VERSION_syntactic(3,0,0)
-    Fun   :: Signature sig => String -> Denotation sig -> Sym sig
+    Fun   :: Signature sig => [String] -> String -> Denotation sig -> Sym sig
 #else
     Fun   :: String -> Denotation sig -> Sym sig
 #endif
@@ -178,7 +178,7 @@ type instance VarPred CExp = CType
 evalSym :: Sym sig -> Denotation sig
 evalSym (Lit _ a)     = a
 evalSym (Const _ _ a) = a
-evalSym (Fun _ f)     = f
+evalSym (Fun _ _ f)   = f
 evalSym (UOp _ f)     = f
 evalSym (UOp' _ f)    = f
 evalSym (Op  _ f)     = f
@@ -214,7 +214,8 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go (Const incls const _) Nil = do
       mapM_ addInclude incls
       return [cexp| $id:const |]
-    go (Fun fun _) args = do
+    go (Fun incls fun _) args = do
+      mapM_ addInclude incls
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
     go (UOp op _) (a :* Nil) = do
@@ -362,6 +363,12 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
     recip = error "recip not implemented for CExp"
 
+instance (Floating a, Ord a, CType a) => Floating (CExp a)
+  where
+    pi    = value pi
+    sin a = constFold $ sugarSym (T $ Fun ["<math.h>"] "sin" sin) a
+    cos a = constFold $ sugarSym (T $ Fun ["<math.h>"] "cos" cos) a
+
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
 quot_ a b
@@ -485,15 +492,15 @@ deriveSymbol ''Sym
 #if MIN_VERSION_syntactic(3,0,0)
 instance Render Sym
   where
-    renderSym (Lit a _)     = a
-    renderSym (Const _ a _) = a
-    renderSym (Fun name _)  = name
-    renderSym (UOp op _)    = show op
-    renderSym (UOp' op _)   = show op
-    renderSym (Op op _)     = show op
-    renderSym (Op' op _)    = show op
-    renderSym (Cast _)      = "cast"
-    renderSym (Var v)       = v
+    renderSym (Lit a _)      = a
+    renderSym (Const _ a _)  = a
+    renderSym (Fun _ name _) = name
+    renderSym (UOp op _)     = show op
+    renderSym (UOp' op _)    = show op
+    renderSym (Op op _)      = show op
+    renderSym (Op' op _)     = show op
+    renderSym (Cast _)       = "cast"
+    renderSym (Var v)        = v
     renderArgs = renderArgsSmart
 
 instance Equality Sym

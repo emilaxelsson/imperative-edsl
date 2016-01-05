@@ -52,7 +52,8 @@ testCExp = do
     a :: CExp Int32 <- fget stdin
     let b = a#==10 ? a*3 $ a-5+8
     let c = not_ (a#==10) ? a*3 $ a-5+8
-    printf "%d %d" b c
+    let d = sin (i2n a) :: CExp Double
+    printf "%d %d %.3f" b c d
 
 testRef :: Prog ()
 testRef = do
@@ -147,18 +148,21 @@ test_strArg = do
 ----------------------------------------
 
 testAll = do
-    compareCompiled testTypes  "0\n"
-    compareCompiled testRef    ""
-    compareCompiled testCExp   "44\n"
-    compareCompiled testArr1   ""
-    compareCompiled testArr2   "20\n"
-    compareCompiled testArr3   ""
-    compareCompiled testArr4   ""
-    compareCompiled testIf1    "12\n"
-    compareCompiled testIf2    "12\n"
-    compareCompiled testFor1   ""
-    compareCompiled testFor2   ""
-    compareCompiled testFor3   ""
-    compareCompiled testAssert "45"
-    runCompiled     test_strArg
+    compareCompiled  testTypes  "0\n"
+    compareCompiled  testRef    ""
+    compareCompiledM testCExp   "44\n"
+    compareCompiled  testArr1   ""
+    compareCompiled  testArr2   "20\n"
+    compareCompiled  testArr3   ""
+    compareCompiled  testArr4   ""
+    compareCompiled  testIf1    "12\n"
+    compareCompiled  testIf2    "12\n"
+    compareCompiled  testFor1   ""
+    compareCompiled  testFor2   ""
+    compareCompiled  testFor3   ""
+    compareCompiled  testAssert "45"
+    runCompiled      test_strArg
+  where
+    compareCompiledM = compareCompiled'
+        defaultExtCompilerOpts {externalFlagsPost = ["-lm"]}
 
