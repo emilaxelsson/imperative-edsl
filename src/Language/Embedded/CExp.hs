@@ -54,8 +54,8 @@ import Language.Embedded.Imperative.CMD (Arr, CompArrIx (..))
 
 instance ToExp Bool
   where
-    toExp True  _ = [cexp| true |]
-    toExp False _ = [cexp| false |]
+    toExp True  _ = [cexp| 1 |]
+    toExp False _ = [cexp| 0 |]
 
 instance ToExp Int8   where toExp = toExp . toInteger
 instance ToExp Int16  where toExp = toExp . toInteger
@@ -133,27 +133,29 @@ isExact' = isExact . CExp
 data Sym sig
   where
     -- Literal
-    Lit  :: String -> a -> Sym (Full a)
+    Lit   :: String -> a -> Sym (Full a)
+    -- Predefined constant. First argument is a list of supporting C includes.
+    Const :: [String] -> String -> a -> Sym (Full a)
     -- Function
 #if MIN_VERSION_syntactic(3,0,0)
-    Fun  :: Signature sig => String -> Denotation sig -> Sym sig
+    Fun   :: Signature sig => String -> Denotation sig -> Sym sig
 #else
-    Fun  :: String -> Denotation sig -> Sym sig
+    Fun   :: String -> Denotation sig -> Sym sig
 #endif
     -- Unary operator
-    UOp  :: UnOp -> (a -> b) -> Sym (a :-> Full b)
+    UOp   :: UnOp -> (a -> b) -> Sym (a :-> Full b)
     -- Unary operator with same type for argument and result
-    UOp' :: UnOp -> (a -> a) -> Sym (a :-> Full a)
+    UOp'  :: UnOp -> (a -> a) -> Sym (a :-> Full a)
     -- Binary operator
-    Op   :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
+    Op    :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
     -- Binary operator with same type for arguments and result
-    Op'  :: BinOp -> (a -> a -> a) -> Sym (a :-> a :-> Full a)
+    Op'   :: BinOp -> (a -> a -> a) -> Sym (a :-> a :-> Full a)
     -- Type casting (ignored when generating code)
-    Cast :: (a -> b) -> Sym (a :-> Full b)
+    Cast  :: (a -> b) -> Sym (a :-> Full b)
     -- Conditional
-    Cond :: Sym (Bool :-> a :-> a :-> Full a)
+    Cond  :: Sym (Bool :-> a :-> a :-> Full a)
     -- Variable (only for compilation)
-    Var  :: String -> Sym (Full a)
+    Var   :: String -> Sym (Full a)
     -- Unsafe array indexing
     UnsafeIx :: Arr i a -> Sym (i :-> Full a)
 
@@ -174,16 +176,17 @@ instance Syntactic (CExp a)
 type instance VarPred CExp = CType
 
 evalSym :: Sym sig -> Denotation sig
-evalSym (Lit _ a)  = a
-evalSym (Fun _ f)  = f
-evalSym (UOp _ f)  = f
-evalSym (UOp' _ f) = f
-evalSym (Op  _ f)  = f
-evalSym (Op'  _ f) = f
-evalSym (Cast f)   = f
-evalSym Cond       = \c t f -> if c then t else f
-evalSym (Var v)      = error $ "evalCExp: cannot evaluate variable " ++ v
-evalSym (UnsafeIx _) = error $ "evalCExp: cannot evaluate unsafeIx"
+evalSym (Lit _ a)     = a
+evalSym (Const _ _ a) = a
+evalSym (Fun _ f)     = f
+evalSym (UOp _ f)     = f
+evalSym (UOp' _ f)    = f
+evalSym (Op  _ f)     = f
+evalSym (Op'  _ f)    = f
+evalSym (Cast f)      = f
+evalSym Cond          = \c t f -> if c then t else f
+evalSym (Var v)       = error $ "evalCExp: cannot evaluate variable " ++ v
+evalSym (UnsafeIx _)  = error $ "evalCExp: cannot evaluate unsafeIx"
 
 -- | Evaluate an expression
 evalCExp :: CExp a -> a
@@ -206,11 +209,11 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     compCExp' = compCExp . CExp
 
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
-    go (Var v) Nil = return [cexp| $id:v |]
-    go (Lit _ a) Nil
-      | Just (_ :: Bool) <- Data.Typeable.cast a = do
-          addSystemInclude "stdbool.h" >> return (toExp a mempty)
-      | otherwise = return $ toExp a mempty
+    go (Var v) Nil   = return [cexp| $id:v |]
+    go (Lit _ a) Nil = return $ toExp a mempty
+    go (Const incls const _) Nil = do
+      mapM_ addInclude incls
+      return [cexp| $id:const |]
     go (Fun fun _) args = do
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
@@ -293,17 +296,25 @@ pattern UOpP' op a  <- Sym (T (UOp' op _)) :$ a
 -- * User interface
 --------------------------------------------------------------------------------
 
--- | Create a named variable
-variable :: CType a => String -> CExp a
-variable = CExp . Sym . T . Var
-
 -- | Construct a literal expression
 value :: CType a => a -> CExp a
 value a = CExp $ Sym $ T $ Lit (show a) a
 
+-- | Predefined constant
+constant :: CType a
+    => [String]  -- ^ Supporting C includes
+    -> String    -- ^ Name of constant
+    -> a         -- ^ Value of constant
+    -> CExp a
+constant incls const val = CExp $ Sym $ T $ Const incls const val
+
+-- | Create a named variable
+variable :: CType a => String -> CExp a
+variable = CExp . Sym . T . Var
+
 true, false :: CExp Bool
-true  = value True
-false = value False
+true  = constant ["<stdbool.h>"] "true" True
+false = constant ["<stdbool.h>"] "false" False
 
 instance (Num a, Ord a, CType a) => Num (CExp a)
   where
@@ -458,14 +469,15 @@ deriveSymbol ''Sym
 #if MIN_VERSION_syntactic(3,0,0)
 instance Render Sym
   where
-    renderSym (Lit a _)    = a
-    renderSym (Fun name _) = name
-    renderSym (UOp op _)   = show op
-    renderSym (UOp' op _)  = show op
-    renderSym (Op op _)    = show op
-    renderSym (Op' op _)   = show op
-    renderSym (Cast _)     = "cast"
-    renderSym (Var v)      = v
+    renderSym (Lit a _)     = a
+    renderSym (Const _ a _) = a
+    renderSym (Fun name _)  = name
+    renderSym (UOp op _)    = show op
+    renderSym (UOp' op _)   = show op
+    renderSym (Op op _)     = show op
+    renderSym (Op' op _)    = show op
+    renderSym (Cast _)      = "cast"
+    renderSym (Var v)       = v
     renderArgs = renderArgsSmart
 
 instance Equality Sym
@@ -496,6 +508,7 @@ instance StringTree T
 instance Semantic Sym
   where
     semantics (Lit s a)    = Sem s a
+    semantics (Const _s a) = Sem s a
     semantics (Fun name f) = Sem name f
     semantics (UOp op f)   = Sem (show op) f
     semantics (UOp' op f)  = Sem (show op) f
