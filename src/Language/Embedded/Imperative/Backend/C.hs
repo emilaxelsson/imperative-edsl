@@ -90,6 +90,7 @@ compArrCMD (SetArr expi expv arr) = do
     addStm [cstm| $id:arr[ $i ] = $v; |]
 compArrCMD (CopyArr arr1 arr2 expl) = do
     addInclude "<string.h>"
+    mapM_ touchVar [arr1,arr2]
     l <- compExp expl
     t <- compTypePP (Proxy :: Proxy exp) arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
