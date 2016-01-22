@@ -169,7 +169,7 @@ compFileCMD :: CompExp exp => FileCMD exp CGen a -> CGen a
 compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
-    sym <- gensym "v"
+    sym <- gensym "f"
     addLocal [cdecl| typename FILE * $id:sym; |]
     addStm   [cstm| $id:sym = fopen($id:path',$string:mode'); |]
     return $ HandleComp sym
