@@ -18,10 +18,10 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import System.IO.Unsafe
-
 #if __GLASGOW_HASKELL__ < 708
 import Data.Proxy
 #endif
+
 import Language.C.Quote.C
 
 import Control.Monad.Operational.Higher
@@ -234,6 +234,22 @@ assert :: (ControlCMD (IExp instr) :<: instr)
     -> String           -- ^ Message in case of failure
     -> ProgramT instr m ()
 assert cond msg = singleE $ Assert cond msg
+
+
+
+--------------------------------------------------------------------------------
+-- * Pointer operations
+--------------------------------------------------------------------------------
+
+-- | Swap two pointers
+--
+-- This is generally an unsafe operation. E.g. it can be used to make a
+-- reference to a data structure escape the scope of the data.
+--
+-- The 'IsPointer' class ensures that the operation is only possible for types
+-- that are represented as pointers in C.
+unsafeSwap :: (IsPointer a, PtrCMD :<: instr) => a -> a -> ProgramT instr m ()
+unsafeSwap a b = singleInj $ SwapPtr a b
 
 
 

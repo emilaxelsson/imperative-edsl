@@ -52,15 +52,32 @@ compRefCMD (SetRef ref exp) = do
     addStm [cstm| $id:ref = $v; |]
 compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
+-- The `IsPointer` instance for `Arr` demands that arrays are represented as
+-- pointers in C (because `IsPointer` enables use of `SwapPtr`). As explained
+-- [here](http://stackoverflow.com/questions/3393518/swap-arrays-by-using-pointers-in-c),
+-- arrays in C are *not* pointers in the sense that they can be redirected. Here
+-- "arrays" means variables declared as e.g. `int arr[10];`. This is why we
+-- declare an additional pointer for such arrays; e.g:
+--
+--     int _a[] = {0,1,2,3,4,5,6,7,8,9};
+--     int * a = _a;
+--
+-- This extra pointer is not needed when using `alloca` since then the array is
+-- a pointer anyway. One option might be to use `alloca` for all arrays, but
+-- that doesn't permit defining constant arrays using a literal as above.
+
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. (CompExp exp, CompArrIx exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
+    let sym' = '_':sym
     n   <- compExp size
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     case n of
-      C.Const _ _ -> addLocal [cdecl| $ty:t $id:sym[ $n ]; |]
+      C.Const _ _ -> do
+        addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
+        addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
       _ -> do
         addInclude "<alloca.h>"
         addLocal [cdecl| $ty:t * $id:sym; |]
@@ -73,9 +90,11 @@ compArrCMD cmd@(NewArr_) = do
     return $ ArrComp sym
 compArrCMD cmd@(InitArr as) = do
     sym <- gensym "a"
+    let sym' = '_':sym
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     as' <- sequence [compExp (litExp a :: exp a') | (a :: a') <- as]
-    addLocal [cdecl| $ty:t $id:sym[] = $init:(arrayInit as');|]
+    addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
+    addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar
@@ -158,6 +177,14 @@ compControlCMD (Assert cond msg) = do
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
 
+compPtrCMD :: PtrCMD prog a -> CGen a
+compPtrCMD (SwapPtr a b) = do
+    sym <- gensym "tmp"
+    addLocal [cdecl| void * $id:sym; |]
+    addStm   [cstm| $id:sym = $id:a; |]
+    addStm   [cstm| $id:a = $id:b; |]
+    addStm   [cstm| $id:b = $id:sym; |]
+
 compIOMode :: IOMode -> String
 compIOMode ReadMode      = "r"
 compIOMode WriteMode     = "w"
@@ -239,6 +266,7 @@ compCallCMD (CallProc fun as) = do
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
+instance                Interp PtrCMD           CGen where interp = compPtrCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
 instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD

@@ -27,6 +27,7 @@ module Language.Embedded.Imperative
   , RefCMD
   , ArrCMD
   , ControlCMD
+  , PtrCMD
   , FileCMD
   , ObjectCMD
   , CallCMD

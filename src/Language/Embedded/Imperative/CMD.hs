@@ -20,6 +20,9 @@ module Language.Embedded.Imperative.CMD
   , borderIncl
   , IxRange
   , ControlCMD (..)
+    -- * Pointers
+  , IsPointer (..)
+  , PtrCMD (..)
     -- * File handling
   , Handle (..)
   , stdin
@@ -129,7 +132,8 @@ type instance IExp (RefCMD e :+: i) = e
 -- | Mutable array
 data Arr i a
     = ArrComp String
-    | ArrEval (IOArray i a)
+    | ArrEval (IORef (IOArray i a))
+        -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
 -- In a way, it's not terribly useful to have `Arr` parameterized on the index
@@ -263,6 +267,37 @@ instance DryInterp (ControlCMD exp)
 
 type instance IExp (ControlCMD e)       = e
 type instance IExp (ControlCMD e :+: i) = e
+
+
+
+--------------------------------------------------------------------------------
+-- * Pointers
+--------------------------------------------------------------------------------
+
+-- | Types that are represented as a pointers in C
+class ToIdent a => IsPointer a
+  where
+    runSwapPtr :: a -> a -> IO ()
+
+instance IsPointer (Arr i a)
+  where
+    runSwapPtr (ArrEval arr1) (ArrEval arr2) = do
+        arr1' <- readIORef arr1
+        arr2' <- readIORef arr2
+        writeIORef arr1 arr2'
+        writeIORef arr2 arr1'
+
+data PtrCMD (prog :: * -> *) a
+  where
+    SwapPtr :: IsPointer a => a -> a -> PtrCMD prog ()
+
+instance HFunctor PtrCMD
+  where
+    hfmap _ (SwapPtr a b) = SwapPtr a b
+
+instance DryInterp PtrCMD
+  where
+    dryInterp (SwapPtr _ _) = return ()
 
 
 
@@ -464,17 +499,22 @@ runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
 runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr n)   = fmap ArrEval $ newArray_ (0, fromIntegral (evalExp n)-1)
+runArrCMD (NewArr n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
 runArrCMD (NewArr_)    = error "NewArr_ not allowed in interpreted mode"
-runArrCMD (InitArr as) = fmap ArrEval $ newListArray (0, genericLength as - 1) as
-runArrCMD (GetArr i (ArrEval arr)) =
-    fmap litExp $ readArray arr (fromIntegral (evalExp i))
-runArrCMD (SetArr i a (ArrEval arr)) =
-    writeArray arr (fromIntegral (evalExp i)) (evalExp a)
-runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = sequence_
-    [ readArray arr2 i >>= writeArray arr1 i
-      | i <- genericTake (evalExp l) [0..]
-    ]
+runArrCMD (InitArr as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
+runArrCMD (GetArr i (ArrEval arr)) = do
+    arr' <- readIORef arr
+    fmap litExp $ readArray arr' (fromIntegral (evalExp i))
+runArrCMD (SetArr i a (ArrEval arr)) = do
+    arr' <- readIORef arr
+    writeArray arr' (fromIntegral (evalExp i)) (evalExp a)
+runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
+    arr1' <- readIORef arr1
+    arr2' <- readIORef arr2
+    sequence_
+      [ readArray arr2' i >>= writeArray arr1' i
+        | i <- genericTake (evalExp l) [0..]
+      ]
 runArrCMD (UnsafeGetArr i arr) = runArrCMD (GetArr i arr)
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
@@ -498,6 +538,9 @@ runControlCMD (For (lo,step,hi) body) = loop (evalExp lo)
 runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
     "Assertion failed: " ++ msg
+
+runPtrCMD :: PtrCMD prog a -> IO a
+runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
 evalHandle :: Handle -> IO.Handle
 evalHandle (HandleEval h)        = h
@@ -550,6 +593,7 @@ runCallCMD (CallProc _ _)       = error "cannot run programs involving callProc"
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
+instance                Interp PtrCMD           IO where interp = runPtrCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
 instance                Interp (ObjectCMD exp)  IO where interp = runObjectCMD
 instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD

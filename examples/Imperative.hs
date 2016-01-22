@@ -20,6 +20,7 @@ type CMD
     =   RefCMD     CExp
     :+: ArrCMD     CExp
     :+: ControlCMD CExp
+    :+: PtrCMD
     :+: FileCMD    CExp
     :+: ObjectCMD  CExp
     :+: CallCMD    CExp
@@ -95,7 +96,27 @@ testArr4 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
     sequence_ [unsafeGetArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
     printf "\n"
-    return ()
+
+testSwap1 :: Prog ()
+testSwap1 = do
+    arr1 :: Arr Word32 Int32 <- initArr [1,2,3,4]
+    arr2 :: Arr Word32 Int32 <- initArr [11,12,13,14]
+    unsafeSwap arr1 arr2
+    sequence_ [getArr i arr1 >>= printf "%d " | i <- map fromInteger [0..3]]
+    printf "\n"
+
+testSwap2 :: Prog ()
+testSwap2 = do
+    arr1 :: Arr Word32 Int32 <- initArr [1,2,3,4]
+    n <- fget stdin
+    arr2 :: Arr Word32 Int32 <- newArr n
+    copyArr arr2 arr1 4
+    setArr 2 22 arr2
+    unsafeSwap arr1 arr2
+    sequence_ [getArr i arr1 >>= printf "%d " | i <- map fromInteger [0..3]]
+    printf "\n"
+    sequence_ [getArr i arr2 >>= printf "%d " | i <- map fromInteger [0..3]]
+    printf "\n"
 
 testIf1 :: Prog ()
 testIf1 = do
@@ -155,6 +176,8 @@ testAll = do
     compareCompiled  testArr2   "20\n"
     compareCompiled  testArr3   ""
     compareCompiled  testArr4   ""
+    compareCompiled  testSwap1  ""
+    compareCompiled  testSwap2  "45\n"
     compareCompiled  testIf1    "12\n"
     compareCompiled  testIf2    "12\n"
     compareCompiled  testFor1   ""
