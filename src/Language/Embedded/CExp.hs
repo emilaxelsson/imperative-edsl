@@ -531,7 +531,7 @@ instance StringTree T
 instance Semantic Sym
   where
     semantics (Lit s a)    = Sem s a
-    semantics (Const _s a) = Sem s a
+    semantics (Const s a)  = Sem s a
     semantics (Fun name f) = Sem name f
     semantics (UOp op f)   = Sem (show op) f
     semantics (UOp' op f)  = Sem (show op) f
