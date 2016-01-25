@@ -137,11 +137,11 @@ data Sym sig
     -- Predefined constant. First argument is a list of supporting C includes.
     Const :: [String] -> String -> a -> Sym (Full a)
     -- Function. First argument is a list of supporting C includes.
+    Fun   ::
 #if MIN_VERSION_syntactic(3,0,0)
-    Fun   :: Signature sig => [String] -> String -> Denotation sig -> Sym sig
-#else
-    Fun   :: String -> Denotation sig -> Sym sig
+             Signature sig =>
 #endif
+             [String] -> String -> Denotation sig -> Sym sig
     -- Unary operator
     UOp   :: UnOp -> (a -> b) -> Sym (a :-> Full b)
     -- Unary operator with same type for argument and result
