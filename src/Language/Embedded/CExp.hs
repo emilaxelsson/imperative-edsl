@@ -530,15 +530,15 @@ instance StringTree T
 
 instance Semantic Sym
   where
-    semantics (Lit s a)     = Sem s a
-    semantics (Const _ s a) = Sem s a
-    semantics (Fun name f)  = Sem name f
-    semantics (UOp op f)    = Sem (show op) f
-    semantics (UOp' op f)   = Sem (show op) f
-    semantics (Op op f)     = Sem (show op) f
-    semantics (Op' op f)    = Sem (show op) f
-    semantics (Cast f)      = Sem "cast" f
-    semantics (Var v)       = Sem v $ error $ "evaluating free variable: " ++ v
+    semantics (Lit s a)      = Sem s a
+    semantics (Const _ s a)  = Sem s a
+    semantics (Fun _ name f) = Sem name f
+    semantics (UOp op f)     = Sem (show op) f
+    semantics (UOp' op f)    = Sem (show op) f
+    semantics (Op op f)      = Sem (show op) f
+    semantics (Op' op f)     = Sem (show op) f
+    semantics (Cast f)       = Sem "cast" f
+    semantics (Var v)        = Sem v $ error $ "evaluating free variable: " ++ v
 
 instance Equality Sym
   where
