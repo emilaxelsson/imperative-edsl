@@ -108,7 +108,7 @@ compileC :: (Interp instr CGen, HFunctor instr)
 compileC (ExternalCompilerOpts {..}) prog = do
     tmp <- getTemporaryDirectory
     t   <- fmap (formatTime defaultTimeLocale format) getCurrentTime
-    (exeFile,exeh) <- openTempFile tmp ("feldspar_" ++ t)
+    (exeFile,exeh) <- openTempFile tmp ("edsl_" ++ t)
     hClose exeh
     let cFile = exeFile ++ ".c"
     writeFile cFile $ compile prog
