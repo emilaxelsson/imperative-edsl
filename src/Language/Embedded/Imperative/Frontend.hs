@@ -157,6 +157,38 @@ copyArr
     -> ProgramT instr m ()
 copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
 
+-- | Freeze a mutable array to an immutable one. This involves copying the array
+-- to a newly allocated one.
+freezeArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => Arr i a
+    -> IExp instr i  -- ^ Length of array
+    -> ProgramT instr m (IArr i a)
+freezeArr arr n = do
+    arr2 <- newArr n
+    copyArr arr2 arr n
+    unsafeFreezeArr arr2
+
+-- | Freeze a mutable array to an immutable one without making a copy. This is
+-- generally only safe if the the mutable array is not updated as long as the
+-- immutable array is alive.
+unsafeFreezeArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => Arr i a
+    -> ProgramT instr m (IArr i a)
+unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
+
 -- | Get an element of an array. Depending on the expression type, this function
 -- may not use a temporary variable for the result, so the operation is only
 -- safe if the array is not updated as long as the resulting value is alive.

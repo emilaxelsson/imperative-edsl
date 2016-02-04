@@ -113,6 +113,7 @@ compArrCMD (CopyArr arr1 arr2 expl) = do
     l <- compExp expl
     t <- compTypePP (Proxy :: Proxy exp) arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
+compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
 compArrCMD (UnsafeGetArr expi arr) = do
     touchVar arr
     case compArrIx expi arr of

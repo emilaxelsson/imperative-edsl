@@ -7,6 +7,7 @@
 module Language.Embedded.Imperative.Frontend.General
   ( Ref
   , Arr
+  , IArr
   , Border (..)
   , IxRange
   , IsPointer
