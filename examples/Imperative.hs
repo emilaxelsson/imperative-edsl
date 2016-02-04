@@ -94,6 +94,20 @@ testArr3 = do
 testArr4 :: Prog ()
 testArr4 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    iarr <- freezeArr arr 4
+    sequence_ [printf "%d " $ iarr #! i | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+
+testArr5 :: Prog ()
+testArr5 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    iarr <- unsafeFreezeArr arr
+    sequence_ [printf "%d " $ iarr #! i | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+
+testArr6 :: Prog ()
+testArr6 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
     sequence_ [unsafeGetArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
     printf "\n"
 
@@ -176,6 +190,8 @@ testAll = do
     compareCompiled  testArr2   "20\n"
     compareCompiled  testArr3   ""
     compareCompiled  testArr4   ""
+    compareCompiled  testArr5   ""
+    compareCompiled  testArr6   ""
     compareCompiled  testSwap1  ""
     compareCompiled  testSwap2  "45\n"
     compareCompiled  testIf1    "12\n"
