@@ -51,7 +51,7 @@ data ArrArg exp where
 
 instance Arg ArrArg where
   mkArg   (ArrArg a) = return [cexp| $id:a |]
-  mkParam (ArrArg (a :: Arr i a) :: ArrArg exp) = do
+  mkParam (ArrArg (_ :: Arr i a) :: ArrArg exp) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
 
@@ -60,6 +60,22 @@ instance Arg ArrArg where
 
   mapMArg predCast _ (ArrArg (a :: Arr i a)) =
     predCast (Proxy :: Proxy a) $ return $ ArrArg a
+
+-- | Pointer argument
+data PtrArg exp where
+  PtrArg :: VarPred exp a => Ptr a -> PtrArg exp
+
+instance Arg PtrArg where
+  mkArg   (PtrArg p) = return [cexp| $id:p |]
+  mkParam (PtrArg (_ :: Ptr a) :: PtrArg exp) = do
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    return [cparam| $ty:t* |]
+
+  mapArg predCast _ (PtrArg (p :: Ptr a)) =
+    predCast (Proxy :: Proxy a) $ PtrArg p
+
+  mapMArg predCast _ (PtrArg (p :: Ptr a)) =
+    predCast (Proxy :: Proxy a) $ return $ PtrArg p
 
 -- | Abstract object argument
 data ObjArg exp where

@@ -472,6 +472,10 @@ refArg = FunArg . RefArg
 arrArg :: VarPred exp a => Arr i a -> FunArg exp
 arrArg = FunArg . ArrArg
 
+-- | Pointer argument
+ptrArg :: VarPred exp a => Ptr a -> FunArg exp
+ptrArg = FunArg . PtrArg
+
 -- | Abstract object argument
 objArg :: Object -> FunArg exp
 objArg = FunArg . ObjArg
