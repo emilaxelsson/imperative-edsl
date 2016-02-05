@@ -473,7 +473,7 @@ refArg :: VarPred exp a => Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
 -- | Array argument
-arrArg :: VarPred exp a => Arr n a -> FunArg exp
+arrArg :: VarPred exp a => Arr i a -> FunArg exp
 arrArg = FunArg . ArrArg
 
 -- | Abstract object argument

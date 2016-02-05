@@ -47,18 +47,18 @@ instance Arg RefArg where
 
 -- | Array argument
 data ArrArg exp where
-  ArrArg :: VarPred exp a => Arr n a -> ArrArg exp
+  ArrArg :: VarPred exp a => Arr i a -> ArrArg exp
 
 instance Arg ArrArg where
   mkArg   (ArrArg a) = return [cexp| $id:a |]
-  mkParam (ArrArg (a :: Arr n a) :: ArrArg exp) = do
+  mkParam (ArrArg (a :: Arr i a) :: ArrArg exp) = do
     t <- compTypeP (Proxy :: Proxy (exp a))
     return [cparam| $ty:t* |]
 
-  mapArg predCast _ (ArrArg (a :: Arr n a)) =
+  mapArg predCast _ (ArrArg (a :: Arr i a)) =
     predCast (Proxy :: Proxy a) $ ArrArg a
 
-  mapMArg predCast _ (ArrArg (a :: Arr n a)) =
+  mapMArg predCast _ (ArrArg (a :: Arr i a)) =
     predCast (Proxy :: Proxy a) $ return $ ArrArg a
 
 -- | Abstract object argument
