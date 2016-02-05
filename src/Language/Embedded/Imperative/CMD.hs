@@ -21,6 +21,7 @@ module Language.Embedded.Imperative.CMD
   , IxRange
   , ControlCMD (..)
     -- * Pointers
+  , Ptr (..)
   , IsPointer (..)
   , PtrCMD (..)
     -- * File handling
@@ -171,7 +172,6 @@ instance ToIdent (IArr i a)
 data ArrCMD exp (prog :: * -> *) a
   where
     NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
-    NewArr_ :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
     InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
     GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
     SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
@@ -186,7 +186,6 @@ data ArrCMD exp (prog :: * -> *) a
 instance HFunctor (ArrCMD exp)
   where
     hfmap _ (NewArr n)            = NewArr n
-    hfmap _ (NewArr_)             = NewArr_
     hfmap _ (InitArr as)          = InitArr as
     hfmap _ (GetArr i arr)        = GetArr i arr
     hfmap _ (SetArr i a arr)      = SetArr i a arr
@@ -196,7 +195,6 @@ instance HFunctor (ArrCMD exp)
 instance CompExp exp => DryInterp (ArrCMD exp)
   where
     dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
-    dryInterp (NewArr_)       = liftM ArrComp $ freshStr "a"
     dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
     dryInterp (GetArr _ _)    = liftM varExp fresh
     dryInterp (SetArr _ _ _)  = return ()
@@ -275,6 +273,13 @@ type instance IExp (ControlCMD e :+: i) = e
 -- * Pointers
 --------------------------------------------------------------------------------
 
+newtype Ptr a = PtrComp {ptrId :: String}
+  deriving Typeable
+
+instance ToIdent (Ptr a)
+  where
+    toIdent = C.Id . ptrId
+
 -- | Types that are represented as a pointers in C
 class ToIdent a => IsPointer a
   where
@@ -288,17 +293,23 @@ instance IsPointer (Arr i a)
         writeIORef arr1 arr2'
         writeIORef arr2 arr1'
 
-data PtrCMD (prog :: * -> *) a
+data PtrCMD (exp :: * -> *) (prog :: * -> *) a
   where
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD prog ()
+    NewPtr  :: VarPred exp a => PtrCMD exp prog (Ptr a)
+    SwapPtr :: IsPointer a => a -> a -> PtrCMD exp prog ()
 
-instance HFunctor PtrCMD
+instance HFunctor (PtrCMD exp)
   where
+    hfmap _ NewPtr        = NewPtr
     hfmap _ (SwapPtr a b) = SwapPtr a b
 
-instance DryInterp PtrCMD
+instance DryInterp (PtrCMD exp)
   where
+    dryInterp NewPtr        = liftM PtrComp $ freshStr "p"
     dryInterp (SwapPtr _ _) = return ()
+
+type instance IExp (PtrCMD e)       = e
+type instance IExp (PtrCMD e :+: i) = e
 
 
 
@@ -499,7 +510,6 @@ runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
-runArrCMD (NewArr_)    = error "NewArr_ not allowed in interpreted mode"
 runArrCMD (InitArr as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrEval arr)) = do
     arr' <- readIORef arr
@@ -539,7 +549,8 @@ runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
     "Assertion failed: " ++ msg
 
-runPtrCMD :: PtrCMD prog a -> IO a
+runPtrCMD :: PtrCMD exp prog a -> IO a
+runPtrCMD NewPtr        = error "newPtr not allowed in interpreted mode"
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
 evalHandle :: Handle -> IO.Handle
@@ -593,7 +604,7 @@ runCallCMD (CallProc _ _)       = error "cannot run programs involving callProc"
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
-instance                Interp PtrCMD           IO where interp = runPtrCMD
+instance                Interp (PtrCMD exp)     IO where interp = runPtrCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
 instance                Interp (ObjectCMD exp)  IO where interp = runObjectCMD
 instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD

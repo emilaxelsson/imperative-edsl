@@ -20,7 +20,7 @@ type CMD
     =   RefCMD     CExp
     :+: ArrCMD     CExp
     :+: ControlCMD CExp
-    :+: PtrCMD
+    :+: PtrCMD     CExp
     :+: FileCMD    CExp
     :+: ObjectCMD  CExp
     :+: CallCMD    CExp

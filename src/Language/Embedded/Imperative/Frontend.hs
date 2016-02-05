@@ -98,16 +98,6 @@ newArr
     => IExp instr i -> ProgramT instr m (Arr i a)
 newArr = singleE . NewArr
 
-newArr_
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => ProgramT instr m (Arr i a)
-newArr_ = singleE $ NewArr_
-
 -- | Create and initialize an array
 initArr
     :: ( VarPred (IExp instr) a
@@ -254,6 +244,11 @@ assert cond msg = singleE $ Assert cond msg
 -- * Pointer operations
 --------------------------------------------------------------------------------
 
+-- | Create a null pointer
+newPtr :: (VarPred (IExp instr) a, PtrCMD (IExp instr) :<: instr) =>
+    ProgramT instr m (Ptr a)
+newPtr = singleE $ NewPtr
+
 -- | Swap two pointers
 --
 -- This is generally an unsafe operation. E.g. it can be used to make a
@@ -261,8 +256,9 @@ assert cond msg = singleE $ Assert cond msg
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: (IsPointer a, PtrCMD :<: instr) => a -> a -> ProgramT instr m ()
-unsafeSwap a b = singleInj $ SwapPtr a b
+unsafeSwap :: (IsPointer a, PtrCMD (IExp instr) :<: instr) =>
+    a -> a -> ProgramT instr m ()
+unsafeSwap a b = singleE $ SwapPtr a b
 
 
 
