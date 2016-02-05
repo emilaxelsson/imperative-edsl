@@ -83,7 +83,6 @@ data Ref a
     | RefEval (IORef a)
   deriving Typeable
 
--- | Identifiers from references
 instance ToIdent (Ref a)
   where
     toIdent (RefComp r) = C.Id ('v' : show r)
@@ -160,12 +159,10 @@ data IArr i a
 -- of `imperative-edsl` may always chose to make a wrapper interface that uses
 -- a specific index type.
 
--- | Identifiers from arrays
 instance ToIdent (Arr i a)
   where
     toIdent (ArrComp arr) = C.Id arr
 
--- | Identifiers from arrays
 instance ToIdent (IArr i a)
   where
     toIdent (IArrComp arr) = C.Id arr
@@ -315,7 +312,6 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
--- | Identifiers from handles
 instance ToIdent Handle
   where
     toIdent (HandleComp h) = C.Id h
@@ -389,7 +385,6 @@ data Object = Object
     }
   deriving (Eq, Show, Ord, Typeable)
 
--- | Identifiers from objects
 instance ToIdent Object
   where
     toIdent (Object _ _ o) = C.Id o
