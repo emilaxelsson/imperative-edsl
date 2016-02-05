@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -167,6 +168,31 @@ testAssert = do
     assert (inp #> 0) "input too small"
     printf "past assertion\n"
 
+test_ptrArg :: Prog ()
+test_ptrArg = do
+    addInclude "<stdlib.h>"
+    addInclude "<string.h>"
+    addInclude "<stdio.h>"
+    addDefinition mall_def
+    addDefinition printArr_def
+    p :: Ptr Int32 <- newPtr
+    callProc "mall" [addr (ptrArg p), valArg (100 :: CExp Word32)]
+    arr :: Arr Word32 Int32 <- initArr [34,45,56,67,78]
+    callProc "memcpy" [ptrArg p, arrArg arr, valArg (5*4 :: CExp Word32)]  -- sizeof(int32_t) = 4
+    callProc "printArr" [ptrArg p]
+    callProc "free" [ptrArg p]
+  where
+    mall_def = [cedecl|
+        void mall (typename int32_t ** p, typename size_t s) {
+            *p = malloc(s);
+        }
+        |]
+    printArr_def = [cedecl|
+        void printArr (typename int32_t * p) {
+            printf("%d %d %d %d %d\n", p[0], p[1], p[2], p[3], p[4]);
+        }
+        |]
+
 test_strArg :: Prog ()
 test_strArg = do
     addInclude "<stdio.h>"
@@ -193,6 +219,7 @@ testAll = do
     compareCompiled  testFor2   ""
     compareCompiled  testFor3   ""
     compareCompiled  testAssert "45"
+    runCompiled      test_ptrArg
     runCompiled      test_strArg
   where
     compareCompiledM = compareCompiled'
