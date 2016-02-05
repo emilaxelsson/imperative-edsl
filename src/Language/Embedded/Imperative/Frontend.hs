@@ -189,19 +189,6 @@ unsafeFreezeArr
     -> ProgramT instr m (IArr i a)
 unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
 
--- | Get an element of an array. Depending on the expression type, this function
--- may not use a temporary variable for the result, so the operation is only
--- safe if the array is not updated as long as the resulting value is alive.
-unsafeGetArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
-unsafeGetArr i arr = singleE $ UnsafeGetArr i arr
-
 
 
 --------------------------------------------------------------------------------
