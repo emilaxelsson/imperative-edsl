@@ -67,7 +67,7 @@ compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 -- that doesn't permit defining constant arrays using a literal as above.
 
 -- | Compile `ArrCMD`
-compArrCMD :: forall exp prog a. (CompExp exp, CompArrIx exp, EvalExp exp)
+compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
@@ -82,11 +82,6 @@ compArrCMD cmd@(NewArr size) = do
         addInclude "<alloca.h>"
         addLocal [cdecl| $ty:t * $id:sym; |]
         addStm [cstm| $id:sym = alloca($n * sizeof($ty:t)); |]
-    return $ ArrComp sym
-compArrCMD cmd@(NewArr_) = do
-    sym <- gensym "a"
-    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
-    addLocal [cdecl| $ty:t * $id:sym; |]
     return $ ArrComp sym
 compArrCMD cmd@(InitArr as) = do
     sym <- gensym "a"
@@ -113,15 +108,7 @@ compArrCMD (CopyArr arr1 arr2 expl) = do
     l <- compExp expl
     t <- compTypePP (Proxy :: Proxy exp) arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
-compArrCMD (UnsafeGetArr expi arr) = do
-    touchVar arr
-    case compArrIx expi arr of
-        Nothing -> do
-          i <- compExp expi
-          (v,n) <- freshVar
-          addStm [cstm| $id:n = $id:arr[ $i ]; |]
-          return v
-        Just e -> return e
+compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
@@ -177,7 +164,13 @@ compControlCMD (Assert cond msg) = do
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
 
-compPtrCMD :: PtrCMD prog a -> CGen a
+compPtrCMD :: forall exp prog a . CompExp exp => PtrCMD exp prog a -> CGen a
+compPtrCMD cmd@NewPtr = do
+    addInclude "<stddef.h>"
+    sym <- gensym "p"
+    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    addLocal [cdecl| $ty:t * $id:sym = NULL; |]
+    return $ PtrComp sym
 compPtrCMD (SwapPtr a b) = do
     sym <- gensym "tmp"
     addLocal [cdecl| void * $id:sym; |]
@@ -266,9 +259,9 @@ compCallCMD (CallProc fun as) = do
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance                Interp PtrCMD           CGen where interp = compPtrCMD
+instance CompExp exp => Interp (PtrCMD exp)     CGen where interp = compPtrCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
 instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
 instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
-instance (CompExp exp, CompArrIx exp, EvalExp exp) => Interp (ArrCMD exp) CGen where interp = compArrCMD
+instance (CompExp exp, EvalExp exp) => Interp (ArrCMD exp) CGen where interp = compArrCMD
 

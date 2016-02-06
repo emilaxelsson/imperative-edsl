@@ -98,16 +98,6 @@ newArr
     => IExp instr i -> ProgramT instr m (Arr i a)
 newArr = singleE . NewArr
 
-newArr_
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => ProgramT instr m (Arr i a)
-newArr_ = singleE $ NewArr_
-
 -- | Create and initialize an array
 initArr
     :: ( VarPred (IExp instr) a
@@ -157,18 +147,37 @@ copyArr
     -> ProgramT instr m ()
 copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
 
--- | Get an element of an array. Depending on the expression type, this function
--- may not use a temporary variable for the result, so the operation is only
--- safe if the array is not updated as long as the resulting value is alive.
-unsafeGetArr
+-- | Freeze a mutable array to an immutable one. This involves copying the array
+-- to a newly allocated one.
+freezeArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => Arr i a
+    -> IExp instr i  -- ^ Length of array
+    -> ProgramT instr m (IArr i a)
+freezeArr arr n = do
+    arr2 <- newArr n
+    copyArr arr2 arr n
+    unsafeFreezeArr arr2
+
+-- | Freeze a mutable array to an immutable one without making a copy. This is
+-- generally only safe if the the mutable array is not updated as long as the
+-- immutable array is alive.
+unsafeFreezeArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
        , Integral i
        , Ix i
        , ArrCMD (IExp instr) :<: instr
        )
-    => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
-unsafeGetArr i arr = singleE $ UnsafeGetArr i arr
+    => Arr i a
+    -> ProgramT instr m (IArr i a)
+unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
 
 
 
@@ -235,6 +244,11 @@ assert cond msg = singleE $ Assert cond msg
 -- * Pointer operations
 --------------------------------------------------------------------------------
 
+-- | Create a null pointer
+newPtr :: (VarPred (IExp instr) a, PtrCMD (IExp instr) :<: instr) =>
+    ProgramT instr m (Ptr a)
+newPtr = singleE $ NewPtr
+
 -- | Swap two pointers
 --
 -- This is generally an unsafe operation. E.g. it can be used to make a
@@ -242,8 +256,9 @@ assert cond msg = singleE $ Assert cond msg
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: (IsPointer a, PtrCMD :<: instr) => a -> a -> ProgramT instr m ()
-unsafeSwap a b = singleInj $ SwapPtr a b
+unsafeSwap :: (IsPointer a, PtrCMD (IExp instr) :<: instr) =>
+    a -> a -> ProgramT instr m ()
+unsafeSwap a b = singleE $ SwapPtr a b
 
 
 
@@ -454,8 +469,12 @@ refArg :: VarPred exp a => Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
 -- | Array argument
-arrArg :: VarPred exp a => Arr n a -> FunArg exp
+arrArg :: VarPred exp a => Arr i a -> FunArg exp
 arrArg = FunArg . ArrArg
+
+-- | Pointer argument
+ptrArg :: VarPred exp a => Ptr a -> FunArg exp
+ptrArg = FunArg . PtrArg
 
 -- | Abstract object argument
 objArg :: Object -> FunArg exp

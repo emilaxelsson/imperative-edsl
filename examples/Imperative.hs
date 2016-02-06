@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -20,7 +21,7 @@ type CMD
     =   RefCMD     CExp
     :+: ArrCMD     CExp
     :+: ControlCMD CExp
-    :+: PtrCMD
+    :+: PtrCMD     CExp
     :+: FileCMD    CExp
     :+: ObjectCMD  CExp
     :+: CallCMD    CExp
@@ -94,7 +95,15 @@ testArr3 = do
 testArr4 :: Prog ()
 testArr4 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
-    sequence_ [unsafeGetArr i arr >>= printf "%d " . (*3) | i' <- [0..3], let i = fromInteger i']
+    iarr <- freezeArr arr 4
+    sequence_ [printf "%d " $ iarr #! i | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+
+testArr5 :: Prog ()
+testArr5 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    iarr <- unsafeFreezeArr arr
+    sequence_ [printf "%d " $ iarr #! i | i' <- [0..3], let i = fromInteger i']
     printf "\n"
 
 testSwap1 :: Prog ()
@@ -159,6 +168,31 @@ testAssert = do
     assert (inp #> 0) "input too small"
     printf "past assertion\n"
 
+test_ptrArg :: Prog ()
+test_ptrArg = do
+    addInclude "<stdlib.h>"
+    addInclude "<string.h>"
+    addInclude "<stdio.h>"
+    addDefinition mall_def
+    addDefinition printArr_def
+    p :: Ptr Int32 <- newPtr
+    callProc "mall" [addr (ptrArg p), valArg (100 :: CExp Word32)]
+    arr :: Arr Word32 Int32 <- initArr [34,45,56,67,78]
+    callProc "memcpy" [ptrArg p, arrArg arr, valArg (5*4 :: CExp Word32)]  -- sizeof(int32_t) = 4
+    callProc "printArr" [ptrArg p]
+    callProc "free" [ptrArg p]
+  where
+    mall_def = [cedecl|
+        void mall (typename int32_t ** p, typename size_t s) {
+            *p = malloc(s);
+        }
+        |]
+    printArr_def = [cedecl|
+        void printArr (typename int32_t * p) {
+            printf("%d %d %d %d %d\n", p[0], p[1], p[2], p[3], p[4]);
+        }
+        |]
+
 test_strArg :: Prog ()
 test_strArg = do
     addInclude "<stdio.h>"
@@ -176,6 +210,7 @@ testAll = do
     compareCompiled  testArr2   "20\n"
     compareCompiled  testArr3   ""
     compareCompiled  testArr4   ""
+    compareCompiled  testArr5   ""
     compareCompiled  testSwap1  ""
     compareCompiled  testSwap2  "45\n"
     compareCompiled  testIf1    "12\n"
@@ -184,6 +219,7 @@ testAll = do
     compareCompiled  testFor2   ""
     compareCompiled  testFor3   ""
     compareCompiled  testAssert "45"
+    runCompiled      test_ptrArg
     runCompiled      test_strArg
   where
     compareCompiledM = compareCompiled'

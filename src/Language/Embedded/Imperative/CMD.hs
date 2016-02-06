@@ -12,7 +12,7 @@ module Language.Embedded.Imperative.CMD
   , RefCMD (..)
     -- * Arrays
   , Arr (..)
-  , CompArrIx (..)
+  , IArr (..)
   , ArrCMD (..)
     -- * Control flow
   , Border (..)
@@ -21,6 +21,7 @@ module Language.Embedded.Imperative.CMD
   , IxRange
   , ControlCMD (..)
     -- * Pointers
+  , Ptr (..)
   , IsPointer (..)
   , PtrCMD (..)
     -- * File handling
@@ -42,6 +43,7 @@ module Language.Embedded.Imperative.CMD
 
 
 
+import Data.Array
 import Data.Array.IO
 import Data.Char (isSpace)
 import Data.Int
@@ -82,7 +84,6 @@ data Ref a
     | RefEval (IORef a)
   deriving Typeable
 
--- | Identifiers from references
 instance ToIdent (Ref a)
   where
     toIdent (RefComp r) = C.Id ('v' : show r)
@@ -136,6 +137,13 @@ data Arr i a
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
+-- | Immutable array
+data IArr i a
+    = IArrComp String
+    | IArrEval (Array i a)
+        -- The `IORef` is needed in order to make the `IsPointer` instance
+  deriving Typeable
+
 -- In a way, it's not terribly useful to have `Arr` parameterized on the index
 -- type, since it's required to be an integer type, and it doesn't really matter
 -- which integer type is used since we can always cast between them.
@@ -152,28 +160,23 @@ data Arr i a
 -- of `imperative-edsl` may always chose to make a wrapper interface that uses
 -- a specific index type.
 
--- | Identifiers from arrays
 instance ToIdent (Arr i a)
   where
     toIdent (ArrComp arr) = C.Id arr
 
--- | Expression types that support compilation of array indexing
-class CompArrIx exp
+instance ToIdent (IArr i a)
   where
-    -- | Generate code for an array indexing operation
-    compArrIx :: VarPred exp a => exp i -> Arr i a -> Maybe (exp a)
-    compArrIx _ _ = Nothing
+    toIdent (IArrComp arr) = C.Id arr
 
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
-    NewArr_      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => ArrCMD exp prog (Arr i a)
-    InitArr      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
-    GetArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
-    SetArr       :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
-    CopyArr      :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
-    UnsafeGetArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
+    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
+    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
+    GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
+    SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
+    CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
+    UnsafeFreezeArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> ArrCMD exp prog (IArr i a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -182,25 +185,21 @@ data ArrCMD exp (prog :: * -> *) a
 
 instance HFunctor (ArrCMD exp)
   where
-    hfmap _ (NewArr n)           = NewArr n
-    hfmap _ (NewArr_)            = NewArr_
-    hfmap _ (InitArr as)         = InitArr as
-    hfmap _ (GetArr i arr)       = GetArr i arr
-    hfmap _ (SetArr i a arr)     = SetArr i a arr
-    hfmap _ (CopyArr a1 a2 l)    = CopyArr a1 a2 l
-    hfmap _ (UnsafeGetArr i arr) = UnsafeGetArr i arr
+    hfmap _ (NewArr n)            = NewArr n
+    hfmap _ (InitArr as)          = InitArr as
+    hfmap _ (GetArr i arr)        = GetArr i arr
+    hfmap _ (SetArr i a arr)      = SetArr i a arr
+    hfmap _ (CopyArr a1 a2 l)     = CopyArr a1 a2 l
+    hfmap _ (UnsafeFreezeArr arr) = UnsafeFreezeArr arr
 
-instance (CompExp exp, CompArrIx exp) => DryInterp (ArrCMD exp)
+instance CompExp exp => DryInterp (ArrCMD exp)
   where
     dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
-    dryInterp (NewArr_)       = liftM ArrComp $ freshStr "a"
     dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
     dryInterp (GetArr _ _)    = liftM varExp fresh
     dryInterp (SetArr _ _ _)  = return ()
     dryInterp (CopyArr _ _ _) = return ()
-    dryInterp (UnsafeGetArr i arr) = case compArrIx i arr of
-        Nothing -> liftM varExp fresh
-        Just a  -> return a
+    dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
 
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
@@ -274,6 +273,13 @@ type instance IExp (ControlCMD e :+: i) = e
 -- * Pointers
 --------------------------------------------------------------------------------
 
+newtype Ptr a = PtrComp {ptrId :: String}
+  deriving Typeable
+
+instance ToIdent (Ptr a)
+  where
+    toIdent = C.Id . ptrId
+
 -- | Types that are represented as a pointers in C
 class ToIdent a => IsPointer a
   where
@@ -287,17 +293,23 @@ instance IsPointer (Arr i a)
         writeIORef arr1 arr2'
         writeIORef arr2 arr1'
 
-data PtrCMD (prog :: * -> *) a
+data PtrCMD (exp :: * -> *) (prog :: * -> *) a
   where
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD prog ()
+    NewPtr  :: VarPred exp a => PtrCMD exp prog (Ptr a)
+    SwapPtr :: IsPointer a => a -> a -> PtrCMD exp prog ()
 
-instance HFunctor PtrCMD
+instance HFunctor (PtrCMD exp)
   where
+    hfmap _ NewPtr        = NewPtr
     hfmap _ (SwapPtr a b) = SwapPtr a b
 
-instance DryInterp PtrCMD
+instance DryInterp (PtrCMD exp)
   where
+    dryInterp NewPtr        = liftM PtrComp $ freshStr "p"
     dryInterp (SwapPtr _ _) = return ()
+
+type instance IExp (PtrCMD e)       = e
+type instance IExp (PtrCMD e :+: i) = e
 
 
 
@@ -311,7 +323,6 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
--- | Identifiers from handles
 instance ToIdent Handle
   where
     toIdent (HandleComp h) = C.Id h
@@ -385,7 +396,6 @@ data Object = Object
     }
   deriving (Eq, Show, Ord, Typeable)
 
--- | Identifiers from objects
 instance ToIdent Object
   where
     toIdent (Object _ _ o) = C.Id o
@@ -500,7 +510,6 @@ runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
-runArrCMD (NewArr_)    = error "NewArr_ not allowed in interpreted mode"
 runArrCMD (InitArr as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrEval arr)) = do
     arr' <- readIORef arr
@@ -515,7 +524,8 @@ runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
       [ readArray arr2' i >>= writeArray arr1' i
         | i <- genericTake (evalExp l) [0..]
       ]
-runArrCMD (UnsafeGetArr i arr) = runArrCMD (GetArr i arr)
+runArrCMD (UnsafeFreezeArr (ArrEval arr)) =
+    fmap IArrEval . freeze =<< readIORef arr
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f
@@ -539,7 +549,8 @@ runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
     "Assertion failed: " ++ msg
 
-runPtrCMD :: PtrCMD prog a -> IO a
+runPtrCMD :: PtrCMD exp prog a -> IO a
+runPtrCMD NewPtr        = error "newPtr not allowed in interpreted mode"
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
 evalHandle :: Handle -> IO.Handle
@@ -593,7 +604,7 @@ runCallCMD (CallProc _ _)       = error "cannot run programs involving callProc"
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
-instance                Interp PtrCMD           IO where interp = runPtrCMD
+instance                Interp (PtrCMD exp)     IO where interp = runPtrCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
 instance                Interp (ObjectCMD exp)  IO where interp = runObjectCMD
 instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
