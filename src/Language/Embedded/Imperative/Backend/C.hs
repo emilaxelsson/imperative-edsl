@@ -164,13 +164,7 @@ compControlCMD (Assert cond msg) = do
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
 
-compPtrCMD :: forall exp prog a . CompExp exp => PtrCMD exp prog a -> CGen a
-compPtrCMD cmd@NewPtr = do
-    addInclude "<stddef.h>"
-    sym <- gensym "p"
-    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
-    addLocal [cdecl| $ty:t * $id:sym = NULL; |]
-    return $ PtrComp sym
+compPtrCMD :: PtrCMD prog a -> CGen a
 compPtrCMD (SwapPtr a b) = do
     sym <- gensym "tmp"
     addLocal [cdecl| void * $id:sym; |]
@@ -224,44 +218,47 @@ compFileCMD (FEof h) = do
     addStm [cstm| $id:n = feof($id:h); |]
     return v
 
-compObjectCMD :: CompExp exp => ObjectCMD exp CGen a -> CGen a
-compObjectCMD (NewObject t) = do
+compC_CMD :: forall exp a . CompExp exp => C_CMD exp CGen a -> CGen a
+compC_CMD cmd@NewPtr = do
+    addInclude "<stddef.h>"
+    sym <- gensym "p"
+    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    addLocal [cdecl| $ty:t * $id:sym = NULL; |]
+    return $ PtrComp sym
+compC_CMD (NewObject t) = do
     sym <- gensym "obj"
     let t' = namedType t
     addLocal [cdecl| $ty:t' * $id:sym; |]
     return $ Object True t sym
-compObjectCMD (InitObject fun pnt t args) = do
+compC_CMD (InitObject fun pnt t args) = do
     sym <- gensym "obj"
     let t' = namedType t
     as  <- mapM mkArg args
     addLocal [cdecl| $ty:t' * $id:sym; |]
     addStm   [cstm|  $id:sym = $id:fun($args:as); |]
     return $ Object pnt t sym
-
-compCallCMD :: CompExp exp => CallCMD exp CGen a -> CGen a
-compCallCMD (AddInclude inc)    = addInclude inc
-compCallCMD (AddDefinition def) = addGlobal def
-compCallCMD (AddExternFun fun res args) = do
+compC_CMD (AddInclude inc)    = addInclude inc
+compC_CMD (AddDefinition def) = addGlobal def
+compC_CMD (AddExternFun fun res args) = do
     tres  <- compTypeP res
     targs <- mapM mkParam args
     addGlobal [cedecl| extern $ty:tres $id:fun($params:targs); |]
-compCallCMD (AddExternProc proc args) = do
+compC_CMD (AddExternProc proc args) = do
     targs <- mapM mkParam args
     addGlobal [cedecl| extern void $id:proc($params:targs); |]
-compCallCMD (CallFun fun as) = do
+compC_CMD (CallFun fun as) = do
     as'   <- mapM mkArg as
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
-compCallCMD (CallProc fun as) = do
+compC_CMD (CallProc fun as) = do
     as' <- mapM mkArg as
     addStm [cstm| $id:fun($args:as'); |]
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance CompExp exp => Interp (PtrCMD exp)     CGen where interp = compPtrCMD
+instance                Interp PtrCMD           CGen where interp = compPtrCMD
 instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp => Interp (ObjectCMD exp)  CGen where interp = compObjectCMD
-instance CompExp exp => Interp (CallCMD exp)    CGen where interp = compCallCMD
+instance CompExp exp => Interp (C_CMD exp)      CGen where interp = compC_CMD
 instance (CompExp exp, EvalExp exp) => Interp (ArrCMD exp) CGen where interp = compArrCMD
 

@@ -244,11 +244,6 @@ assert cond msg = singleE $ Assert cond msg
 -- * Pointer operations
 --------------------------------------------------------------------------------
 
--- | Create a null pointer
-newPtr :: (VarPred (IExp instr) a, PtrCMD (IExp instr) :<: instr) =>
-    ProgramT instr m (Ptr a)
-newPtr = singleE $ NewPtr
-
 -- | Swap two pointers
 --
 -- This is generally an unsafe operation. E.g. it can be used to make a
@@ -256,9 +251,8 @@ newPtr = singleE $ NewPtr
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: (IsPointer a, PtrCMD (IExp instr) :<: instr) =>
-    a -> a -> ProgramT instr m ()
-unsafeSwap a b = singleE $ SwapPtr a b
+unsafeSwap :: (IsPointer a, PtrCMD :<: instr) => a -> a -> ProgramT instr m ()
+unsafeSwap a b = singleInj $ SwapPtr a b
 
 
 
@@ -326,18 +320,23 @@ printf = fprintf stdout
 
 
 --------------------------------------------------------------------------------
--- * Abstract objects
+-- * C-specific commands
 --------------------------------------------------------------------------------
+
+-- | Create a null pointer
+newPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr) =>
+    ProgramT instr m (Ptr a)
+newPtr = singleE NewPtr
 
 -- | Create a pointer to an abstract object. The only thing one can do with such
 -- objects is to pass them to 'callFun' or 'callProc'.
-newObject :: (ObjectCMD (IExp instr) :<: instr)
+newObject :: (C_CMD (IExp instr) :<: instr)
     => String  -- ^ Object type
     -> ProgramT instr m Object
 newObject = singleE . NewObject
 
 -- | Call a function to create a pointed object
-initObject :: (ObjectCMD (IExp instr) :<: instr)
+initObject :: (C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Function name
     -> String                 -- ^ Object type
     -> [FunArg (IExp instr)]  -- ^ Arguments
@@ -345,21 +344,15 @@ initObject :: (ObjectCMD (IExp instr) :<: instr)
 initObject fun ty args = singleE $ InitObject fun True ty args
 
 -- | Call a function to create an object
-initUObject :: (ObjectCMD (IExp instr) :<: instr)
+initUObject :: (C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Function name
     -> String                 -- ^ Object type
     -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m Object
 initUObject fun ty args = singleE $ InitObject fun False ty args
 
-
-
---------------------------------------------------------------------------------
--- * External function calls (C-specific)
---------------------------------------------------------------------------------
-
 -- | Add an @#include@ statement to the generated code
-addInclude :: (CallCMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
+addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude
 
 -- | Add a global definition to the generated code
@@ -383,11 +376,11 @@ addInclude = singleE . AddInclude
 -- >           // goes here
 -- >       }
 -- >       |]
-addDefinition :: (CallCMD (IExp instr) :<: instr) => Definition -> ProgramT instr m ()
+addDefinition :: (C_CMD (IExp instr) :<: instr) => Definition -> ProgramT instr m ()
 addDefinition = singleE . AddDefinition
 
 -- | Declare an external function
-addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr)
+addExternFun :: (VarPred exp res, C_CMD exp :<: instr, exp ~ IExp instr)
     => String           -- ^ Function name
     -> proxy (exp res)  -- ^ Proxy for expression and result type
     -> [FunArg exp]     -- ^ Arguments (only used to determine types)
@@ -395,21 +388,21 @@ addExternFun :: (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr)
 addExternFun fun res args = singleE $ AddExternFun fun res args
 
 -- | Declare an external procedure
-addExternProc :: (CallCMD exp :<: instr, exp ~ IExp instr)
+addExternProc :: (C_CMD exp :<: instr, exp ~ IExp instr)
     => String        -- ^ Procedure name
     -> [FunArg exp]  -- ^ Arguments (only used to determine types)
     -> ProgramT instr m ()
 addExternProc proc args = singleE $ AddExternProc proc args
 
 -- | Call a function
-callFun :: (VarPred (IExp instr) a, CallCMD (IExp instr) :<: instr)
+callFun :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Function name
     -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m (IExp instr a)
 callFun fun as = singleE $ CallFun fun as
 
 -- | Call a procedure
-callProc :: (CallCMD (IExp instr) :<: instr)
+callProc :: (C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Procedure name
     -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
@@ -417,7 +410,7 @@ callProc fun as = singleE $ CallProc fun as
 
 -- | Declare and call an external function
 externFun :: forall instr m exp res
-    .  (VarPred exp res, CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
+    .  (VarPred exp res, C_CMD exp :<: instr, exp ~ IExp instr, Monad m)
     => String        -- ^ Function name
     -> [FunArg exp]  -- ^ Arguments
     -> ProgramT instr m (exp res)
@@ -426,7 +419,7 @@ externFun fun args = do
     callFun fun args
 
 -- | Declare and call an external procedure
-externProc :: (CallCMD exp :<: instr, exp ~ IExp instr, Monad m)
+externProc :: (C_CMD exp :<: instr, exp ~ IExp instr, Monad m)
     => String        -- ^ Procedure name
     -> [FunArg exp]  -- ^ Arguments
     -> ProgramT instr m ()
@@ -435,7 +428,7 @@ externProc proc args = do
     callProc proc args
 
 -- | Get current time as number of seconds passed today
-getTime :: (VarPred (IExp instr) Double, CallCMD (IExp instr) :<: instr, Monad m) =>
+getTime :: (VarPred (IExp instr) Double, C_CMD (IExp instr) :<: instr, Monad m) =>
     ProgramT instr m (IExp instr Double)
 getTime = do
     addInclude "<sys/time.h>"

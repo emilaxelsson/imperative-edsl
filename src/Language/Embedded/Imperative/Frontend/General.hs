@@ -10,13 +10,13 @@ module Language.Embedded.Imperative.Frontend.General
   , IArr
   , Border (..)
   , IxRange
-  , Ptr
   , IsPointer
   , IO.IOMode (..)
   , Handle
   , stdin
   , stdout
   , Formattable
+  , Ptr
   , Object
   , FunArg (..)
   , Definition

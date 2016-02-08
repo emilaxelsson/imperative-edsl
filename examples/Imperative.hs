@@ -21,10 +21,9 @@ type CMD
     =   RefCMD     CExp
     :+: ArrCMD     CExp
     :+: ControlCMD CExp
-    :+: PtrCMD     CExp
+    :+: PtrCMD
     :+: FileCMD    CExp
-    :+: ObjectCMD  CExp
-    :+: CallCMD    CExp
+    :+: C_CMD      CExp
 
 type Prog = Program CMD
 
