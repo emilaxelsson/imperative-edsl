@@ -232,9 +232,6 @@ compC_CMD (NewObject t pointed) = do
       then addLocal [cdecl| $ty:t' * $id:sym; |]
       else addLocal [cdecl| $ty:t' $id:sym; |]
     return $ Object pointed t sym
-compC_CMD (InitObject obj fun args) = do
-    as <- mapM mkArg args
-    addStm [cstm| $id:obj = $id:fun($args:as); |]
 compC_CMD (AddInclude inc)    = addInclude inc
 compC_CMD (AddDefinition def) = addGlobal def
 compC_CMD (AddExternFun fun res args) = do
@@ -249,9 +246,11 @@ compC_CMD (CallFun fun as) = do
     (v,n) <- freshVar
     addStm [cstm| $id:n = $id:fun($args:as'); |]
     return v
-compC_CMD (CallProc fun as) = do
+compC_CMD (CallProc obj fun as) = do
     as' <- mapM mkArg as
-    addStm [cstm| $id:fun($args:as'); |]
+    case obj of
+      Nothing -> addStm [cstm| $id:fun($args:as'); |]
+      Just o  -> addStm [cstm| $id:o = $id:fun($args:as'); |]
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD

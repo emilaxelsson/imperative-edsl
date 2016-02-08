@@ -20,6 +20,7 @@ module Language.Embedded.Imperative.Frontend.General
   , Object
   , FunArg (..)
   , Definition
+  , ToIdent  -- Needed by `callProcAssign`
   , cedecl
   ) where
   -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,

@@ -431,12 +431,6 @@ data C_CMD exp (prog :: * -> *) a
         :: String  -- Type
         -> Bool    -- Pointed?
         -> C_CMD exp prog Object
-    InitObject
-        :: Object  -- Object to initialize
-        -> String  -- Function name
-        -> [FunArg exp]
-        -> C_CMD exp prog ()
-
     AddInclude    :: String       -> C_CMD exp prog ()
     AddDefinition :: C.Definition -> C_CMD exp prog ()
     AddExternFun  :: VarPred exp res
@@ -446,31 +440,29 @@ data C_CMD exp (prog :: * -> *) a
                   -> C_CMD exp prog ()
     AddExternProc :: String -> [FunArg exp] -> C_CMD exp prog ()
     CallFun       :: VarPred exp a => String -> [FunArg exp] -> C_CMD exp prog (exp a)
-    CallProc      ::                  String -> [FunArg exp] -> C_CMD exp prog ()
+    CallProc      :: ToIdent obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
 
 instance HFunctor (C_CMD exp)
   where
     hfmap _ NewPtr                      = NewPtr
     hfmap _ (NewObject p t)             = NewObject p t
-    hfmap _ (InitObject obj fun args)   = InitObject obj fun args
     hfmap _ (AddInclude incl)           = AddInclude incl
     hfmap _ (AddDefinition def)         = AddDefinition def
     hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
     hfmap _ (AddExternProc proc args)   = AddExternProc proc args
     hfmap _ (CallFun fun args)          = CallFun fun args
-    hfmap _ (CallProc proc args)        = CallProc proc args
+    hfmap _ (CallProc obj proc args)    = CallProc obj proc args
 
 instance CompExp exp => DryInterp (C_CMD exp)
   where
     dryInterp NewPtr               = liftM PtrComp $ freshStr "p"
     dryInterp (NewObject t p)      = liftM (Object p t) $ freshStr "obj"
-    dryInterp (InitObject _ _ _)   = return ()
     dryInterp (AddInclude _)       = return ()
     dryInterp (AddDefinition _)    = return ()
     dryInterp (AddExternFun _ _ _) = return ()
     dryInterp (AddExternProc _ _)  = return ()
     dryInterp (CallFun _ _)        = liftM varExp fresh
-    dryInterp (CallProc _ _)       = return ()
+    dryInterp (CallProc _ _ _)     = return ()
 
 type instance IExp (C_CMD e)       = e
 type instance IExp (C_CMD e :+: i) = e
@@ -571,13 +563,12 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 runC_CMD :: C_CMD exp IO a -> IO a
 runC_CMD NewPtr               = error "cannot run programs involving newPtr"
 runC_CMD (NewObject _ _)      = error "cannot run programs involving newObject"
-runC_CMD (InitObject _ _ _)   = error "cannot run programs involving initObject"
 runC_CMD (AddInclude _)       = return ()
 runC_CMD (AddDefinition _)    = return ()
 runC_CMD (AddExternFun _ _ _) = return ()
 runC_CMD (AddExternProc _ _)  = return ()
 runC_CMD (CallFun _ _)        = error "cannot run programs involving callFun"
-runC_CMD (CallProc _ _)       = error "cannot run programs involving callProc"
+runC_CMD (CallProc _ _ _)     = error "cannot run programs involving callProc"
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD

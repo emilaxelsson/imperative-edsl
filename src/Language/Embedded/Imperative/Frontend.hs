@@ -336,14 +336,6 @@ newObject :: (C_CMD (IExp instr) :<: instr)
     -> ProgramT instr m Object
 newObject t p = singleE $ NewObject t p
 
--- | Call a function to create a pointed object
-initObject :: (C_CMD (IExp instr) :<: instr)
-    => Object                 -- ^ Object to initialize
-    -> String                 -- ^ Function name
-    -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m ()
-initObject obj fun args = singleE $ InitObject obj fun args
-
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude
@@ -399,7 +391,18 @@ callProc :: (C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Procedure name
     -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
-callProc fun as = singleE $ CallProc fun as
+callProc fun as = singleE $ CallProc (Nothing :: Maybe String) fun as
+
+-- | Call a procedure
+callProcAssign :: (ToIdent obj, C_CMD (IExp instr) :<: instr)
+    => obj                    -- ^ Object to which the result should be assigned
+    -> String                 -- ^ Procedure name
+    -> [FunArg (IExp instr)]  -- ^ Arguments
+    -> ProgramT instr m ()
+callProcAssign obj fun as = singleE $ CallProc (Just obj) fun as
+  -- The reason for having both `callProc` and `callProcAssign` instead of a
+  -- single one with a `Maybe obj` is that the caller would have to resolve the
+  -- overloading when passing `Nothing` (as currently done in `callProc`).
 
 -- | Declare and call an external function
 externFun :: forall instr m exp res
