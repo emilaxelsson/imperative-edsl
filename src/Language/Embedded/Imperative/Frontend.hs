@@ -332,24 +332,17 @@ newPtr = singleE NewPtr
 -- objects is to pass them to 'callFun' or 'callProc'.
 newObject :: (C_CMD (IExp instr) :<: instr)
     => String  -- ^ Object type
+    -> Bool    -- ^ Pointed?
     -> ProgramT instr m Object
-newObject = singleE . NewObject
+newObject t p = singleE $ NewObject t p
 
 -- | Call a function to create a pointed object
 initObject :: (C_CMD (IExp instr) :<: instr)
-    => String                 -- ^ Function name
-    -> String                 -- ^ Object type
+    => Object                 -- ^ Object to initialize
+    -> String                 -- ^ Function name
     -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m Object
-initObject fun ty args = singleE $ InitObject fun True ty args
-
--- | Call a function to create an object
-initUObject :: (C_CMD (IExp instr) :<: instr)
-    => String                 -- ^ Function name
-    -> String                 -- ^ Object type
-    -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m Object
-initUObject fun ty args = singleE $ InitObject fun False ty args
+    -> ProgramT instr m ()
+initObject obj fun args = singleE $ InitObject obj fun args
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()

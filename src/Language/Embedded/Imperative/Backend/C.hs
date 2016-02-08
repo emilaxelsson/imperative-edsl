@@ -225,18 +225,16 @@ compC_CMD cmd@NewPtr = do
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     addLocal [cdecl| $ty:t * $id:sym = NULL; |]
     return $ PtrComp sym
-compC_CMD (NewObject t) = do
+compC_CMD (NewObject t pointed) = do
     sym <- gensym "obj"
     let t' = namedType t
-    addLocal [cdecl| $ty:t' * $id:sym; |]
-    return $ Object True t sym
-compC_CMD (InitObject fun pnt t args) = do
-    sym <- gensym "obj"
-    let t' = namedType t
-    as  <- mapM mkArg args
-    addLocal [cdecl| $ty:t' * $id:sym; |]
-    addStm   [cstm|  $id:sym = $id:fun($args:as); |]
-    return $ Object pnt t sym
+    if pointed
+      then addLocal [cdecl| $ty:t' * $id:sym; |]
+      else addLocal [cdecl| $ty:t' $id:sym; |]
+    return $ Object pointed t sym
+compC_CMD (InitObject obj fun args) = do
+    as <- mapM mkArg args
+    addStm [cstm| $id:obj = $id:fun($args:as); |]
 compC_CMD (AddInclude inc)    = addInclude inc
 compC_CMD (AddDefinition def) = addGlobal def
 compC_CMD (AddExternFun fun res args) = do

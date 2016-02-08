@@ -429,13 +429,13 @@ data C_CMD exp (prog :: * -> *) a
     NewPtr :: VarPred exp a => C_CMD exp prog (Ptr a)
     NewObject
         :: String  -- Type
+        -> Bool    -- Pointed?
         -> C_CMD exp prog Object
     InitObject
-        :: String -- Function name
-        -> Bool   -- Pointed object?
-        -> String -- Object Type
+        :: Object  -- Object to initialize
+        -> String  -- Function name
         -> [FunArg exp]
-        -> C_CMD exp prog Object
+        -> C_CMD exp prog ()
 
     AddInclude    :: String       -> C_CMD exp prog ()
     AddDefinition :: C.Definition -> C_CMD exp prog ()
@@ -450,9 +450,9 @@ data C_CMD exp (prog :: * -> *) a
 
 instance HFunctor (C_CMD exp)
   where
-    hfmap _ NewPtr               = NewPtr
-    hfmap _ (NewObject t)        = NewObject t
-    hfmap _ (InitObject s p t a) = InitObject s p t a
+    hfmap _ NewPtr                      = NewPtr
+    hfmap _ (NewObject p t)             = NewObject p t
+    hfmap _ (InitObject obj fun args)   = InitObject obj fun args
     hfmap _ (AddInclude incl)           = AddInclude incl
     hfmap _ (AddDefinition def)         = AddDefinition def
     hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
@@ -463,8 +463,8 @@ instance HFunctor (C_CMD exp)
 instance CompExp exp => DryInterp (C_CMD exp)
   where
     dryInterp NewPtr               = liftM PtrComp $ freshStr "p"
-    dryInterp (NewObject t)        = liftM (Object True t) $ freshStr "obj"
-    dryInterp (InitObject _ _ t _) = liftM (Object True t) $ freshStr "obj"
+    dryInterp (NewObject t p)      = liftM (Object p t) $ freshStr "obj"
+    dryInterp (InitObject _ _ _)   = return ()
     dryInterp (AddInclude _)       = return ()
     dryInterp (AddDefinition _)    = return ()
     dryInterp (AddExternFun _ _ _) = return ()
@@ -570,8 +570,8 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runC_CMD :: C_CMD exp IO a -> IO a
 runC_CMD NewPtr               = error "cannot run programs involving newPtr"
-runC_CMD (NewObject _)        = error "cannot run programs involving newObject"
-runC_CMD (InitObject _ _ _ _) = error "cannot run programs involving initObject"
+runC_CMD (NewObject _ _)      = error "cannot run programs involving newObject"
+runC_CMD (InitObject _ _ _)   = error "cannot run programs involving initObject"
 runC_CMD (AddInclude _)       = return ()
 runC_CMD (AddDefinition _)    = return ()
 runC_CMD (AddExternFun _ _ _) = return ()
