@@ -395,10 +395,10 @@ callProc :: (C_CMD (IExp instr) :<: instr)
     => String                 -- ^ Procedure name
     -> [FunArg (IExp instr)]  -- ^ Arguments
     -> ProgramT instr m ()
-callProc fun as = singleE $ CallProc (Nothing :: Maybe String) fun as
+callProc fun as = singleE $ CallProc (Nothing :: Maybe Object) fun as
 
 -- | Call a procedure and assign its result
-callProcAssign :: (ToIdent obj, C_CMD (IExp instr) :<: instr)
+callProcAssign :: (Assignable obj, C_CMD (IExp instr) :<: instr)
     => obj                    -- ^ Object to which the result should be assigned
     -> String                 -- ^ Procedure name
     -> [FunArg (IExp instr)]  -- ^ Arguments

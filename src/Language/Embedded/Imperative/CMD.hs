@@ -36,6 +36,7 @@ module Language.Embedded.Imperative.CMD
   , FunArg (..)
   , VarPredCast
   , Arg (..)
+  , Assignable
   , C_CMD (..)
   ) where
 
@@ -427,6 +428,14 @@ instance Arg FunArg where
   mapArg  predCast f (FunArg arg) = FunArg (mapArg predCast f arg)
   mapMArg predCast f (FunArg arg) = liftM FunArg (mapMArg predCast f arg)
 
+class ToIdent obj => Assignable obj
+
+instance Assignable (Ref a)
+instance Assignable (Arr i a)
+instance Assignable (IArr i a)
+instance Assignable (Ptr a)
+instance Assignable Object
+
 data C_CMD exp (prog :: * -> *) a
   where
     NewPtr   :: VarPred exp a => C_CMD exp prog (Ptr a)
@@ -444,7 +453,7 @@ data C_CMD exp (prog :: * -> *) a
                   -> C_CMD exp prog ()
     AddExternProc :: String -> [FunArg exp] -> C_CMD exp prog ()
     CallFun       :: VarPred exp a => String -> [FunArg exp] -> C_CMD exp prog (exp a)
-    CallProc      :: ToIdent obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
+    CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
 
 instance HFunctor (C_CMD exp)
   where
