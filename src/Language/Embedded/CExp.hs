@@ -446,7 +446,13 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
-not_ (UOpP UnNot a) = CExp a
+not_ (UOpP UnNot a)  = CExp a
+not_ (OpP BiEq a b)  = CExp a #!= CExp b
+not_ (OpP BiNEq a b) = CExp a #== CExp b
+not_ (OpP BiLt a b)  = CExp a #>= CExp b
+not_ (OpP BiGt a b)  = CExp a #<= CExp b
+not_ (OpP BiLe a b)  = CExp a #> CExp b
+not_ (OpP BiGe a b)  = CExp a #< CExp b
 not_ a = constFold $ sugarSym (T $ UOp UnNot) a
 
 -- | Logical and
