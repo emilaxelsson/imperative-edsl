@@ -132,7 +132,8 @@ compileC (ExternalCompilerOpts {..}) prog = do
 compileAndCheck' :: (Interp instr CGen, HFunctor instr) =>
     ExternalCompilerOpts -> Program instr a -> IO ()
 compileAndCheck' opts prog = do
-    exe <- compileC opts prog
+    let opts' = opts {externalFlagsPre = "-c" : externalFlagsPre opts}
+    exe <- compileC opts' prog
     removeFileIfPossible exe
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
