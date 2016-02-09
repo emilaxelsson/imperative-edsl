@@ -473,6 +473,10 @@ objArg = FunArg . ObjArg
 addr :: FunArg exp -> FunArg exp
 addr = FunArg . Addr
 
+-- | Modifier that dereferences another argument
+deref :: FunArg exp -> FunArg exp
+deref = FunArg . Deref
+
 
 
 --------------------------------------------------------------------------------
