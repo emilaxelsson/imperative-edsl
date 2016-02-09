@@ -130,6 +130,68 @@ isExact' = isExact . CExp
 -- * Expressions
 --------------------------------------------------------------------------------
 
+data Unary a
+  where
+    UnNeg :: Num a => Unary (a -> a)
+    UnNot :: Unary (Bool -> Bool)
+
+evalUnary :: Unary a -> a
+evalUnary UnNeg = negate
+evalUnary UnNot = not
+
+unaryOp :: Unary a -> UnOp
+unaryOp UnNeg = Negate
+unaryOp UnNot = Lnot
+
+data Binary a
+  where
+    BiAdd  :: Num a        => Binary (a -> a -> a)
+    BiSub  :: Num a        => Binary (a -> a -> a)
+    BiMul  :: Num a        => Binary (a -> a -> a)
+    BiDiv  :: Fractional a => Binary (a -> a -> a)
+    BiQuot :: Integral a   => Binary (a -> a -> a)
+    BiRem  :: Integral a   => Binary (a -> a -> a)
+    BiAnd  ::                 Binary (Bool -> Bool -> Bool)
+    BiOr   ::                 Binary (Bool -> Bool -> Bool)
+    BiEq   :: Eq a         => Binary (a -> a -> Bool)
+    BiNEq  :: Eq a         => Binary (a -> a -> Bool)
+    BiLt   :: Ord a        => Binary (a -> a -> Bool)
+    BiGt   :: Ord a        => Binary (a -> a -> Bool)
+    BiLe   :: Ord a        => Binary (a -> a -> Bool)
+    BiGe   :: Ord a        => Binary (a -> a -> Bool)
+
+evalBinary :: Binary a -> a
+evalBinary BiAdd  = (+)
+evalBinary BiSub  = (-)
+evalBinary BiMul  = (*)
+evalBinary BiDiv  = (/)
+evalBinary BiQuot = quot
+evalBinary BiRem  = rem
+evalBinary BiAnd  = (&&)
+evalBinary BiOr   = (||)
+evalBinary BiEq   = (==)
+evalBinary BiNEq  = (/=)
+evalBinary BiLt   = (<)
+evalBinary BiGt   = (>)
+evalBinary BiLe   = (<=)
+evalBinary BiGe   = (>=)
+
+binaryOp :: Binary a -> BinOp
+binaryOp BiAdd  = Add
+binaryOp BiSub  = Sub
+binaryOp BiMul  = Mul
+binaryOp BiDiv  = Div
+binaryOp BiQuot = Div
+binaryOp BiRem  = Mod
+binaryOp BiAnd  = Land
+binaryOp BiOr   = Lor
+binaryOp BiEq   = Eq
+binaryOp BiNEq  = Ne
+binaryOp BiLt   = Lt
+binaryOp BiGt   = Gt
+binaryOp BiLe   = Le
+binaryOp BiGe   = Ge
+
 -- | Syntactic symbols for C
 data Sym sig
   where
@@ -144,13 +206,9 @@ data Sym sig
 #endif
              [String] -> String -> Denotation sig -> Sym sig
     -- Unary operator
-    UOp   :: UnOp -> (a -> b) -> Sym (a :-> Full b)
-    -- Unary operator with same type for argument and result
-    UOp'  :: UnOp -> (a -> a) -> Sym (a :-> Full a)
+    UOp   :: Unary (a -> b) -> Sym (a :-> Full b)
     -- Binary operator
-    Op    :: BinOp -> (a -> b -> c) -> Sym (a :-> b :-> Full c)
-    -- Binary operator with same type for arguments and result
-    Op'   :: BinOp -> (a -> a -> a) -> Sym (a :-> a :-> Full a)
+    Op    :: Binary (a -> b -> c) -> Sym (a :-> b :-> Full c)
     -- Type casting (ignored when generating code)
     Cast  :: (a -> b) -> Sym (a :-> Full b)
     -- Conditional
@@ -180,10 +238,8 @@ evalSym :: Sym sig -> Denotation sig
 evalSym (Lit _ a)     = a
 evalSym (Const _ _ a) = a
 evalSym (Fun _ _ f)   = f
-evalSym (UOp _ f)     = f
-evalSym (UOp' _ f)    = f
-evalSym (Op  _ f)     = f
-evalSym (Op'  _ f)    = f
+evalSym (UOp uop)     = evalUnary uop
+evalSym (Op bop)      = evalBinary bop
 evalSym (Cast f)      = f
 evalSym Cond          = \c t f -> if c then t else f
 evalSym (ArrIx (IArrEval arr)) = \i ->
@@ -227,20 +283,13 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       mapM_ addInclude incls
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
-    go (UOp op _) (a :* Nil) = do
+    go (UOp uop) (a :* Nil) = do
       a' <- compCExp' a
-      return $ UnOp op a' mempty
-    go (UOp' op _) (a :* Nil) = do
-      a' <- compCExp' a
-      return $ UnOp op a' mempty
-    go (Op op _) (a :* b :* Nil) = do
+      return $ UnOp (unaryOp uop) a' mempty
+    go (Op bop) (a :* b :* Nil) = do
       a' <- compCExp' a
       b' <- compCExp' b
-      return $ BinOp op a' b' mempty
-    go (Op' op _) (a :* b :* Nil) = do
-      a' <- compCExp' a
-      b' <- compCExp' b
-      return $ BinOp op a' b' mempty
+      return $ BinOp (binaryOp bop) a' b' mempty
     go (Cast f) (a :* Nil) = do
       a' <- compCExp' a
       return [cexp| $a' |]
@@ -291,10 +340,10 @@ pattern LitP a      <- CExp (Sym (T (Lit _ a)))
 pattern LitP' a     <- Sym (T (Lit _ a))
 pattern NonLitP     <- (viewLit -> Nothing)
 pattern NonLitP'    <- (CExp -> (viewLit -> Nothing))
-pattern OpP op a b  <- CExp (Sym (T (Op' op _)) :$ a :$ b)
-pattern OpP' op a b <- Sym (T (Op' op _)) :$ a :$ b
-pattern UOpP op a   <- CExp (Sym (T (UOp' op _)) :$ a)
-pattern UOpP' op a  <- Sym (T (UOp' op _)) :$ a
+pattern OpP op a b  <- CExp (Sym (T (Op op)) :$ a :$ b)
+pattern OpP' op a b <- Sym (T (Op op)) :$ a :$ b
+pattern UOpP op a   <- CExp (Sym (T (UOp op)) :$ a)
+pattern UOpP' op a  <- Sym (T (UOp op)) :$ a
 
 
 
@@ -329,34 +378,34 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
     LitP 0 + b | isExact b = b
     a + LitP 0 | isExact a = a
     a@(LitP _) + b@NonLitP | isExact a = b+a  -- Move literals to the right
-    OpP Add a (LitP' b) + LitP c | isExact' a = CExp a + value (b+c)
-    OpP Sub a (LitP' b) + LitP c | isExact' a = CExp a + value (c-b)
+    OpP BiAdd a (LitP' b) + LitP c | isExact' a = CExp a + value (b+c)
+    OpP BiSub a (LitP' b) + LitP c | isExact' a = CExp a + value (c-b)
     a + LitP b | b < 0, isExact a = a - value (negate b)
-    a + b = constFold $ sugarSym (T $ Op' Add (+)) a b
+    a + b = constFold $ sugarSym (T $ Op BiAdd) a b
 
     LitP 0 - b | isExact b = negate b
     a - LitP 0 | isExact a = a
     a@(LitP _) - b@NonLitP | isExact a = negate b - negate a  -- Move literals to the right
-    OpP Add a (LitP' b) - LitP c | isExact' a = CExp a + value (b-c)
-    OpP Sub a (LitP' b) - LitP c | isExact' a = CExp a - value (b+c)
+    OpP BiAdd a (LitP' b) - LitP c | isExact' a = CExp a + value (b-c)
+    OpP BiSub a (LitP' b) - LitP c | isExact' a = CExp a - value (b+c)
     a - LitP b | b < 0, isExact a = a + value (negate b)
-    a - b = constFold $ sugarSym (T $ Op' Sub (-)) a b
+    a - b = constFold $ sugarSym (T $ Op BiSub) a b
 
     LitP 0 * b | isExact b = value 0
     a * LitP 0 | isExact a = value 0
     LitP 1 * b | isExact b = b
     a * LitP 1 | isExact a = a
     a@(LitP _) * b@NonLitP | isExact a = b*a  -- Move literals to the right
-    OpP Mul a (LitP' b) * LitP c | isExact' a = CExp a * value (b*c)
-    a * b = constFold $ sugarSym (T $ Op' Mul (*)) a b
+    OpP BiMul a (LitP' b) * LitP c | isExact' a = CExp a * value (b*c)
+    a * b = constFold $ sugarSym (T $ Op BiMul) a b
 
-    negate (UOpP Negate a) | isExact' a = CExp a
-    negate (OpP Add a b)   | isExact' a = negate (CExp a) - CExp b
-    negate (OpP Sub a b)   | isExact' a = CExp b - CExp a
-    negate (OpP Mul a b)   | isExact' a = CExp a * negate (CExp b)
+    negate (UOpP UnNeg a)  | isExact' a = CExp a
+    negate (OpP BiAdd a b) | isExact' a = negate (CExp a) - CExp b
+    negate (OpP BiSub a b) | isExact' a = CExp b - CExp a
+    negate (OpP BiMul a b) | isExact' a = CExp a * negate (CExp b)
       -- Negate the right operand, because literals are moved to the right
       -- in multiplications
-    negate a = constFold $ sugarSym (T $ UOp' Negate negate) a
+    negate a = constFold $ sugarSym (T $ UOp UnNeg) a
 
     abs    = error "abs not implemented for CExp"
     signum = error "signum not implemented for CExp"
@@ -364,7 +413,7 @@ instance (Num a, Ord a, CType a) => Num (CExp a)
 instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
   where
     fromRational = value . fromRational
-    a / b = constFold $ sugarSym (T $ Op' Div (/)) a b
+    a / b = constFold $ sugarSym (T $ Op BiDiv) a b
 
     recip = error "recip not implemented for CExp"
 
@@ -380,7 +429,7 @@ quot_ a b
     | Just 0 <- viewLit a = 0
     | Just 1 <- viewLit b = a
     | a == b              = 1
-    | otherwise           = constFold $ sugarSym (T $ Op' Div quot) a b
+    | otherwise           = constFold $ sugarSym (T $ Op BiQuot) a b
 
 -- | Integer remainder satisfying
 --
@@ -390,7 +439,7 @@ a #% b
     | Just 0 <- viewLit a = 0
     | Just 1 <- viewLit b = 0
     | a == b              = 0
-    | otherwise           = constFold $ sugarSym (T $ Op' Mod rem) a b
+    | otherwise           = constFold $ sugarSym (T $ Op BiRem) a b
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
@@ -398,9 +447,8 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
-not_ (CExp (nt :$ a))
-    | Just (T (UOp' Lnot _)) <- prj nt = CExp a
-not_ a = constFold $ sugarSym (T $ UOp' Lnot not) a
+not_ (CExp (Sym (T (UOp UnNot)) :$ a)) = CExp a
+not_ a = constFold $ sugarSym (T $ UOp UnNot) a
 
 -- | Logical and
 (#&&) :: CExp Bool -> CExp Bool -> CExp Bool
@@ -408,7 +456,7 @@ LitP True  #&& b          = b
 LitP False #&& b          = false
 a          #&& LitP True  = a
 a          #&& LitP False = false
-a          #&& b          = constFold $ sugarSym (T $ Op Land (&&)) a b
+a          #&& b          = constFold $ sugarSym (T $ Op BiAnd) a b
 
 -- | Logical or
 (#||) :: CExp Bool -> CExp Bool -> CExp Bool
@@ -416,39 +464,39 @@ LitP True  #|| b          = true
 LitP False #|| b          = b
 a          #|| LitP True  = true
 a          #|| LitP False = a
-a          #|| b          = constFold $ sugarSym (T $ Op Lor (||)) a b
+a          #|| b          = constFold $ sugarSym (T $ Op BiOr) a b
 
 -- | Equality
 (#==) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
 a #== b
     | a == b, isExact a = true
-    | otherwise         = constFold $ sugarSym (T $ Op Eq (==)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiEq) a b
 
 -- | In-equality
 (#!=) :: (Eq a, CType a) => CExp a -> CExp a -> CExp Bool
 a #!= b
     | a == b, isExact a = false
-    | otherwise         = constFold $ sugarSym (T $ Op Ne (/=)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiNEq) a b
 
 (#<) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
 a #< b
     | a == b, isExact a = false
-    | otherwise         = constFold $ sugarSym (T $ Op Lt (<)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiLt) a b
 
 (#>) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
 a #> b
     | a == b, isExact a = false
-    | otherwise         = constFold $ sugarSym (T $ Op Gt (>)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiGt) a b
 
 (#<=) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
 a #<= b
     | a == b, isExact a = true
-    | otherwise         = constFold $ sugarSym (T $ Op Le (<=)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiLe) a b
 
 (#>=) :: (Ord a, CType a) => CExp a -> CExp a -> CExp Bool
 a #>= b
     | a == b, isExact a = true
-    | otherwise         = constFold $ sugarSym (T $ Op Ge (>=)) a b
+    | otherwise         = constFold $ sugarSym (T $ Op BiGe) a b
 
 infix 4 #==, #!=, #<, #>, #<=, #>=
 
@@ -461,8 +509,7 @@ cond :: CType a
 cond c t f
     | Just c' <- viewLit c = if c' then t else f
     | t == f = t
-cond (CExp (nt :$ a)) t f
-    | Just (T (UOp' Lnot _)) <- prj nt = cond (CExp a) f t
+cond (CExp (Sym (T (UOp UnNot)) :$ a)) t f = cond (CExp a) f t
 cond c t f = constFold $ sugarSym (T Cond) c t f
 
 -- | Condition operator; use as follows:
@@ -500,10 +547,8 @@ instance Render Sym
     renderSym (Lit a _)      = a
     renderSym (Const _ a _)  = a
     renderSym (Fun _ name _) = name
-    renderSym (UOp op _)     = show op
-    renderSym (UOp' op _)    = show op
-    renderSym (Op op _)      = show op
-    renderSym (Op' op _)     = show op
+    renderSym (UOp op)       = show $ unaryOp op
+    renderSym (Op op)        = show $ binaryOp op
     renderSym (Cast _)       = "cast"
     renderSym (Var v)        = v
     renderArgs = renderArgsSmart
@@ -539,9 +584,7 @@ instance Semantic Sym
     semantics (Const _ s a)  = Sem s a
     semantics (Fun _ name f) = Sem name f
     semantics (UOp op f)     = Sem (show op) f
-    semantics (UOp' op f)    = Sem (show op) f
     semantics (Op op f)      = Sem (show op) f
-    semantics (Op' op f)     = Sem (show op) f
     semantics (Cast f)       = Sem "cast" f
     semantics (Var v)        = Sem v $ error $ "evaluating free variable: " ++ v
 
