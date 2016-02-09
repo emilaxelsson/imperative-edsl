@@ -490,18 +490,45 @@ runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
 runArrCMD (NewArr n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
 runArrCMD (InitArr as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrEval arr)) = do
-    arr' <- readIORef arr
-    fmap litExp $ readArray arr' (fromIntegral (evalExp i))
+    arr'  <- readIORef arr
+    let i' = evalExp i
+    (l,h) <- getBounds arr'
+    if i'<l || i'>h
+      then error $ "getArr: index "
+                ++ show (toInteger i')
+                ++ " out of bounds "
+                ++ show (toInteger l, toInteger h)
+      else fmap litExp $ readArray arr' i'
 runArrCMD (SetArr i a (ArrEval arr)) = do
-    arr' <- readIORef arr
-    writeArray arr' (fromIntegral (evalExp i)) (evalExp a)
+    arr'  <- readIORef arr
+    let i' = evalExp i
+    (l,h) <- getBounds arr'
+    if i'<l || i'>h
+      then error $ "setArr: index "
+                ++ show (toInteger i')
+                ++ " out of bounds "
+                ++ show (toInteger l, toInteger h)
+      else writeArray arr' (fromIntegral (evalExp i)) (evalExp a)
 runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
-    arr1' <- readIORef arr1
-    arr2' <- readIORef arr2
-    sequence_
-      [ readArray arr2' i >>= writeArray arr1' i
-        | i <- genericTake (evalExp l) [0..]
-      ]
+    arr1'  <- readIORef arr1
+    arr2'  <- readIORef arr2
+    let l' = evalExp l
+    (0,h1) <- getBounds arr1'
+    (0,h2) <- getBounds arr2'
+    if l'>h2+1
+    then error $ "copyArr: cannot copy "
+              ++ show (toInteger l')
+              ++ " elements from array with "
+              ++ show (toInteger (h2+1))
+              ++ " allocated elements"
+    else if l'>h1+1
+    then error $ "copyArr: cannot copy "
+              ++ show (toInteger l')
+              ++ " elements to array with "
+              ++ show (toInteger (h1+1))
+              ++ " allocated elements"
+    else sequence_
+      [ readArray arr2' i >>= writeArray arr1' i | i <- genericTake l' [0..] ]
 runArrCMD (UnsafeFreezeArr (ArrEval arr)) =
     fmap IArrEval . freeze =<< readIORef arr
 

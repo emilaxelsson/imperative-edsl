@@ -158,7 +158,7 @@ data Sym sig
     -- Variable (only for compilation)
     Var   :: String -> Sym (Full a)
     -- Unsafe array indexing
-    ArrIx :: Ix i => IArr i a -> Sym (i :-> Full a)
+    ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
 
 data T sig
   where
@@ -186,8 +186,16 @@ evalSym (Op  _ f)     = f
 evalSym (Op'  _ f)    = f
 evalSym (Cast f)      = f
 evalSym Cond          = \c t f -> if c then t else f
-evalSym (ArrIx (IArrEval arr)) = \i -> arr!i
-evalSym (Var v)       = error $ "evalCExp: cannot evaluate variable " ++ v
+evalSym (ArrIx (IArrEval arr)) = \i ->
+    if i<l || i>h
+      then error $ "index "
+                ++ show (toInteger i)
+                ++ " out of bounds "
+                ++ show (toInteger l, toInteger h)
+      else arr!i
+  where
+    (l,h) = bounds arr
+evalSym (Var v) = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
 evalCExp :: CExp a -> a
@@ -473,7 +481,7 @@ cond c t f = constFold $ sugarSym (T Cond) c t f
 infixl 1 ?
 
 -- | Array indexing
-(#!) :: (CType a, Ix i) => IArr i a -> CExp i -> CExp a
+(#!) :: (CType a, Integral i, Ix i) => IArr i a -> CExp i -> CExp a
 arr #! i = sugarSym (T $ ArrIx arr) i
 
 
