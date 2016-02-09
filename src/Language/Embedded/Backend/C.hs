@@ -184,30 +184,32 @@ captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     -> IO String        -- ^ Result from @stdout@
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
--- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code
+-- | Compare the content written to 'stdout' from the reference program and from
+-- running the compiled C code
 compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts
     -> Program instr a  -- ^ Program to run
     -> String           -- ^ Input to send to @stdin@
+    -> IO a             -- ^ Reference program
     -> IO ()
-compareCompiled' opts@(ExternalCompilerOpts {..}) prog inp = do
-    maybePutStrLn externalSilent "#### runIO:"
-    outIO <- fakeIO (interpret prog) inp
-    maybePutStrLn externalSilent outIO
+compareCompiled' opts@(ExternalCompilerOpts {..}) prog inp ref = do
+    maybePutStrLn externalSilent "#### Reference program:"
+    outRef <- fakeIO ref inp
+    maybePutStrLn externalSilent outRef
     maybePutStrLn externalSilent "#### runCompiled:"
     outComp <- captureCompiled' opts prog inp
     maybePutStrLn externalSilent outComp
-    if outIO /= outComp
-      then error "#### runIO and runCompiled differ"
+    if outRef /= outComp
+      then error "runCompiled differs from reference program"
       else maybePutStrLn externalSilent
-             "#### runIO and runCompiled are consistent"
+             "#### runCompiled is consistent with reference program"
 
--- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code
+-- | Compare the content written to 'stdout' from the reference program and from
+-- running the compiled C code
 compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => Program instr a  -- ^ Program to run
     -> String           -- ^ Input to send to @stdin@
+    -> IO a             -- ^ Reference program
     -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 
