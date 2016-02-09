@@ -225,6 +225,7 @@ compC_CMD cmd@NewPtr = do
     t   <- compTypePP2 (Proxy :: Proxy exp) cmd
     addLocal [cdecl| $ty:t * $id:sym = NULL; |]
     return $ PtrComp sym
+compC_CMD (PtrToArr (PtrComp p)) = return $ ArrComp p
 compC_CMD (NewObject t pointed) = do
     sym <- gensym "obj"
     let t' = namedType t

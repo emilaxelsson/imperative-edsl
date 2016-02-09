@@ -172,20 +172,14 @@ testPtr = do
     addInclude "<stdlib.h>"
     addInclude "<string.h>"
     addInclude "<stdio.h>"
-    addDefinition printArr_def
     p :: Ptr Int32 <- newPtr
     callProcAssign p "malloc" [valArg (100 :: CExp Word32)]
     arr :: Arr Word32 Int32 <- initArr [34,45,56,67,78]
     callProc "memcpy" [ptrArg p, arrArg arr, valArg (5*4 :: CExp Word32)]  -- sizeof(int32_t) = 4
     callProc "printf" [strArg "%d\n", deref $ ptrArg p]
-    callProc "printArr" [ptrArg p]
+    iarr :: IArr Word32 Int32 <- unsafeFreezeArr =<< ptrToArr p
+    printf "sum: %d\n" (iarr#!0 + iarr#!1 + iarr#!2 + iarr#!3 + iarr#!4)
     callProc "free" [ptrArg p]
-  where
-    printArr_def = [cedecl|
-        void printArr (int * p) {
-            printf("%d %d %d %d %d\n", p[0], p[1], p[2], p[3], p[4]);
-        }
-        |]
 
 testArgs :: Prog ()
 testArgs = do
@@ -270,7 +264,7 @@ testAll = do
     compareCompiled  testFor2   ""     (interpret testFor2)
     compareCompiled  testFor3   ""     (interpret testFor3)
     compareCompiled  testAssert "45"   (interpret testAssert)
-    compareCompiled  testPtr    ""     (putStrLn "34" >> putStrLn "34 45 56 67 78")
+    compareCompiled  testPtr    ""     (putStrLn "34" >> putStrLn "sum: 280")
     compareCompiled  testArgs   ""     (putStrLn "55 66 234 66 55 66")
     compileAndCheck  testExternArgs
   where

@@ -328,6 +328,10 @@ newPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr) =>
     ProgramT instr m (Ptr a)
 newPtr = singleE NewPtr
 
+-- | Cast a pointer to an array
+ptrToArr :: (C_CMD (IExp instr) :<: instr) => Ptr a -> ProgramT instr m (Arr i a)
+ptrToArr = singleE . PtrToArr
+
 -- | Create a pointer to an abstract object. The only thing one can do with such
 -- objects is to pass them to 'callFun' or 'callProc'.
 newObject :: (C_CMD (IExp instr) :<: instr)

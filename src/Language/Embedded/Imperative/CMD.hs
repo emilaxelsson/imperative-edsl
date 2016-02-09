@@ -271,6 +271,9 @@ type instance IExp (ControlCMD e :+: i) = e
 -- * Pointers
 --------------------------------------------------------------------------------
 
+-- The reason for not implementing `SwapPtr` using the `Ptr` type is that it's
+-- (currently) not possible to interpret `Ptr` in `IO`.
+
 -- | Types that are represented as a pointers in C
 class ToIdent a => IsPointer a
   where
@@ -426,7 +429,8 @@ instance Arg FunArg where
 
 data C_CMD exp (prog :: * -> *) a
   where
-    NewPtr :: VarPred exp a => C_CMD exp prog (Ptr a)
+    NewPtr   :: VarPred exp a => C_CMD exp prog (Ptr a)
+    PtrToArr :: Ptr a -> C_CMD exp prog (Arr i a)
     NewObject
         :: String  -- Type
         -> Bool    -- Pointed?
@@ -445,6 +449,7 @@ data C_CMD exp (prog :: * -> *) a
 instance HFunctor (C_CMD exp)
   where
     hfmap _ NewPtr                      = NewPtr
+    hfmap _ (PtrToArr p)                = PtrToArr p
     hfmap _ (NewObject p t)             = NewObject p t
     hfmap _ (AddInclude incl)           = AddInclude incl
     hfmap _ (AddDefinition def)         = AddDefinition def
@@ -455,14 +460,15 @@ instance HFunctor (C_CMD exp)
 
 instance CompExp exp => DryInterp (C_CMD exp)
   where
-    dryInterp NewPtr               = liftM PtrComp $ freshStr "p"
-    dryInterp (NewObject t p)      = liftM (Object p t) $ freshStr "obj"
-    dryInterp (AddInclude _)       = return ()
-    dryInterp (AddDefinition _)    = return ()
-    dryInterp (AddExternFun _ _ _) = return ()
-    dryInterp (AddExternProc _ _)  = return ()
-    dryInterp (CallFun _ _)        = liftM varExp fresh
-    dryInterp (CallProc _ _ _)     = return ()
+    dryInterp NewPtr                 = liftM PtrComp $ freshStr "p"
+    dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
+    dryInterp (NewObject t p)        = liftM (Object p t) $ freshStr "obj"
+    dryInterp (AddInclude _)         = return ()
+    dryInterp (AddDefinition _)      = return ()
+    dryInterp (AddExternFun _ _ _)   = return ()
+    dryInterp (AddExternProc _ _)    = return ()
+    dryInterp (CallFun _ _)          = liftM varExp fresh
+    dryInterp (CallProc _ _ _)       = return ()
 
 type instance IExp (C_CMD e)       = e
 type instance IExp (C_CMD e :+: i) = e
@@ -562,6 +568,7 @@ runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
 runC_CMD :: C_CMD exp IO a -> IO a
 runC_CMD NewPtr               = error "cannot run programs involving newPtr"
+runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
 runC_CMD (NewObject _ _)      = error "cannot run programs involving newObject"
 runC_CMD (AddInclude _)       = return ()
 runC_CMD (AddDefinition _)    = return ()
