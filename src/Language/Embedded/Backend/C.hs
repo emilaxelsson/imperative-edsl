@@ -184,7 +184,7 @@ captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     -> IO String        -- ^ Result from @stdout@
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
--- | Compare the content written to 'stdout' from the reference program and from
+-- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code
 compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts
@@ -204,7 +204,7 @@ compareCompiled' opts@(ExternalCompilerOpts {..}) prog ref inp = do
       else maybePutStrLn externalSilent
              "#### runCompiled is consistent with reference program"
 
--- | Compare the content written to 'stdout' from the reference program and from
+-- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code
 compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => Program instr a  -- ^ Program to run

@@ -496,7 +496,7 @@ runIO = interpret
 -- | Like 'runIO' but with explicit input/output connected to @stdin@/@stdout@
 captureIO :: (Interp instr IO, HFunctor instr)
     => Program instr a  -- ^ Program to run
-    -> String           -- ^ Faked @stdin@
-    -> IO String        -- ^ Captured @stdout@
+    -> String           -- ^ Input to send to @stdin@
+    -> IO String        -- ^ Result from @stdout@
 captureIO = fakeIO . runIO
 
