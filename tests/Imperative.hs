@@ -247,6 +247,11 @@ testExternArgs = do
 
 ----------------------------------------
 
+-- It would be nice to be able to run these tests using Tests.Tasty.HUnit, but
+-- I wasn't able to make that work, probably due to the use of `fakeIO` in the
+-- tests. First, Tasty wasn't able to silence the output of the tests, and
+-- secondly, the tests would always fail when running a second time.
+
 testAll = do
     compareCompiled  testTypes  "0\n"  (interpret testTypes)
     compareCompiled  testRef    ""     (interpret testRef)
