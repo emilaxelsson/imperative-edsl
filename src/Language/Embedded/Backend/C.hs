@@ -189,10 +189,10 @@ captureCompiled = captureCompiled' defaultExtCompilerOpts
 compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts
     -> Program instr a  -- ^ Program to run
-    -> String           -- ^ Input to send to @stdin@
     -> IO a             -- ^ Reference program
+    -> String           -- ^ Input to send to @stdin@
     -> IO ()
-compareCompiled' opts@(ExternalCompilerOpts {..}) prog inp ref = do
+compareCompiled' opts@(ExternalCompilerOpts {..}) prog ref inp = do
     maybePutStrLn externalSilent "#### Reference program:"
     outRef <- fakeIO ref inp
     maybePutStrLn externalSilent outRef
@@ -208,8 +208,8 @@ compareCompiled' opts@(ExternalCompilerOpts {..}) prog inp ref = do
 -- running the compiled C code
 compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => Program instr a  -- ^ Program to run
-    -> String           -- ^ Input to send to @stdin@
     -> IO a             -- ^ Reference program
+    -> String           -- ^ Input to send to @stdin@
     -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 

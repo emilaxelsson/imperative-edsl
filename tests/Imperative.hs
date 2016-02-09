@@ -253,24 +253,24 @@ testExternArgs = do
 -- secondly, the tests would always fail when running a second time.
 
 testAll = do
-    compareCompiled  testTypes  "0\n"  (interpret testTypes)
-    compareCompiled  testRef    ""     (interpret testRef)
-    compareCompiledM testCExp   "44\n" (interpret testCExp)
-    compareCompiled  testArr1   ""     (interpret testArr1)
-    compareCompiled  testArr2   "20\n" (interpret testArr2)
-    compareCompiled  testArr3   ""     (interpret testArr3)
-    compareCompiled  testArr4   ""     (interpret testArr4)
-    compareCompiled  testArr5   ""     (interpret testArr5)
-    compareCompiled  testSwap1  ""     (interpret testSwap1)
-    compareCompiled  testSwap2  "45\n" (interpret testSwap2)
-    compareCompiled  testIf1    "12\n" (interpret testIf1)
-    compareCompiled  testIf2    "12\n" (interpret testIf2)
-    compareCompiled  testFor1   ""     (interpret testFor1)
-    compareCompiled  testFor2   ""     (interpret testFor2)
-    compareCompiled  testFor3   ""     (interpret testFor3)
-    compareCompiled  testAssert "45"   (interpret testAssert)
-    compareCompiled  testPtr    ""     (putStrLn "34" >> putStrLn "sum: 280")
-    compareCompiled  testArgs   ""     (putStrLn "55 66 234 66 55 66")
+    compareCompiled  testTypes  (interpret testTypes)                  "0\n"
+    compareCompiled  testRef    (interpret testRef)                    ""
+    compareCompiledM testCExp   (interpret testCExp)                   "44\n"
+    compareCompiled  testArr1   (interpret testArr1)                   ""
+    compareCompiled  testArr2   (interpret testArr2)                   "20\n"
+    compareCompiled  testArr3   (interpret testArr3)                   ""
+    compareCompiled  testArr4   (interpret testArr4)                   ""
+    compareCompiled  testArr5   (interpret testArr5)                   ""
+    compareCompiled  testSwap1  (interpret testSwap1)                  ""
+    compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
+    compareCompiled  testIf1    (interpret testIf1)                    "12\n"
+    compareCompiled  testIf2    (interpret testIf2)                    "12\n"
+    compareCompiled  testFor1   (interpret testFor1)                   ""
+    compareCompiled  testFor2   (interpret testFor2)                   ""
+    compareCompiled  testFor3   (interpret testFor3)                   ""
+    compareCompiled  testAssert (interpret testAssert)                 "45"
+    compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
+    compareCompiled  testArgs   (putStrLn "55 66 234 66 55 66")        ""
     compileAndCheck  testExternArgs
   where
     compareCompiledM = compareCompiled'
