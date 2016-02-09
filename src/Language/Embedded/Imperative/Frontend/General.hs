@@ -10,16 +10,17 @@ module Language.Embedded.Imperative.Frontend.General
   , IArr
   , Border (..)
   , IxRange
-  , Ptr
   , IsPointer
   , IO.IOMode (..)
   , Handle
   , stdin
   , stdout
   , Formattable
+  , Ptr
   , Object
   , FunArg (..)
   , Definition
+  , ToIdent  -- Needed by `callProcAssign`
   , cedecl
   ) where
   -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,

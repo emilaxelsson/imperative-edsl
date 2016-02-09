@@ -85,6 +85,7 @@ data ExternalCompilerOpts = ExternalCompilerOpts
       { externalKeepFiles  :: Bool      -- ^ Keep generated files?
       , externalFlagsPre   :: [String]  -- ^ External compiler flags (e.g. @["-Ipath"]@)
       , externalFlagsPost  :: [String]  -- ^ External compiler flags after C source (e.g. @["-lm","-lpthread"]@)
+      , externalSilent     :: Bool      -- ^ Don't print anything besides what the program prints
       }
 
 defaultExtCompilerOpts :: ExternalCompilerOpts
@@ -92,13 +93,18 @@ defaultExtCompilerOpts = ExternalCompilerOpts
     { externalKeepFiles = False
     , externalFlagsPre  = []
     , externalFlagsPost = []
+    , externalSilent    = False
     }
 
 instance Monoid ExternalCompilerOpts
   where
     mempty = defaultExtCompilerOpts
-    mappend (ExternalCompilerOpts keep1 pre1 post1) (ExternalCompilerOpts keep2 pre2 post2) =
-        ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2)
+    mappend (ExternalCompilerOpts keep1 pre1 post1 silent1) (ExternalCompilerOpts keep2 pre2 post2 silent2) =
+        ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2) silent2
+
+maybePutStrLn :: Bool -> String -> IO ()
+maybePutStrLn False str = putStrLn str
+maybePutStrLn _ _ = return ()
 
 -- | Generate C code and use GCC to compile it
 compileC :: (Interp instr CGen, HFunctor instr)
@@ -112,13 +118,14 @@ compileC (ExternalCompilerOpts {..}) prog = do
     hClose exeh
     let cFile = exeFile ++ ".c"
     writeFile cFile $ compile prog
-    when externalKeepFiles $ putStrLn $ "Created temporary file: " ++ cFile
+    when externalKeepFiles $ maybePutStrLn externalSilent $
+        "Created temporary file: " ++ cFile
     let compileCMD = unwords
           $  ["gcc", "-std=c99"]
           ++ externalFlagsPre
           ++ [cFile, "-o", exeFile]
           ++ externalFlagsPost
-    putStrLn compileCMD
+    maybePutStrLn externalSilent compileCMD
     exit <- system compileCMD
     unless externalKeepFiles $ removeFileIfPossible cFile
     case exit of
@@ -132,7 +139,8 @@ compileC (ExternalCompilerOpts {..}) prog = do
 compileAndCheck' :: (Interp instr CGen, HFunctor instr) =>
     ExternalCompilerOpts -> Program instr a -> IO ()
 compileAndCheck' opts prog = do
-    exe <- compileC opts prog
+    let opts' = opts {externalFlagsPre = "-c" : externalFlagsPre opts}
+    exe <- compileC opts' prog
     removeFileIfPossible exe
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
@@ -143,10 +151,10 @@ compileAndCheck = compileAndCheck' mempty
 -- | Generate C code, use GCC to compile it, and run the resulting executable
 runCompiled' :: (Interp instr CGen, HFunctor instr) =>
     ExternalCompilerOpts -> Program instr a -> IO ()
-runCompiled' opts prog = do
+runCompiled' opts@(ExternalCompilerOpts {..}) prog = do
     exe <- compileC opts prog
-    putStrLn ""
-    putStrLn "#### Running:"
+    maybePutStrLn externalSilent ""
+    maybePutStrLn externalSilent "#### Running:"
     system exe
     removeFileIfPossible exe
     return ()
@@ -176,29 +184,32 @@ captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     -> IO String        -- ^ Result from @stdout@
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
--- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code
+-- | Compare the content written to 'stdout' from the reference program and from
+-- running the compiled C code
 compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts
     -> Program instr a  -- ^ Program to run
     -> String           -- ^ Input to send to @stdin@
+    -> IO a             -- ^ Reference program
     -> IO ()
-compareCompiled' opts prog inp = do
-    putStrLn "#### runIO:"
-    outIO <- fakeIO (interpret prog) inp
-    putStrLn outIO
-    putStrLn "#### runCompiled:"
+compareCompiled' opts@(ExternalCompilerOpts {..}) prog inp ref = do
+    maybePutStrLn externalSilent "#### Reference program:"
+    outRef <- fakeIO ref inp
+    maybePutStrLn externalSilent outRef
+    maybePutStrLn externalSilent "#### runCompiled:"
     outComp <- captureCompiled' opts prog inp
-    putStrLn outComp
-    if outIO /= outComp
-      then error "#### runIO and runCompiled differ"
-      else putStrLn "#### runIO and runCompiled are consistent"
+    maybePutStrLn externalSilent outComp
+    if outRef /= outComp
+      then error "runCompiled differs from reference program"
+      else maybePutStrLn externalSilent
+             "#### runCompiled is consistent with reference program"
 
--- | Compare the content written to 'stdout' from interpretation in 'IO' and
--- from running the compiled C code
+-- | Compare the content written to 'stdout' from the reference program and from
+-- running the compiled C code
 compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
     => Program instr a  -- ^ Program to run
     -> String           -- ^ Input to send to @stdin@
+    -> IO a             -- ^ Reference program
     -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 

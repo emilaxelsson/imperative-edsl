@@ -4,7 +4,7 @@
 -- and different command types can be combined using (':+:').
 --
 -- These commands are general imperative constructs independent of the back end,
--- except for 'CallCMD' which is C-specific.
+-- except for 'C_CMD' which is C-specific.
 
 module Language.Embedded.Imperative.CMD
   ( -- * References
@@ -21,7 +21,6 @@ module Language.Embedded.Imperative.CMD
   , IxRange
   , ControlCMD (..)
     -- * Pointers
-  , Ptr (..)
   , IsPointer (..)
   , PtrCMD (..)
     -- * File handling
@@ -31,14 +30,13 @@ module Language.Embedded.Imperative.CMD
   , Formattable (..)
   , FileCMD (..)
   , PrintfArg (..)
-    -- * Abstract objects
+    -- * C-specific commands
+  , Ptr (..)
   , Object (..)
-  , ObjectCMD (..)
-    -- * External function calls (C-specific)
   , FunArg (..)
   , VarPredCast
   , Arg (..)
-  , CallCMD (..)
+  , C_CMD (..)
   ) where
 
 
@@ -273,12 +271,8 @@ type instance IExp (ControlCMD e :+: i) = e
 -- * Pointers
 --------------------------------------------------------------------------------
 
-newtype Ptr a = PtrComp {ptrId :: String}
-  deriving Typeable
-
-instance ToIdent (Ptr a)
-  where
-    toIdent = C.Id . ptrId
+-- The reason for not implementing `SwapPtr` using the `Ptr` type is that it's
+-- (currently) not possible to interpret `Ptr` in `IO`.
 
 -- | Types that are represented as a pointers in C
 class ToIdent a => IsPointer a
@@ -293,23 +287,17 @@ instance IsPointer (Arr i a)
         writeIORef arr1 arr2'
         writeIORef arr2 arr1'
 
-data PtrCMD (exp :: * -> *) (prog :: * -> *) a
+data PtrCMD (prog :: * -> *) a
   where
-    NewPtr  :: VarPred exp a => PtrCMD exp prog (Ptr a)
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD exp prog ()
+    SwapPtr :: IsPointer a => a -> a -> PtrCMD prog ()
 
-instance HFunctor (PtrCMD exp)
+instance HFunctor PtrCMD
   where
-    hfmap _ NewPtr        = NewPtr
     hfmap _ (SwapPtr a b) = SwapPtr a b
 
-instance DryInterp (PtrCMD exp)
+instance DryInterp PtrCMD
   where
-    dryInterp NewPtr        = liftM PtrComp $ freshStr "p"
     dryInterp (SwapPtr _ _) = return ()
-
-type instance IExp (PtrCMD e)       = e
-type instance IExp (PtrCMD e :+: i) = e
 
 
 
@@ -386,9 +374,18 @@ type instance IExp (FileCMD e :+: i) = e
 
 
 --------------------------------------------------------------------------------
--- * Abstract objects
+-- * C-specific commands
 --------------------------------------------------------------------------------
 
+-- | Pointer
+newtype Ptr a = PtrComp {ptrId :: String}
+  deriving Typeable
+
+instance ToIdent (Ptr a)
+  where
+    toIdent = C.Id . ptrId
+
+-- | Abstract object
 data Object = Object
     { pointed    :: Bool
     , objectType :: String
@@ -399,37 +396,6 @@ data Object = Object
 instance ToIdent Object
   where
     toIdent (Object _ _ o) = C.Id o
-
-data ObjectCMD exp (prog :: * -> *) a
-  where
-    NewObject
-        :: String  -- Type
-        -> ObjectCMD exp prog Object
-    InitObject
-        :: String -- Function name
-        -> Bool   -- Pointed object?
-        -> String -- Object Type
-        -> [FunArg exp]
-        -> ObjectCMD exp prog Object
-
-instance HFunctor (ObjectCMD exp)
-  where
-    hfmap _ (NewObject t)        = NewObject t
-    hfmap _ (InitObject s p t a) = InitObject s p t a
-
-instance DryInterp (ObjectCMD exp)
-  where
-    dryInterp (NewObject t)        = liftM (Object True t) $ freshStr "obj"
-    dryInterp (InitObject _ _ t _) = liftM (Object True t) $ freshStr "obj"
-
-type instance IExp (ObjectCMD e)       = e
-type instance IExp (ObjectCMD e :+: i) = e
-
-
-
---------------------------------------------------------------------------------
--- * External function calls (C-specific)
---------------------------------------------------------------------------------
 
 data FunArg exp where
   FunArg :: Arg arg => arg exp -> FunArg exp
@@ -461,39 +427,51 @@ instance Arg FunArg where
   mapArg  predCast f (FunArg arg) = FunArg (mapArg predCast f arg)
   mapMArg predCast f (FunArg arg) = liftM FunArg (mapMArg predCast f arg)
 
-data CallCMD exp (prog :: * -> *) a
+data C_CMD exp (prog :: * -> *) a
   where
-    AddInclude    :: String       -> CallCMD exp prog ()
-    AddDefinition :: C.Definition -> CallCMD exp prog ()
+    NewPtr   :: VarPred exp a => C_CMD exp prog (Ptr a)
+    PtrToArr :: Ptr a -> C_CMD exp prog (Arr i a)
+    NewObject
+        :: String  -- Type
+        -> Bool    -- Pointed?
+        -> C_CMD exp prog Object
+    AddInclude    :: String       -> C_CMD exp prog ()
+    AddDefinition :: C.Definition -> C_CMD exp prog ()
     AddExternFun  :: VarPred exp res
                   => String
                   -> proxy (exp res)
                   -> [FunArg exp]
-                  -> CallCMD exp prog ()
-    AddExternProc :: String -> [FunArg exp] -> CallCMD exp prog ()
-    CallFun       :: VarPred exp a => String -> [FunArg exp] -> CallCMD exp prog (exp a)
-    CallProc      ::                  String -> [FunArg exp] -> CallCMD exp prog ()
+                  -> C_CMD exp prog ()
+    AddExternProc :: String -> [FunArg exp] -> C_CMD exp prog ()
+    CallFun       :: VarPred exp a => String -> [FunArg exp] -> C_CMD exp prog (exp a)
+    CallProc      :: ToIdent obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
 
-instance HFunctor (CallCMD exp)
+instance HFunctor (C_CMD exp)
   where
+    hfmap _ NewPtr                      = NewPtr
+    hfmap _ (PtrToArr p)                = PtrToArr p
+    hfmap _ (NewObject p t)             = NewObject p t
     hfmap _ (AddInclude incl)           = AddInclude incl
     hfmap _ (AddDefinition def)         = AddDefinition def
     hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
     hfmap _ (AddExternProc proc args)   = AddExternProc proc args
     hfmap _ (CallFun fun args)          = CallFun fun args
-    hfmap _ (CallProc proc args)        = CallProc proc args
+    hfmap _ (CallProc obj proc args)    = CallProc obj proc args
 
-instance CompExp exp => DryInterp (CallCMD exp)
+instance CompExp exp => DryInterp (C_CMD exp)
   where
-    dryInterp (AddInclude _)       = return ()
-    dryInterp (AddDefinition _)    = return ()
-    dryInterp (AddExternFun _ _ _) = return ()
-    dryInterp (AddExternProc _ _)  = return ()
-    dryInterp (CallFun _ _)        = liftM varExp fresh
-    dryInterp (CallProc _ _)       = return ()
+    dryInterp NewPtr                 = liftM PtrComp $ freshStr "p"
+    dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
+    dryInterp (NewObject t p)        = liftM (Object p t) $ freshStr "obj"
+    dryInterp (AddInclude _)         = return ()
+    dryInterp (AddDefinition _)      = return ()
+    dryInterp (AddExternFun _ _ _)   = return ()
+    dryInterp (AddExternProc _ _)    = return ()
+    dryInterp (CallFun _ _)          = liftM varExp fresh
+    dryInterp (CallProc _ _ _)       = return ()
 
-type instance IExp (CallCMD e)       = e
-type instance IExp (CallCMD e :+: i) = e
+type instance IExp (C_CMD e)       = e
+type instance IExp (C_CMD e :+: i) = e
 
 
 
@@ -549,8 +527,7 @@ runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
     "Assertion failed: " ++ msg
 
-runPtrCMD :: PtrCMD exp prog a -> IO a
-runPtrCMD NewPtr        = error "newPtr not allowed in interpreted mode"
+runPtrCMD :: PtrCMD prog a -> IO a
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
 evalHandle :: Handle -> IO.Handle
@@ -589,23 +566,21 @@ runFileCMD (FGet h)   = do
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
 
-runObjectCMD :: ObjectCMD exp IO a -> IO a
-runObjectCMD (NewObject _) = error "cannot run programs involving newObject"
-runObjectCMD (InitObject _ _ _ _) = error "cannot run programs involving initObject"
-
-runCallCMD :: EvalExp exp => CallCMD exp IO a -> IO a
-runCallCMD (AddInclude _)       = return ()
-runCallCMD (AddDefinition _)    = return ()
-runCallCMD (AddExternFun _ _ _) = return ()
-runCallCMD (AddExternProc _ _)  = return ()
-runCallCMD (CallFun _ _)        = error "cannot run programs involving callFun"
-runCallCMD (CallProc _ _)       = error "cannot run programs involving callProc"
+runC_CMD :: C_CMD exp IO a -> IO a
+runC_CMD NewPtr               = error "cannot run programs involving newPtr"
+runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
+runC_CMD (NewObject _ _)      = error "cannot run programs involving newObject"
+runC_CMD (AddInclude _)       = return ()
+runC_CMD (AddDefinition _)    = return ()
+runC_CMD (AddExternFun _ _ _) = return ()
+runC_CMD (AddExternProc _ _)  = return ()
+runC_CMD (CallFun _ _)        = error "cannot run programs involving callFun"
+runC_CMD (CallProc _ _ _)     = error "cannot run programs involving callProc"
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
 instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
-instance                Interp (PtrCMD exp)     IO where interp = runPtrCMD
+instance                Interp PtrCMD           IO where interp = runPtrCMD
 instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
-instance                Interp (ObjectCMD exp)  IO where interp = runObjectCMD
-instance EvalExp exp => Interp (CallCMD exp)    IO where interp = runCallCMD
+instance EvalExp exp => Interp (C_CMD exp)      IO where interp = runC_CMD
 
