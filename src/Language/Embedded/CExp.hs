@@ -145,20 +145,20 @@ unaryOp UnNot = Lnot
 
 data Binary a
   where
-    BiAdd  :: Num a        => Binary (a -> a -> a)
-    BiSub  :: Num a        => Binary (a -> a -> a)
-    BiMul  :: Num a        => Binary (a -> a -> a)
-    BiDiv  :: Fractional a => Binary (a -> a -> a)
-    BiQuot :: Integral a   => Binary (a -> a -> a)
-    BiRem  :: Integral a   => Binary (a -> a -> a)
-    BiAnd  ::                 Binary (Bool -> Bool -> Bool)
-    BiOr   ::                 Binary (Bool -> Bool -> Bool)
-    BiEq   :: Eq a         => Binary (a -> a -> Bool)
-    BiNEq  :: Eq a         => Binary (a -> a -> Bool)
-    BiLt   :: Ord a        => Binary (a -> a -> Bool)
-    BiGt   :: Ord a        => Binary (a -> a -> Bool)
-    BiLe   :: Ord a        => Binary (a -> a -> Bool)
-    BiGe   :: Ord a        => Binary (a -> a -> Bool)
+    BiAdd  :: Num a            => Binary (a -> a -> a)
+    BiSub  :: Num a            => Binary (a -> a -> a)
+    BiMul  :: Num a            => Binary (a -> a -> a)
+    BiDiv  :: Fractional a     => Binary (a -> a -> a)
+    BiQuot :: Integral a       => Binary (a -> a -> a)
+    BiRem  :: Integral a       => Binary (a -> a -> a)
+    BiAnd  ::                     Binary (Bool -> Bool -> Bool)
+    BiOr   ::                     Binary (Bool -> Bool -> Bool)
+    BiEq   :: CType a          => Binary (a -> a -> Bool)
+    BiNEq  :: CType a          => Binary (a -> a -> Bool)
+    BiLt   :: (Ord a, CType a) => Binary (a -> a -> Bool)
+    BiGt   :: (Ord a, CType a) => Binary (a -> a -> Bool)
+    BiLe   :: (Ord a, CType a) => Binary (a -> a -> Bool)
+    BiGe   :: (Ord a, CType a) => Binary (a -> a -> Bool)
 
 evalBinary :: Binary a -> a
 evalBinary BiAdd  = (+)
@@ -425,21 +425,20 @@ instance (Floating a, Ord a, CType a) => Floating (CExp a)
 
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
+quot_ (LitP 0) b = 0
+quot_ a (LitP 1) = a
 quot_ a b
-    | Just 0 <- viewLit a = 0
-    | Just 1 <- viewLit b = a
-    | a == b              = 1
-    | otherwise           = constFold $ sugarSym (T $ Op BiQuot) a b
+    | a == b     = 1
+quot_ a b        = constFold $ sugarSym (T $ Op BiQuot) a b
 
 -- | Integer remainder satisfying
 --
 -- > (x `quot_` y)*y + (x #% y) == x
 (#%) :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
-a #% b
-    | Just 0 <- viewLit a = 0
-    | Just 1 <- viewLit b = 0
-    | a == b              = 0
-    | otherwise           = constFold $ sugarSym (T $ Op BiRem) a b
+LitP 0 #% _          = 0
+_      #% LitP 1     = 0
+a      #% b | a == b = 0
+a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
@@ -447,7 +446,7 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
-not_ (CExp (Sym (T (UOp UnNot)) :$ a)) = CExp a
+not_ (UOpP UnNot a) = CExp a
 not_ a = constFold $ sugarSym (T $ UOp UnNot) a
 
 -- | Logical and
@@ -506,10 +505,10 @@ cond :: CType a
     -> CExp a     -- ^ True branch
     -> CExp a     -- ^ False branch
     -> CExp a
+cond (LitP c) t f = if c then t else f
 cond c t f
-    | Just c' <- viewLit c = if c' then t else f
     | t == f = t
-cond (CExp (Sym (T (UOp UnNot)) :$ a)) t f = cond (CExp a) f t
+cond (UOpP UnNot a) t f = cond (CExp a) f t
 cond c t f = constFold $ sugarSym (T Cond) c t f
 
 -- | Condition operator; use as follows:
