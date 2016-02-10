@@ -52,10 +52,12 @@ evalNumCExp :: forall a
 evalNumCExp env = go . unCExp
   where
     go :: (a ~ DenResult sig) => AST T sig -> Denotation sig
-    go (Sym (T (Var v)))               = env v
-    go (Sym (T s))                     = evalSym s
-    go (Sym (T s@(UOp' _ _)) :$ a)     = evalSym s $ go a
-    go (Sym (T s@(Op' _ _)) :$ a :$ b) = evalSym s (go a) (go b)
+    go (Sym (T (Var v)))                = env v
+    go (Sym (T s))                      = evalSym s
+    go (Sym (T s@(UOp UnNeg)) :$ a)     = evalSym s $ go a
+    go (Sym (T s@(Op BiAdd)) :$ a :$ b) = evalSym s (go a) (go b)
+    go (Sym (T s@(Op BiSub)) :$ a :$ b) = evalSym s (go a) (go b)
+    go (Sym (T s@(Op BiMul)) :$ a :$ b) = evalSym s (go a) (go b)
 
 genNumExp :: Gen NumExp
 genNumExp = sized go

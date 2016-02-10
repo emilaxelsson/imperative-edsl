@@ -37,5 +37,5 @@ run_sumInput = runCompiled sumInput
 
 
 testAll = do
-    compareCompiled sumInput (unlines $ map show $ reverse [0..20])
+    compareCompiled sumInput (interpret sumInput) (unlines $ map show $ reverse [0..20])
 

@@ -8,7 +8,7 @@ module Language.Embedded.Imperative.Args where
 import Control.Monad
 import Data.Proxy
 import Language.C.Quote.C
-import Language.C.Syntax
+import Language.C.Syntax hiding (Deref)
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Backend.C
@@ -110,7 +110,23 @@ instance Arg arg => Arg (Addr arg) where
     p <- mkParam arg
     case p of
        Param mid spec decl loc -> return $ Param mid spec (Ptr [] decl loc) loc
-       _ -> error "Cannot deal with antiquotes"
+       _ -> error "mkParam for Addr: cannot deal with antiquotes"
   mapArg  predCast f (Addr arg) = Addr (mapArg predCast f arg)
   mapMArg predCast f (Addr arg) = liftM Addr (mapMArg predCast f arg)
+
+-- | Modifier that dereferences another argument
+newtype Deref arg exp = Deref (arg exp)
+
+instance Arg arg => Arg (Deref arg) where
+  mkArg (Deref arg) = do
+    e <- mkArg arg
+    return [cexp| *$e |]
+  mkParam (Deref arg) = do
+    p <- mkParam arg
+    case p of
+       Param mid spec (Ptr [] decl _) loc -> return $ Param mid spec decl loc
+       Param _ _ _ _ -> error "mkParam for Deref: cannot dereference non-pointer parameter"
+       _ -> error "mkParam for Deref: cannot deal with antiquotes"
+  mapArg  predCast f (Deref arg) = Deref (mapArg predCast f arg)
+  mapMArg predCast f (Deref arg) = liftM Deref (mapMArg predCast f arg)
 

@@ -21,10 +21,9 @@ type CMD
     =   RefCMD     CExp
     :+: ArrCMD     CExp
     :+: ControlCMD CExp
-    :+: PtrCMD     CExp
+    :+: PtrCMD
     :+: FileCMD    CExp
-    :+: ObjectCMD  CExp
-    :+: CallCMD    CExp
+    :+: C_CMD      CExp
 
 type Prog = Program CMD
 
@@ -160,7 +159,7 @@ testFor3 :: Prog ()
 testFor3 = for (0, 2, Excl 10) $ \i ->
     printf "%d\n" (i :: CExp Int8)
 
--- While loop tested in the `sumInput` in Demo.hs.
+-- While loop tested in `sumInput` in Demo.hs.
 
 testAssert :: Prog ()
 testAssert = do
@@ -168,59 +167,111 @@ testAssert = do
     assert (inp #> 0) "input too small"
     printf "past assertion\n"
 
-test_ptrArg :: Prog ()
-test_ptrArg = do
+testPtr :: Prog ()
+testPtr = do
     addInclude "<stdlib.h>"
     addInclude "<string.h>"
     addInclude "<stdio.h>"
-    addDefinition mall_def
-    addDefinition printArr_def
     p :: Ptr Int32 <- newPtr
-    callProc "mall" [addr (ptrArg p), valArg (100 :: CExp Word32)]
+    callProcAssign p "malloc" [valArg (100 :: CExp Word32)]
     arr :: Arr Word32 Int32 <- initArr [34,45,56,67,78]
     callProc "memcpy" [ptrArg p, arrArg arr, valArg (5*4 :: CExp Word32)]  -- sizeof(int32_t) = 4
-    callProc "printArr" [ptrArg p]
+    callProc "printf" [strArg "%d\n", deref $ ptrArg p]
+    iarr :: IArr Word32 Int32 <- unsafeFreezeArr =<< ptrToArr p
+    printf "sum: %d\n" (iarr#!0 + iarr#!1 + iarr#!2 + iarr#!3 + iarr#!4)
     callProc "free" [ptrArg p]
+
+testArgs :: Prog ()
+testArgs = do
+    addInclude "<stdio.h>"
+    addDefinition setPtr_def
+    addDefinition ret_def
+    let v = 55 :: CExp Int32
+    r <- initRef (66 :: CExp Int32)
+    a :: Arr Int32 Int32 <- initArr [234..300]
+    p :: Ptr Int32 <- newPtr
+    o <- newObject "int" False
+    op <- newObject "int" True
+    callProcAssign p "setPtr" [refArg r]
+    callProcAssign o "ret" [valArg v]
+    callProcAssign op "setPtr" [refArg r]
+    callProc "printf"
+        [ strArg "%d %d %d %d %d %d\n"
+        , valArg v
+        , deref (refArg r)
+        , deref (arrArg a)
+        , deref (ptrArg p)
+        , objArg o
+        , deref (objArg op)
+        ]
   where
-    mall_def = [cedecl|
-        void mall (typename int32_t ** p, typename size_t s) {
-            *p = malloc(s);
+    setPtr_def = [cedecl|
+        int * setPtr (int *a) {
+            return a;
         }
         |]
-    printArr_def = [cedecl|
-        void printArr (typename int32_t * p) {
-            printf("%d %d %d %d %d\n", p[0], p[1], p[2], p[3], p[4]);
+    ret_def = [cedecl|
+        int ret (int a) {
+            return a;
         }
         |]
 
-test_strArg :: Prog ()
-test_strArg = do
-    addInclude "<stdio.h>"
-    callProc "printf" [strArg "Hello World!\n"]
+testExternArgs :: Prog ()
+testExternArgs = do
+    let v = 55 :: CExp Int32
+    externProc "val_proc" [valArg v]
+    r <- initRef v
+    externProc "ref_proc1" [refArg r]
+    externProc "ref_proc2" [deref $ refArg r]  -- TODO Simplify
+    a :: Arr Int32 Int32 <- newArr 10
+    externProc "arr_proc1" [arrArg a]
+    externProc "arr_proc2" [addr $ arrArg a]
+    externProc "arr_proc3" [deref $ arrArg a]
+    p :: Ptr Int32 <- newPtr
+    externProc "ptr_proc1" [ptrArg p]
+    externProc "ptr_proc2" [addr $ ptrArg p]
+    externProc "ptr_proc3" [deref $ ptrArg p]
+    o <- newObject "int" False
+    externProc "obj_proc1" [objArg o]
+    externProc "obj_proc2" [addr $ objArg o]
+    op <- newObject "int" True
+    externProc "obj_proc3" [objArg op]
+    externProc "obj_proc4" [addr $ objArg op]
+    externProc "obj_proc5" [deref $ objArg op]
+    let s = "apa"
+    externProc "str_proc1"  [strArg s]
+    externProc "str_proc2"  [deref $ strArg s]
+    return ()
 
 
 
 ----------------------------------------
 
+-- It would be nice to be able to run these tests using Tests.Tasty.HUnit, but
+-- I wasn't able to make that work, probably due to the use of `fakeIO` in the
+-- tests. First, Tasty wasn't able to silence the output of the tests, and
+-- secondly, the tests would always fail when running a second time.
+
 testAll = do
-    compareCompiled  testTypes  "0\n"
-    compareCompiled  testRef    ""
-    compareCompiledM testCExp   "44\n"
-    compareCompiled  testArr1   ""
-    compareCompiled  testArr2   "20\n"
-    compareCompiled  testArr3   ""
-    compareCompiled  testArr4   ""
-    compareCompiled  testArr5   ""
-    compareCompiled  testSwap1  ""
-    compareCompiled  testSwap2  "45\n"
-    compareCompiled  testIf1    "12\n"
-    compareCompiled  testIf2    "12\n"
-    compareCompiled  testFor1   ""
-    compareCompiled  testFor2   ""
-    compareCompiled  testFor3   ""
-    compareCompiled  testAssert "45"
-    runCompiled      test_ptrArg
-    runCompiled      test_strArg
+    compareCompiled  testTypes  (interpret testTypes)                  "0\n"
+    compareCompiled  testRef    (interpret testRef)                    ""
+    compareCompiledM testCExp   (interpret testCExp)                   "44\n"
+    compareCompiled  testArr1   (interpret testArr1)                   ""
+    compareCompiled  testArr2   (interpret testArr2)                   "20\n"
+    compareCompiled  testArr3   (interpret testArr3)                   ""
+    compareCompiled  testArr4   (interpret testArr4)                   ""
+    compareCompiled  testArr5   (interpret testArr5)                   ""
+    compareCompiled  testSwap1  (interpret testSwap1)                  ""
+    compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
+    compareCompiled  testIf1    (interpret testIf1)                    "12\n"
+    compareCompiled  testIf2    (interpret testIf2)                    "12\n"
+    compareCompiled  testFor1   (interpret testFor1)                   ""
+    compareCompiled  testFor2   (interpret testFor2)                   ""
+    compareCompiled  testFor3   (interpret testFor3)                   ""
+    compareCompiled  testAssert (interpret testAssert)                 "45"
+    compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
+    compareCompiled  testArgs   (putStrLn "55 66 234 66 55 66")        ""
+    compileAndCheck  testExternArgs
   where
     compareCompiledM = compareCompiled'
         defaultExtCompilerOpts {externalFlagsPost = ["-lm"]}
