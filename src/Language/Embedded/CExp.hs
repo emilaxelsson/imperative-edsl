@@ -273,6 +273,10 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     compCExp' :: ASTF T b -> m Exp
     compCExp' = compCExp . CExp
 
+    typeOfSym :: forall sig m . MonadC m =>
+        CType (DenResult sig) => Sym sig -> m Type
+    typeOfSym _ = cType (Proxy :: Proxy (DenResult sig))
+
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil   = return [cexp| $id:v |]
     go (Lit _ a) Nil = return $ toExp a mempty
@@ -290,9 +294,19 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       a' <- compCExp' a
       b' <- compCExp' b
       return $ BinOp (binaryOp bop) a' b' mempty
-    go (Cast f) (a :* Nil) = do
+    go s@(Cast f) (a :* Nil) = do
       a' <- compCExp' a
-      return [cexp| $a' |]
+      t <- typeOfSym s
+      if t == [cty|float|] || t == [cty|double|]
+        then return [cexp|($ty:t) $a'|]
+        else return [cexp| $a' |]
+          -- Explicit casting is usually not needed. The reason for doing it for
+          -- floating-point types is that
+          --
+          --     printf("%f",i);
+          --
+          -- gives an error if `i` is an integer. I'm not sure if there's ever a
+          -- need to use an explicit when going to an integer type.
     go Cond (c :* t :* f :* Nil) = do
       c' <- compCExp' c
       t' <- compCExp' t
