@@ -55,9 +55,10 @@ testCExp = do
     let c = not_ (a#==10) ? a*3 $ a-5+8
     let d = a `quot_` b
     let e = a #% b
-    let f = sin (i2n a) :: CExp Double
-    let g = f/23
-    printf "%d %d %d %d %.3f %.3f %.3f" b c d e f (i2n a :: CExp Float) g
+    let f = cond (i2b e) a b
+    let g = sin (i2n a) :: CExp Double
+    let h = g/23
+    printf "%d %d %d %d %d %.3f %.3f %.3f" b c d e f g (i2n a :: CExp Float) h
 
 testRef :: Prog ()
 testRef = do

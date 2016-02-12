@@ -297,7 +297,7 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go s@(Cast f) (a :* Nil) = do
       a' <- compCExp' a
       t <- typeOfSym s
-      if t == [cty|float|] || t == [cty|double|]
+      if t == [cty|typename bool|] || t == [cty|float|] || t == [cty|double|]
         then return [cexp|($ty:t) $a'|]
         else return [cexp| $a' |]
           -- Explicit casting is usually not needed. The reason for doing it for
@@ -457,6 +457,10 @@ a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
 i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
+
+-- | Cast integer to 'Bool'
+i2b :: Integral a => CExp a -> CExp Bool
+i2b a = constFold $ sugarSym (T $ Cast (/=0)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
