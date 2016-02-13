@@ -58,7 +58,11 @@ testCExp = do
     let f = cond (i2b e) a b
     let g = sin (i2n a) :: CExp Double
     let h = g/23
-    printf "%d %d %d %d %d %.3f %.3f %.3f" b c d e f g (i2n a :: CExp Float) h
+    let i = round_ (g*1000)              :: CExp Int32
+    let j = round_ (11.5 :: CExp Float)  :: CExp Int32
+    let k = round_ (-11.5 :: CExp Float) :: CExp Int32
+    let l = g**h
+    printf "%d %d %d %d %d %.3f %.3f %.3f %ld %d %d %.3f " b c d e f g (i2n a :: CExp Float) h i j k l
 
 testRef :: Prog ()
 testRef = do

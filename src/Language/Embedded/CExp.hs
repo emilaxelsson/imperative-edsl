@@ -109,10 +109,7 @@ instance PWitness CType FunType t
 
 -- | Return whether the type of the expression is a floating-point numeric type
 isFloat :: forall a . CType a => CExp a -> Bool
-isFloat a
-    | t == typeOf (undefined :: Float)  = True
-    | t == typeOf (undefined :: Double) = True
-    | otherwise = False
+isFloat a = t == typeOf (undefined :: Float) || t == typeOf (undefined :: Double)
   where
     t = typeOf (undefined :: a)
 
@@ -433,9 +430,10 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
 instance (Floating a, Ord a, CType a) => Floating (CExp a)
   where
-    pi    = value pi
-    sin a = constFold $ sugarSym (T $ Fun ["<math.h>"] "sin" sin) a
-    cos a = constFold $ sugarSym (T $ Fun ["<math.h>"] "cos" cos) a
+    pi     = value pi
+    a ** b = constFold $ sugarSym (T $ Fun ["<math.h>"] "pow" (**)) a b
+    sin a  = constFold $ sugarSym (T $ Fun ["<math.h>"] "sin" sin) a
+    cos a  = constFold $ sugarSym (T $ Fun ["<math.h>"] "cos" cos) a
 
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
@@ -453,6 +451,9 @@ LitP 0 #% _          = 0
 _      #% LitP 1     = 0
 a      #% b | a == b = 0
 a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
+
+round_ :: (RealFrac a, Integral b, CType b) => CExp a -> CExp b
+round_ = constFold . sugarSym (T $ Fun ["<math.h>"] "lround" round)
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
