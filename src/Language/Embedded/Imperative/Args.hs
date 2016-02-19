@@ -45,7 +45,7 @@ instance Arg RefArg where
   mapMArg predCast _ (RefArg (r :: Ref a)) =
     predCast (Proxy :: Proxy a) $ return $ RefArg r
 
--- | Array argument
+-- | Mutable array argument
 data ArrArg exp where
   ArrArg :: VarPred exp a => Arr i a -> ArrArg exp
 
@@ -60,6 +60,22 @@ instance Arg ArrArg where
 
   mapMArg predCast _ (ArrArg (a :: Arr i a)) =
     predCast (Proxy :: Proxy a) $ return $ ArrArg a
+
+-- | Immutable array argument
+data IArrArg exp where
+  IArrArg :: VarPred exp a => IArr i a -> IArrArg exp
+
+instance Arg IArrArg where
+  mkArg   (IArrArg a) = return [cexp| $id:a |]
+  mkParam (IArrArg (_ :: IArr i a) :: IArrArg exp) = do
+    t <- compTypeP (Proxy :: Proxy (exp a))
+    return [cparam| $ty:t* |]
+
+  mapArg predCast _ (IArrArg (a :: IArr i a)) =
+    predCast (Proxy :: Proxy a) $ IArrArg a
+
+  mapMArg predCast _ (IArrArg (a :: IArr i a)) =
+    predCast (Proxy :: Proxy a) $ return $ IArrArg a
 
 -- | Pointer argument
 data PtrArg exp where

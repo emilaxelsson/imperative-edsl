@@ -197,6 +197,7 @@ testArgs = do
     let v = 55 :: CExp Int32
     r <- initRef (66 :: CExp Int32)
     a :: Arr Int32 Int32 <- initArr [234..300]
+    ia <- freezeArr a 10
     p :: Ptr Int32 <- newPtr
     o <- newObject "int" False
     op <- newObject "int" True
@@ -204,10 +205,11 @@ testArgs = do
     callProcAssign o "ret" [valArg v]
     callProcAssign op "setPtr" [refArg r]
     callProc "printf"
-        [ strArg "%d %d %d %d %d %d\n"
+        [ strArg "%d %d %d %d %d %d %d\n"
         , valArg v
         , deref (refArg r)
         , deref (arrArg a)
+        , deref (iarrArg ia)
         , deref (ptrArg p)
         , objArg o
         , deref (objArg op)
@@ -278,7 +280,7 @@ testAll = do
     compareCompiled  testFor3   (interpret testFor3)                   ""
     compareCompiled  testAssert (interpret testAssert)                 "45"
     compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    compareCompiled  testArgs   (putStrLn "55 66 234 66 55 66")        ""
+    compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
     compileAndCheck  testExternArgs
   where
     compareCompiledM = compareCompiled'

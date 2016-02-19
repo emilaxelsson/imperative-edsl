@@ -461,9 +461,13 @@ valArg = FunArg . ValArg
 refArg :: VarPred exp a => Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
--- | Array argument
+-- | Mutable array argument
 arrArg :: VarPred exp a => Arr i a -> FunArg exp
 arrArg = FunArg . ArrArg
+
+-- | Immutable array argument
+iarrArg :: VarPred exp a => IArr i a -> FunArg exp
+iarrArg = FunArg . IArrArg
 
 -- | Pointer argument
 ptrArg :: VarPred exp a => Ptr a -> FunArg exp
