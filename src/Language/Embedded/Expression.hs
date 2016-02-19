@@ -6,6 +6,7 @@ module Language.Embedded.Expression
   , VarPred
   , EvalExp(..)
   , CompExp(..)
+  , proxyArg
   , freshVar
   , freshVar_
   )
@@ -44,34 +45,11 @@ class CompExp exp where
     compExp :: (MonadC m) => exp a -> m Exp
 
     -- | Extract expression type
-    compType :: forall m a
-             .  (MonadC m, VarPred exp a)
-             => exp a -> m Type
-    compType _ = compTypeP (Proxy :: Proxy (exp a))
-    {-# INLINE compType #-}
+    compType :: (MonadC m, VarPred exp a) => proxy1 exp -> proxy2 a -> m Type
 
-    -- | Extract expression type
-    compTypeP :: forall proxy m a
-              .  (MonadC m, VarPred exp a)
-              => proxy (exp a) -> m Type
-    compTypeP _ = compTypePP (Proxy :: Proxy exp) (Proxy :: Proxy a)
-    {-# INLINE compTypeP #-}
-
-    -- | Extract expression type
-    compTypePP :: forall proxy1 proxy2 m a
-               .  (MonadC m, VarPred exp a)
-               => proxy1 exp -> proxy2 a -> m Type
-    compTypePP _ _ = compTypePP2 (Proxy :: Proxy exp) (Proxy :: Proxy (Proxy a))
-    {-# INLINE compTypePP #-}
-
-    -- | Extract expression type
-    compTypePP2 :: forall proxy proxy1 proxy2 m a
-                .  (MonadC m, VarPred exp a)
-                => proxy exp -> proxy1 (proxy2 a) -> m Type
-    compTypePP2 _ _ = compType (undefined :: exp a)
-    {-# INLINE compTypePP2 #-}
-
-    {-# MINIMAL varExp , compExp , (compType | compTypeP | compTypePP | compTypePP2 ) #-}
+-- | Remove one layer of a nested proxy
+proxyArg :: proxy1 (proxy2 a) -> Proxy a
+proxyArg _ = Proxy
 
 -- | Variable identifier
 type VarId = Integer
@@ -80,7 +58,7 @@ type VarId = Integer
 freshVar :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a, C.Id)
 freshVar = do
     v <- fmap varExp freshId
-    t <- compTypeP (Proxy :: Proxy (exp a))
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     C.Var n _ <- compExp v
     touchVar n
     case t of

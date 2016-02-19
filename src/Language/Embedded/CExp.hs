@@ -318,7 +318,7 @@ instance CompExp CExp
     varExp = CExp . Sym . T . Var . showVar
       where showVar v = 'v' : show v
     compExp  = compCExp
-    compType = cType
+    compType _ p = cType p
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal
