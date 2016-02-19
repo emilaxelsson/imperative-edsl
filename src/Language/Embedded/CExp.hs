@@ -45,6 +45,7 @@ import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
+import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Imperative.CMD (IArr (..))
 
 
@@ -229,8 +230,6 @@ instance Syntactic (CExp a)
     desugar = unCExp
     sugar   = CExp
 
-type instance VarPred CExp = CType
-
 evalSym :: Sym sig -> Denotation sig
 evalSym (Lit _ a)     = a
 evalSym (Const _ _ a) = a
@@ -258,10 +257,14 @@ evalCExp (CExp e) = go e
     go (Sym (T s)) = evalSym s
     go (f :$ a)    = go f $ go a
 
-instance EvalExp CExp
+instance FreeExp CExp
   where
-    litExp a = CExp $ Sym $ T $ Lit (show a) a
-    evalExp  = evalCExp
+    type VarPred CExp = CType
+    valExp a = CExp $ Sym $ T $ Lit (show a) a
+    varExp = CExp . Sym . T . Var . showVar
+      where showVar v = 'v' : show v
+
+instance EvalExp CExp where evalExp = evalCExp
 
 -- | Compile an expression
 compCExp :: forall m a . MonadC m => CExp a -> m Exp
@@ -315,8 +318,6 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
 
 instance CompExp CExp
   where
-    varExp = CExp . Sym . T . Var . showVar
-      where showVar v = 'v' : show v
     compExp  = compCExp
     compType _ p = cType p
 

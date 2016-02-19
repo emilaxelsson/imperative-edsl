@@ -22,6 +22,7 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Backend.C
+import Language.Embedded.Backend.C.Expression
 
 -- | Compile `RefCMD`
 compRefCMD :: CompExp exp => RefCMD exp prog a -> CGen a
@@ -86,7 +87,7 @@ compArrCMD cmd@(InitArr as) = do
     sym <- gensym "a"
     let sym' = '_':sym
     t   <- compTypeFromCMD cmd (proxyArg cmd)
-    as' <- sequence [compExp (litExp a :: exp a') | (a :: a') <- as]
+    as' <- sequence [compExp (valExp a :: exp a') | (a :: a') <- as]
     addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
     addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym

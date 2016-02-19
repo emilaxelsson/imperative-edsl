@@ -9,9 +9,8 @@ module Language.Embedded.Concurrent.Backend.C where
 import Control.Applicative
 #endif
 import Control.Monad.Operational.Higher
-import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
-import Language.Embedded.Backend.C
+import Language.Embedded.Backend.C.Expression
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C

@@ -76,9 +76,8 @@ unsafeFreezeRef = singleE . UnsafeFreezeRef
 -- can give strange results when evaluating in 'IO', as explained here:
 --
 -- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
-veryUnsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp) =>
-    Ref a -> exp a
-veryUnsafeFreezeRef (RefEval r) = litExp $! unsafePerformIO $! readIORef r
+veryUnsafeFreezeRef :: (FreeExp exp, VarPred exp a) => Ref a -> exp a
+veryUnsafeFreezeRef (RefEval r) = valExp $! unsafePerformIO $! readIORef r
 veryUnsafeFreezeRef (RefComp v) = varExp v
 
 

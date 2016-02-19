@@ -12,6 +12,7 @@ import Language.C.Syntax hiding (Deref)
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Backend.C
+import Language.Embedded.Backend.C.Expression
 
 -- | Value argument
 data ValArg exp where

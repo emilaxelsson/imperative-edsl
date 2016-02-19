@@ -129,22 +129,22 @@ runChanCMD (ReadChan (ChanEval c closedref lastread)) = do
   mval <- Bounded.tryReadChan c
   case mval of
     Just x -> do
-        return $ litExp x
+        return $ valExp x
     Nothing
       | closed -> do
         writeIORef lastread False
         return undefined
       | otherwise -> do
-        litExp <$> Bounded.readChan c
+        valExp <$> Bounded.readChan c
 runChanCMD (WriteChan (ChanEval c closedref _) x) = do
   closed <- readIORef closedref
   if closed
-    then return (litExp False)
-    else Bounded.writeChan c (evalExp x) >> return (litExp True)
+    then return (valExp False)
+    else Bounded.writeChan c (evalExp x) >> return (valExp True)
 runChanCMD (CloseChan (ChanEval _ closedref _)) = do
   writeIORef closedref True
 runChanCMD (ReadOK (ChanEval _ _ lastread)) = do
-  litExp <$> readIORef lastread
+  valExp <$> readIORef lastread
 
 instance Interp ThreadCMD IO where
   interp = runThreadCMD

@@ -48,6 +48,7 @@ library
     Language.Embedded.Concurrent
     Language.Embedded.Signature
     Language.Embedded.Backend.C
+    Language.Embedded.Backend.C.Expression
     Language.Embedded.CExp
 
   other-modules:

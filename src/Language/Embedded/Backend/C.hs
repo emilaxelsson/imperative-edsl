@@ -12,7 +12,6 @@ import Control.Applicative
 import Data.Monoid
 #endif
 import Control.Exception
-import Data.Proxy
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (ExitCode (..))
@@ -26,20 +25,12 @@ import Text.PrettyPrint.Mainland (pretty)
 import Control.Monad.Operational.Higher
 import System.IO.Fake
 import Language.C.Monad
-import Language.Embedded.Expression
 
 
 
 --------------------------------------------------------------------------------
 -- * Utilities
 --------------------------------------------------------------------------------
-
--- | Alternative to 'compType' which receives the expression type from a
--- \"command\" type
-compTypeFromCMD :: forall m exp a cmd (prog :: * -> *) x proxy
-    .  (MonadC m, CompExp exp, VarPred exp a)
-    => cmd exp prog x -> proxy a -> m C.Type
-compTypeFromCMD _ = compType (Proxy :: Proxy exp)
 
 -- | Create a named type
 namedType :: String -> C.Type

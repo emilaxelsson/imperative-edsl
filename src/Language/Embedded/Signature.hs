@@ -9,6 +9,7 @@ import Data.Proxy
 
 import Language.C.Monad
 import Language.Embedded.Expression
+import Language.Embedded.Backend.C.Expression
 
 import Language.C.Quote.C
 import Language.C.Syntax (Id(..),Exp(..))
