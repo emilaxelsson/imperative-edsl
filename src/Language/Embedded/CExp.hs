@@ -440,7 +440,11 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
 instance (Floating a, Ord a, CType a) => Floating (CExp a)
   where
-    pi     = value pi
+    pi = constant (addGlobal pi_def) "EDSL_PI" pi
+      where
+        pi_def = [cedecl|$esc:("#define EDSL_PI 3.141592653589793")|]
+          -- This is the value of `pi :: Double`.
+          -- Apparently there is no standard C99 definition of pi.
     a ** b = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "pow" (**)) a b
     sin a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "sin" sin) a
     cos a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "cos" cos) a
