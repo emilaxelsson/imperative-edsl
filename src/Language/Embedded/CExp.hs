@@ -54,11 +54,6 @@ import Language.Embedded.Imperative.CMD (IArr (..))
 -- * Types
 --------------------------------------------------------------------------------
 
-instance ToExp Bool
-  where
-    toExp True  _ = [cexp| 1 |]
-    toExp False _ = [cexp| 0 |]
-
 instance ToExp Int8   where toExp = toExp . toInteger
 instance ToExp Int16  where toExp = toExp . toInteger
 instance ToExp Int32  where toExp = toExp . toInteger
@@ -69,11 +64,23 @@ instance ToExp Word32 where toExp = toExp . toInteger
 instance ToExp Word64 where toExp = toExp . toInteger
 
 -- | Types supported by C
-class (Show a, Eq a, Typeable a, ToExp a) => CType a
+class (Show a, Eq a, Typeable a) => CType a
   where
     cType :: MonadC m => proxy a -> m Type
 
-instance CType Bool   where cType _ = addSystemInclude "stdbool.h" >> return [cty| typename bool     |]
+    cLit         :: MonadC m => a -> m Exp
+    default cLit :: (ToExp a, MonadC m) => a -> m Exp
+    cLit = return . flip toExp mempty
+
+instance CType Bool
+  where
+    cType _ = do
+        addSystemInclude "stdbool.h"
+        return [cty| typename bool |]
+    cLit b = do
+        addSystemInclude "stdbool.h"
+        return $ if b then [cexp| true |] else [cexp| false |]
+
 instance CType Int8   where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int8_t   |]
 instance CType Int16  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int16_t  |]
 instance CType Int32  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int32_t  |]
@@ -279,7 +286,7 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
 
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil   = return [cexp| $id:v |]
-    go (Lit _ a) Nil = return $ toExp a mempty
+    go (Lit _ a) Nil = cLit a
     go (Const incls const _) Nil = do
       mapM_ addInclude incls
       return [cexp| $id:const |]
