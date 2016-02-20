@@ -589,6 +589,8 @@ instance Render Sym
     renderSym (Op op)        = show $ binaryOp op
     renderSym (Cast _)       = "cast"
     renderSym (Var v)        = v
+    renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
+    renderSym (ArrIx _)              = "ArrIx ..."
     renderArgs = renderArgsSmart
 
 instance Equality Sym
