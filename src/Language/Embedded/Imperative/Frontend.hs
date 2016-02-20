@@ -178,6 +178,18 @@ unsafeFreezeArr
     -> ProgramT instr m (IArr i a)
 unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
 
+-- | Create and initialize an immutable array
+initIArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => [a] -> ProgramT instr m (IArr i a)
+initIArr = unsafeFreezeArr <=< initArr
+
 
 
 --------------------------------------------------------------------------------
