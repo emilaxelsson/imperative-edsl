@@ -579,7 +579,6 @@ arr #! i = sugarSym (T $ ArrIx arr) i
 deriveSymbol ''Sym
 #endif
 
-#if MIN_VERSION_syntactic(3,0,0)
 instance Render Sym
   where
     renderSym (Lit a _)      = a
@@ -591,6 +590,9 @@ instance Render Sym
     renderSym (Var v)        = v
     renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
     renderSym (ArrIx _)              = "ArrIx ..."
+
+#if MIN_VERSION_syntactic(3,0,0)
+
     renderArgs = renderArgsSmart
 
 instance Equality Sym
@@ -620,13 +622,7 @@ instance StringTree T
 
 instance Semantic Sym
   where
-    semantics (Lit s a)      = Sem s a
-    semantics (Const _ s a)  = Sem s a
-    semantics (Fun _ name f) = Sem name f
-    semantics (UOp uop)      = Sem (show $ unaryOp uop) (evalUnary uop)
-    semantics (Op bop)       = Sem (show $ binaryOp bop) (evalBinary bop)
-    semantics (Cast f)       = Sem "cast" f
-    semantics (Var v)        = Sem v $ error $ "evaluating free variable: " ++ v
+    semantics s = Sem (renderSym s) (evalSym s)
 
 instance Equality Sym
   where
