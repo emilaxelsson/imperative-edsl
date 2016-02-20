@@ -197,19 +197,21 @@ binaryOp BiGt   = Gt
 binaryOp BiLe   = Le
 binaryOp BiGe   = Ge
 
+type SupportCode = forall m . MonadC m => m ()
+
 -- | Syntactic symbols for C
 data Sym sig
   where
     -- Literal
     Lit   :: String -> a -> Sym (Full a)
-    -- Predefined constant. First argument is a list of supporting C includes.
-    Const :: [String] -> String -> a -> Sym (Full a)
-    -- Function. First argument is a list of supporting C includes.
+    -- Predefined constant
+    Const :: SupportCode -> String -> a -> Sym (Full a)
+    -- Function call
     Fun   ::
 #if MIN_VERSION_syntactic(3,0,0)
              Signature sig =>
 #endif
-             [String] -> String -> Denotation sig -> Sym sig
+             SupportCode -> String -> Denotation sig -> Sym sig
     -- Unary operator
     UOp   :: Unary (a -> b) -> Sym (a :-> Full b)
     -- Binary operator
@@ -287,11 +289,11 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil   = return [cexp| $id:v |]
     go (Lit _ a) Nil = cLit a
-    go (Const incls const _) Nil = do
-      mapM_ addInclude incls
+    go (Const code const _) Nil = do
+      code
       return [cexp| $id:const |]
-    go (Fun incls fun _) args = do
-      mapM_ addInclude incls
+    go (Fun code fun _) args = do
+      code
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
     go (UOp uop) (a :* Nil) = do
@@ -376,19 +378,19 @@ value a = CExp $ Sym $ T $ Lit (show a) a
 
 -- | Predefined constant
 constant :: CType a
-    => [String]  -- ^ Supporting C includes
-    -> String    -- ^ Name of constant
-    -> a         -- ^ Value of constant
+    => SupportCode  -- ^ Supporting C code
+    -> String       -- ^ Name of constant
+    -> a            -- ^ Value of constant
     -> CExp a
-constant incls const val = CExp $ Sym $ T $ Const incls const val
+constant code const val = CExp $ Sym $ T $ Const code const val
 
 -- | Create a named variable
 variable :: CType a => String -> CExp a
 variable = CExp . Sym . T . Var
 
 true, false :: CExp Bool
-true  = constant ["<stdbool.h>"] "true" True
-false = constant ["<stdbool.h>"] "false" False
+true  = constant (addInclude "<stdbool.h>") "true" True
+false = constant (addInclude "<stdbool.h>") "false" False
 
 instance (Num a, Ord a, CType a) => Num (CExp a)
   where
@@ -439,9 +441,9 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 instance (Floating a, Ord a, CType a) => Floating (CExp a)
   where
     pi     = value pi
-    a ** b = constFold $ sugarSym (T $ Fun ["<math.h>"] "pow" (**)) a b
-    sin a  = constFold $ sugarSym (T $ Fun ["<math.h>"] "sin" sin) a
-    cos a  = constFold $ sugarSym (T $ Fun ["<math.h>"] "cos" cos) a
+    a ** b = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "pow" (**)) a b
+    sin a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "sin" sin) a
+    cos a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "cos" cos) a
 
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
@@ -461,7 +463,7 @@ a      #% b | a == b = 0
 a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
 
 round_ :: (RealFrac a, Integral b, CType b) => CExp a -> CExp b
-round_ = constFold . sugarSym (T $ Fun ["<math.h>"] "lround" round)
+round_ = constFold . sugarSym (T $ Fun (addInclude "<math.h>") "lround" round)
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
