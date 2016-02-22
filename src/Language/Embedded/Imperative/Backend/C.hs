@@ -109,6 +109,7 @@ compArrCMD cmd@(CopyArr arr1 arr2 expl) = do
     t <- compTypeFromCMD cmd arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
 compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
+compArrCMD (UnsafeThawArr (IArrComp arr))  = return $ ArrComp arr
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
