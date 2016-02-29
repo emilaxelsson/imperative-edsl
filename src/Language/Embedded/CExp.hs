@@ -221,7 +221,7 @@ data Sym sig
     -- Conditional
     Cond  :: Sym (Bool :-> a :-> a :-> Full a)
     -- Variable (only for compilation)
-    Var   :: String -> Sym (Full a)
+    Var   :: VarId -> Sym (Full a)
     -- Unsafe array indexing
     ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
 
@@ -384,7 +384,7 @@ constant :: CType a
 constant code const val = CExp $ Sym $ T $ Const code const val
 
 -- | Create a named variable
-variable :: CType a => String -> CExp a
+variable :: CType a => VarId -> CExp a
 variable = CExp . Sym . T . Var
 
 true, false :: CExp Bool

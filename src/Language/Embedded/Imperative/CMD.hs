@@ -133,14 +133,14 @@ type instance IExp (RefCMD e :+: i) = e
 
 -- | Mutable array
 data Arr i a
-    = ArrComp String
+    = ArrComp VarId
     | ArrEval (IORef (IOArray i a))
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
 -- | Immutable array
 data IArr i a
-    = IArrComp String
+    = IArrComp VarId
     | IArrEval (Array i a)
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
@@ -313,7 +313,7 @@ instance DryInterp PtrCMD
 
 -- | File handle
 data Handle
-    = HandleComp String
+    = HandleComp VarId
     | HandleEval IO.Handle
   deriving Typeable
 
@@ -384,7 +384,7 @@ type instance IExp (FileCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 -- | Pointer
-newtype Ptr a = PtrComp {ptrId :: String}
+newtype Ptr a = PtrComp {ptrId :: VarId}
   deriving Typeable
 
 instance ToIdent (Ptr a)
@@ -395,7 +395,7 @@ instance ToIdent (Ptr a)
 data Object = Object
     { pointed    :: Bool
     , objectType :: String
-    , objectId   :: String
+    , objectId   :: VarId
     }
   deriving (Eq, Show, Ord, Typeable)
 
