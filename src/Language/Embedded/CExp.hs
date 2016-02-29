@@ -475,6 +475,10 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 i2b :: Integral a => CExp a -> CExp Bool
 i2b a = constFold $ sugarSym (T $ Cast (/=0)) a
 
+-- | Cast 'Bool' to integer
+b2i :: (Integral a, CType a) => CExp Bool -> CExp a
+b2i a = constFold $ sugarSym (T $ Cast (\c -> if c then 1 else 0)) a
+
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool
 not_ (UOpP UnNot a)  = CExp a

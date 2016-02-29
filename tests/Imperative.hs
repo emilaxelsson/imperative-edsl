@@ -59,6 +59,7 @@ testCExp = do
     printf "%d " (a `quot_` b)
     printf "%d " (a #% b)
     printf "%d " (cond (i2b a) a b)
+    printf "%d " (b2i (not_ (a#==10)) * a)
     printf "%.3f " c
     printf "%.3f " d
     printf "%.3f " (i2n a :: CExp Float)
