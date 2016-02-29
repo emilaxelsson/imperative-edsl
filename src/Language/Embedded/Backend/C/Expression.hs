@@ -43,7 +43,7 @@ compTypeFromCMD _ = compType (Proxy :: Proxy exp)
 -- | Create and declare a fresh variable and return its name
 freshVar :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a, C.Id)
 freshVar = do
-    v <- fmap varExp freshId
+    v <- fmap varExp $ gensym "v"
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     C.Var n _ <- compExp v
     touchVar n

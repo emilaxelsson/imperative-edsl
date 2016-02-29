@@ -18,10 +18,10 @@ import qualified Language.C.Syntax as C
 
 
 instance ToIdent ThreadId where
-  toIdent (TIDComp tid) = C.Id $ "t" ++ show tid
+  toIdent (TIDComp tid) = C.Id tid
 
 instance ToIdent (Chan t a) where
-  toIdent (ChanComp c) = C.Id $ "chan" ++ show c
+  toIdent (ChanComp c) = C.Id c
 
 threadFun :: ThreadId -> String
 threadFun tid = "thread_" ++ show tid
@@ -30,7 +30,7 @@ threadFun tid = "thread_" ++ show tid
 --   TODO: sharing for threads with the same body
 compThreadCMD :: ThreadCMD CGen a -> CGen a
 compThreadCMD (ForkWithId body) = do
-  tid <- TIDComp <$> freshId
+  tid <- TIDComp <$> gensym "t"
   let funName = threadFun tid
   _ <- inFunctionTy [cty|void*|] funName $ do
     addParam [cparam| void* unused |]
@@ -56,7 +56,7 @@ compChanCMD cmd@(NewChan sz) = do
   addLocalInclude "chan.h"
   t <- compTypeFromCMD cmd (proxyArg cmd)
   sz' <- compExp sz
-  c <- ChanComp <$> freshId
+  c <- ChanComp <$> gensym "chan"
   addGlobal [cedecl| typename chan_t $id:c; |]
   addStm [cstm| $id:c = chan_new(sizeof($ty:t), $sz'); |]
   return c

@@ -15,11 +15,9 @@ import qualified Control.Monad.State.Lazy as L
 import Control.Monad.State.Strict
 import Control.Monad.Writer
 
-import Language.Embedded.Expression
 
 
-
-newtype SupplyT m a = SupplyT { unSupplyT :: StateT VarId m a }
+newtype SupplyT m a = SupplyT { unSupplyT :: StateT Integer m a }
   deriving (Functor, Applicative, Monad, MonadFix, MonadIO, MonadTrans)
 
 type Supply = SupplyT Identity
@@ -27,8 +25,8 @@ type Supply = SupplyT Identity
 class Monad m => MonadSupply m
   where
     -- | Create a fresh variable identifier
-    fresh :: m VarId
-    default fresh :: (m ~ t n, MonadTrans t, MonadSupply n) => m VarId
+    fresh :: m Integer
+    default fresh :: (m ~ t n, MonadTrans t, MonadSupply n) => m Integer
     fresh = lift fresh
 
 instance Monad m => MonadSupply (SupplyT m)

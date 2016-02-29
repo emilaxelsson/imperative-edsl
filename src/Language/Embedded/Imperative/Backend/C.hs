@@ -28,14 +28,14 @@ import Language.Embedded.Backend.C.Expression
 compRefCMD :: CompExp exp => RefCMD exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
     t <- compTypeFromCMD cmd (proxyArg cmd)
-    r <- RefComp <$> freshId
+    r <- RefComp <$> gensym "r"
     case t of
       C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:r = NULL; |]
       _                  -> addLocal [cdecl| $ty:t $id:r; |]
     return r
 compRefCMD (InitRef (exp :: exp a)) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
-    r <- RefComp <$> freshId
+    r <- RefComp <$> gensym "r"
     v <- compExp exp
     addLocal [cdecl| $ty:t $id:r; |]
     addStm   [cstm| $id:r = $v; |]

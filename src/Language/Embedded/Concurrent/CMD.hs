@@ -61,7 +61,7 @@ data ThreadId
 
 instance Show ThreadId where
   show (TIDEval tid _) = show tid
-  show (TIDComp tid)   = show tid
+  show (TIDComp tid)   = tid
 
 data Closeable
 data Uncloseable

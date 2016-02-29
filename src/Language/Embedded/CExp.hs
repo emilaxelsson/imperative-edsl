@@ -270,8 +270,7 @@ instance FreeExp CExp
   where
     type VarPred CExp = CType
     valExp a = CExp $ Sym $ T $ Lit (show a) a
-    varExp = CExp . Sym . T . Var . showVar
-      where showVar v = 'v' : show v
+    varExp = CExp . Sym . T . Var
 
 instance EvalExp CExp where evalExp = evalCExp
 

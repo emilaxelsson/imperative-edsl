@@ -87,7 +87,7 @@ data Ref a
 
 instance ToIdent (Ref a)
   where
-    toIdent (RefComp r) = C.Id ('v' : show r)
+    toIdent (RefComp r) = C.Id r
 
 -- | Commands for mutable references
 data RefCMD exp (prog :: * -> *) a
@@ -116,9 +116,9 @@ instance HFunctor (RefCMD exp)
 
 instance FreeExp exp => DryInterp (RefCMD exp)
   where
-    dryInterp NewRef       = liftM RefComp fresh
-    dryInterp (InitRef _)  = liftM RefComp fresh
-    dryInterp (GetRef _)   = liftM varExp fresh
+    dryInterp NewRef       = liftM RefComp $ freshStr "r"
+    dryInterp (InitRef _)  = liftM RefComp $ freshStr "r"
+    dryInterp (GetRef _)   = liftM varExp $ freshStr "v"
     dryInterp (SetRef _ _) = return ()
     dryInterp (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
@@ -199,7 +199,7 @@ instance FreeExp exp => DryInterp (ArrCMD exp)
   where
     dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
     dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
-    dryInterp (GetArr _ _)    = liftM varExp fresh
+    dryInterp (GetArr _ _)    = liftM varExp $ freshStr "v"
     dryInterp (SetArr _ _ _)  = return ()
     dryInterp (CopyArr _ _ _) = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
@@ -371,8 +371,8 @@ instance FreeExp exp => DryInterp (FileCMD exp)
     dryInterp (FOpen _ _)     = liftM HandleComp $ freshStr "h"
     dryInterp (FClose _)      = return ()
     dryInterp (FPrintf _ _ _) = return ()
-    dryInterp (FGet _)        = liftM varExp fresh
-    dryInterp (FEof _)        = liftM varExp fresh
+    dryInterp (FGet _)        = liftM varExp $ freshStr "v"
+    dryInterp (FEof _)        = liftM varExp $ freshStr "v"
 
 type instance IExp (FileCMD e)       = e
 type instance IExp (FileCMD e :+: i) = e
@@ -481,7 +481,7 @@ instance FreeExp exp => DryInterp (C_CMD exp)
     dryInterp (AddDefinition _)      = return ()
     dryInterp (AddExternFun _ _ _)   = return ()
     dryInterp (AddExternProc _ _)    = return ()
-    dryInterp (CallFun _ _)          = liftM varExp fresh
+    dryInterp (CallFun _ _)          = liftM varExp $ freshStr "v"
     dryInterp (CallProc _ _ _)       = return ()
 
 type instance IExp (C_CMD e)       = e

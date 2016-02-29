@@ -9,7 +9,7 @@ import Data.Constraint
 
 
 -- | Variable identifier
-type VarId = Integer
+type VarId = String
 
 -- | Expressions that support injection of values and named variables
 class FreeExp exp
