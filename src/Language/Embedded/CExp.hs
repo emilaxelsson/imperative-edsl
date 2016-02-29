@@ -305,16 +305,15 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go s@(Cast f) (a :* Nil) = do
       a' <- compCExp' a
       t <- typeOfSym s
-      if t == [cty|typename bool|] || t == [cty|float|] || t == [cty|double|]
-        then return [cexp|($ty:t) $a'|]
-        else return [cexp| $a' |]
-          -- Explicit casting is usually not needed. The reason for doing it for
-          -- floating-point types is that
+      return [cexp|($ty:t) $a'|]
+          -- Explicit casting is usually not needed. But sometimes it is. For
+          -- example
           --
           --     printf("%f",i);
           --
-          -- gives an error if `i` is an integer. I'm not sure if there's ever a
-          -- need to use an explicit when going to an integer type.
+          -- gives an error if `i` is an integer. The most robust option is
+          -- probably to always have explicit casts. In many cases it probably
+          -- also makes the generated code more readable.
     go Cond (c :* t :* f :* Nil) = do
       c' <- compCExp' c
       t' <- compCExp' t
