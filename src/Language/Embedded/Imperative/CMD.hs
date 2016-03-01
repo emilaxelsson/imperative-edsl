@@ -523,7 +523,7 @@ runArrCMD (SetArr i a (ArrEval arr)) = do
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else writeArray arr' (fromIntegral (evalExp i)) (evalExp a)
+      else writeArray arr' (fromIntegral i') (evalExp a)
 runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
     arr1'  <- readIORef arr1
     arr2'  <- readIORef arr2
