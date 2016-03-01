@@ -79,8 +79,9 @@ suicide = do
 ----------------------------------------
 
 testAll = do
-    compareCompiled' opts waiting (interpret waiting) ""
-    compareCompiled' opts suicide (interpret suicide) ""
+    tag "waiting" >> compareCompiled' opts waiting (interpret waiting) ""
+    tag "suicide" >> compareCompiled' opts suicide (interpret suicide) ""
   where
+    tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"
     opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}
 

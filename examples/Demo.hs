@@ -37,5 +37,7 @@ run_sumInput = runCompiled sumInput
 
 
 testAll = do
-    compareCompiled sumInput (interpret sumInput) (unlines $ map show $ reverse [0..20])
+    tag "sumInput" >> compareCompiled sumInput (interpret sumInput) (unlines $ map show $ reverse [0..20])
+  where
+    tag str = putStrLn $ "---------------- examples/Demo.hs/" ++ str ++ "\n"
 
