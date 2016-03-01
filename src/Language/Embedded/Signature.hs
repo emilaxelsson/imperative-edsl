@@ -9,9 +9,10 @@ import Data.Proxy
 
 import Language.C.Monad
 import Language.Embedded.Expression
+import Language.Embedded.Backend.C.Expression
 
 import Language.C.Quote.C
-import Language.C.Syntax (Id(..),Exp(..),Type)
+import Language.C.Syntax (Id(..),Exp(..))
 
 
 -- * Language
@@ -58,27 +59,27 @@ translateFunction :: forall m exp a. (MonadC m, CompExp exp)
                   => Signature exp a -> m ()
 translateFunction sig = go sig (return ())
   where
-    go :: forall d. Signature exp d -> m () -> m ()
-    go (Ret n a) prelude = do
-      t <- compType a
+    go :: Signature exp d -> m () -> m ()
+    go (Ret n (a :: exp d)) prelude = do
+      t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy d)
       inFunctionTy t n $ do
         prelude
         e <- compExp a
         addStm [cstm| return $e; |]
-    go (Ptr n a) prelude = do
-      t <- compType a
+    go (Ptr n (a :: exp d)) prelude = do
+      t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy d)
       inFunction n $ do
         prelude
         e <- compExp a
         addParam [cparam| $ty:t *out |]
         addStm [cstm| *out = $e; |]
     go fun@(Lam Empty f) prelude = do
-      t <- compTypePP (Proxy :: Proxy exp) (argProxy fun)
+      t <- compType (expProxy fun) (argProxy fun)
       v <- fmap varExp freshId
       Var n _ <- compExp v
       go (f v) $ prelude >> addParam [cparam| $ty:t $id:n |]
     go fun@(Lam n@(Native l) f) prelude = do
-      t <- compTypePP (Proxy :: Proxy exp) (elemProxy n fun)
+      t <- compType (expProxy fun) (elemProxy n fun)
       i <- freshId
       let w = varExp i
       Var (Id m _) _ <- compExp w
@@ -93,13 +94,16 @@ translateFunction sig = go sig (return ())
                                               }; |]
         addParam [cparam| $ty:t * $id:n |]
     go fun@(Lam (Named s) f) prelude = do
-      t <- compTypePP (Proxy :: Proxy exp) (argProxy fun)
+      t <- compType (expProxy fun) (argProxy fun)
       i <- freshId
       withAlias i s $ go (f $ varExp i) $ prelude >> addParam [cparam| $ty:t $id:s |]
 
-    argProxy :: Signature exp (b -> c) -> Proxy b
-    argProxy _ = Proxy
+argProxy :: Signature exp (b -> c) -> Proxy b
+argProxy _ = Proxy
 
-    elemProxy :: Ann exp [b] -> Signature exp ([b] -> c) -> Proxy b
-    elemProxy _ _ = Proxy
+elemProxy :: Ann exp [b] -> Signature exp ([b] -> c) -> Proxy b
+elemProxy _ _ = Proxy
+
+expProxy :: Signature exp a -> Proxy exp
+expProxy _ = Proxy
 

@@ -76,9 +76,8 @@ unsafeFreezeRef = singleE . UnsafeFreezeRef
 -- can give strange results when evaluating in 'IO', as explained here:
 --
 -- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
-veryUnsafeFreezeRef :: (VarPred exp a, EvalExp exp, CompExp exp) =>
-    Ref a -> exp a
-veryUnsafeFreezeRef (RefEval r) = litExp $! unsafePerformIO $! readIORef r
+veryUnsafeFreezeRef :: (FreeExp exp, VarPred exp a) => Ref a -> exp a
+veryUnsafeFreezeRef (RefEval r) = valExp $! unsafePerformIO $! readIORef r
 veryUnsafeFreezeRef (RefComp v) = varExp v
 
 
@@ -175,9 +174,52 @@ unsafeFreezeArr
        , Ix i
        , ArrCMD (IExp instr) :<: instr
        )
-    => Arr i a
-    -> ProgramT instr m (IArr i a)
+    => Arr i a -> ProgramT instr m (IArr i a)
 unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
+
+-- | Thaw an immutable array to a mutable one without making a copy. This
+-- involves copying the array to a newly allocated one.
+thawArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => IArr i a
+    -> IExp instr i  -- ^ Length of array
+    -> ProgramT instr m (Arr i a)
+thawArr arr n = do
+    arr2 <- unsafeThawArr arr
+    arr3 <- newArr n
+    copyArr arr3 arr2 n
+    return arr3
+
+-- | Thaw an immutable array to a mutable one without making a copy. This is
+-- generally only safe if the the mutable array is not updated as long as the
+-- immutable array is alive.
+unsafeThawArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => IArr i a -> ProgramT instr m (Arr i a)
+unsafeThawArr arr = singleE $ UnsafeThawArr arr
+
+-- | Create and initialize an immutable array
+initIArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       , Monad m
+       )
+    => [a] -> ProgramT instr m (IArr i a)
+initIArr = unsafeFreezeArr <=< initArr
 
 
 
@@ -461,9 +503,13 @@ valArg = FunArg . ValArg
 refArg :: VarPred exp a => Ref a -> FunArg exp
 refArg = FunArg . RefArg
 
--- | Array argument
+-- | Mutable array argument
 arrArg :: VarPred exp a => Arr i a -> FunArg exp
 arrArg = FunArg . ArrArg
+
+-- | Immutable array argument
+iarrArg :: VarPred exp a => IArr i a -> FunArg exp
+iarrArg = FunArg . IArrArg
 
 -- | Pointer argument
 ptrArg :: VarPred exp a => Ptr a -> FunArg exp

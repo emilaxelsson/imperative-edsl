@@ -9,9 +9,8 @@ module Language.Embedded.Concurrent.Backend.C where
 import Control.Applicative
 #endif
 import Control.Monad.Operational.Higher
-import Data.Proxy
-import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
+import Language.Embedded.Backend.C.Expression
 import Language.C.Quote.C
 import Language.C.Monad
 import qualified Language.C.Syntax as C
@@ -55,7 +54,7 @@ compChanCMD :: forall exp prog a. CompExp exp
             -> CGen a
 compChanCMD cmd@(NewChan sz) = do
   addLocalInclude "chan.h"
-  t <- compTypePP2 (Proxy :: Proxy exp) cmd
+  t <- compTypeFromCMD cmd (proxyArg cmd)
   sz' <- compExp sz
   c <- ChanComp <$> freshId
   addGlobal [cedecl| typename chan_t $id:c; |]

@@ -53,8 +53,16 @@ testCExp = do
     a :: CExp Int32 <- fget stdin
     let b = a#==10 ? a*3 $ a-5+8
     let c = not_ (a#==10) ? a*3 $ a-5+8
-    let d = sin (i2n a) :: CExp Double
-    printf "%d %d %.3f" b c d
+    let d = a `quot_` b
+    let e = a #% b
+    let f = cond (i2b e) a b
+    let g = sin (i2n a) :: CExp Double
+    let h = g/23
+    let i = round_ (g*1000)              :: CExp Int32
+    let j = round_ (11.5 :: CExp Float)  :: CExp Int32
+    let k = round_ (-11.5 :: CExp Float) :: CExp Int32
+    let l = g**h
+    printf "%d %d %d %d %d %.3f %.3f %.3f %ld %d %d %.3f " b c d e f g (i2n a :: CExp Float) h i j k l
 
 testRef :: Prog ()
 testRef = do
@@ -103,6 +111,22 @@ testArr5 = do
     arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
     iarr <- unsafeFreezeArr arr
     sequence_ [printf "%d " $ iarr #! i | i' <- [0..3], let i = fromInteger i']
+    printf "\n"
+
+testArr6 :: Prog ()
+testArr6 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    iarr <- unsafeFreezeArr arr
+    arr2 <- unsafeThawArr iarr
+    sequence_ [getArr i arr2 >>= printf "%d " | i <- map fromInteger [0..3]]
+    printf "\n"
+
+testArr7 :: Prog ()
+testArr7 = do
+    arr :: Arr Word32 Int32 <- initArr [8,7,6,5]
+    iarr <- freezeArr arr 4
+    arr2 <- thawArr iarr 4
+    sequence_ [getArr i arr2 >>= printf "%d " | i <- map fromInteger [0..3]]
     printf "\n"
 
 testSwap1 :: Prog ()
@@ -189,6 +213,7 @@ testArgs = do
     let v = 55 :: CExp Int32
     r <- initRef (66 :: CExp Int32)
     a :: Arr Int32 Int32 <- initArr [234..300]
+    ia <- freezeArr a 10
     p :: Ptr Int32 <- newPtr
     o <- newObject "int" False
     op <- newObject "int" True
@@ -196,10 +221,11 @@ testArgs = do
     callProcAssign o "ret" [valArg v]
     callProcAssign op "setPtr" [refArg r]
     callProc "printf"
-        [ strArg "%d %d %d %d %d %d\n"
+        [ strArg "%d %d %d %d %d %d %d\n"
         , valArg v
         , deref (refArg r)
         , deref (arrArg a)
+        , deref (iarrArg ia)
         , deref (ptrArg p)
         , objArg o
         , deref (objArg op)
@@ -261,6 +287,9 @@ testAll = do
     compareCompiled  testArr3   (interpret testArr3)                   ""
     compareCompiled  testArr4   (interpret testArr4)                   ""
     compareCompiled  testArr5   (interpret testArr5)                   ""
+    compareCompiled  testArr6   (runIO testArr6)                       ""
+    compareCompiled  testArr7   (runIO testArr6)                       ""
+    compareCompiled  testArr7   (runIO testArr7)                       ""
     compareCompiled  testSwap1  (interpret testSwap1)                  ""
     compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
     compareCompiled  testIf1    (interpret testIf1)                    "12\n"
@@ -270,7 +299,7 @@ testAll = do
     compareCompiled  testFor3   (interpret testFor3)                   ""
     compareCompiled  testAssert (interpret testAssert)                 "45"
     compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    compareCompiled  testArgs   (putStrLn "55 66 234 66 55 66")        ""
+    compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
     compileAndCheck  testExternArgs
   where
     compareCompiledM = compareCompiled'

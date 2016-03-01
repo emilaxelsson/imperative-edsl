@@ -8,9 +8,7 @@
 -- type MyProg exp a = `Program` (`RefCMD` exp `:+:` `FileCMD` exp) a
 -- @
 --
--- Also, instructions are parameterized on the expression language. In the above
--- example, @exp@ can be any type (of kind @* -> *@) that implements the
--- 'EvalExp' and 'CompExp' classes.
+-- Also, instructions are parameterized on the expression language.
 --
 -- Some examples of using the library are found in the @examples@ directory.
 
@@ -35,9 +33,9 @@ module Language.Embedded.Imperative
     -- * Composing instruction sets
   , (:+:)
   , (:<:)
+    -- * Interface for expression types
   , IExp
-    -- * Interpreting expressions
-  , VarPred
+  , FreeExp
   , EvalExp
   , CompExp
     -- * Front end
@@ -54,6 +52,7 @@ import Data.Word
 import Control.Monad.Operational.Higher
 
 import Language.Embedded.Expression
+import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Frontend

@@ -12,6 +12,7 @@ import Language.C.Syntax hiding (Deref)
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Backend.C
+import Language.Embedded.Backend.C.Expression
 
 -- | Value argument
 data ValArg exp where
@@ -19,8 +20,8 @@ data ValArg exp where
 
 instance Arg ValArg where
   mkArg   (ValArg a) = compExp a
-  mkParam (ValArg a) = do
-    t <- compType a
+  mkParam (ValArg (a :: exp a)) = do
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t |]
 
   mapArg predCast f (ValArg (a :: exp a)) =
@@ -36,7 +37,7 @@ data RefArg exp where
 instance Arg RefArg where
   mkArg   (RefArg r) = return [cexp| &$id:r |]
   mkParam (RefArg (r :: Ref a) :: RefArg exp) = do
-    t <- compTypeP (Proxy :: Proxy (exp a))
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
   mapArg predCast _ (RefArg (r :: Ref a)) =
@@ -45,14 +46,14 @@ instance Arg RefArg where
   mapMArg predCast _ (RefArg (r :: Ref a)) =
     predCast (Proxy :: Proxy a) $ return $ RefArg r
 
--- | Array argument
+-- | Mutable array argument
 data ArrArg exp where
   ArrArg :: VarPred exp a => Arr i a -> ArrArg exp
 
 instance Arg ArrArg where
   mkArg   (ArrArg a) = return [cexp| $id:a |]
   mkParam (ArrArg (_ :: Arr i a) :: ArrArg exp) = do
-    t <- compTypeP (Proxy :: Proxy (exp a))
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
   mapArg predCast _ (ArrArg (a :: Arr i a)) =
@@ -61,6 +62,22 @@ instance Arg ArrArg where
   mapMArg predCast _ (ArrArg (a :: Arr i a)) =
     predCast (Proxy :: Proxy a) $ return $ ArrArg a
 
+-- | Immutable array argument
+data IArrArg exp where
+  IArrArg :: VarPred exp a => IArr i a -> IArrArg exp
+
+instance Arg IArrArg where
+  mkArg   (IArrArg a) = return [cexp| $id:a |]
+  mkParam (IArrArg (_ :: IArr i a) :: IArrArg exp) = do
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
+    return [cparam| $ty:t* |]
+
+  mapArg predCast _ (IArrArg (a :: IArr i a)) =
+    predCast (Proxy :: Proxy a) $ IArrArg a
+
+  mapMArg predCast _ (IArrArg (a :: IArr i a)) =
+    predCast (Proxy :: Proxy a) $ return $ IArrArg a
+
 -- | Pointer argument
 data PtrArg exp where
   PtrArg :: VarPred exp a => Ptr a -> PtrArg exp
@@ -68,7 +85,7 @@ data PtrArg exp where
 instance Arg PtrArg where
   mkArg   (PtrArg p) = return [cexp| $id:p |]
   mkParam (PtrArg (_ :: Ptr a) :: PtrArg exp) = do
-    t <- compTypeP (Proxy :: Proxy (exp a))
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
   mapArg predCast _ (PtrArg (p :: Ptr a)) =

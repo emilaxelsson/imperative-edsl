@@ -22,19 +22,19 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Backend.C
+import Language.Embedded.Backend.C.Expression
 
 -- | Compile `RefCMD`
-compRefCMD :: forall exp prog a. CompExp exp
-           => RefCMD exp prog a -> CGen a
+compRefCMD :: CompExp exp => RefCMD exp prog a -> CGen a
 compRefCMD cmd@NewRef = do
-    t <- compTypePP2 (Proxy :: Proxy exp) cmd
+    t <- compTypeFromCMD cmd (proxyArg cmd)
     r <- RefComp <$> freshId
     case t of
       C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:r = NULL; |]
       _                  -> addLocal [cdecl| $ty:t $id:r; |]
     return r
-compRefCMD (InitRef exp) = do
-    t <- compType exp
+compRefCMD (InitRef (exp :: exp a)) = do
+    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     r <- RefComp <$> freshId
     v <- compExp exp
     addLocal [cdecl| $ty:t $id:r; |]
@@ -72,8 +72,8 @@ compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
 compArrCMD cmd@(NewArr size) = do
     sym <- gensym "a"
     let sym' = '_':sym
-    n   <- compExp size
-    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    n <- compExp size
+    t <- compTypeFromCMD cmd (proxyArg cmd)
     case n of
       C.Const _ _ -> do
         addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
@@ -86,8 +86,8 @@ compArrCMD cmd@(NewArr size) = do
 compArrCMD cmd@(InitArr as) = do
     sym <- gensym "a"
     let sym' = '_':sym
-    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
-    as' <- sequence [compExp (litExp a :: exp a') | (a :: a') <- as]
+    t   <- compTypeFromCMD cmd (proxyArg cmd)
+    as' <- sequence [compExp (valExp a :: exp a') | (a :: a') <- as]
     addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
     addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
@@ -102,13 +102,14 @@ compArrCMD (SetArr expi expv arr) = do
     i <- compExp expi
     touchVar arr
     addStm [cstm| $id:arr[ $i ] = $v; |]
-compArrCMD (CopyArr arr1 arr2 expl) = do
+compArrCMD cmd@(CopyArr arr1 arr2 expl) = do
     addInclude "<string.h>"
     mapM_ touchVar [arr1,arr2]
     l <- compExp expl
-    t <- compTypePP (Proxy :: Proxy exp) arr1
+    t <- compTypeFromCMD cmd arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
 compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
+compArrCMD (UnsafeThawArr (IArrComp arr))  = return $ ArrComp arr
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
@@ -222,7 +223,7 @@ compC_CMD :: forall exp a . CompExp exp => C_CMD exp CGen a -> CGen a
 compC_CMD cmd@NewPtr = do
     addInclude "<stddef.h>"
     sym <- gensym "p"
-    t   <- compTypePP2 (Proxy :: Proxy exp) cmd
+    t   <- compTypeFromCMD cmd (proxyArg cmd)
     addLocal [cdecl| $ty:t * $id:sym = NULL; |]
     return $ PtrComp sym
 compC_CMD (PtrToArr (PtrComp p)) = return $ ArrComp p
@@ -235,8 +236,8 @@ compC_CMD (NewObject t pointed) = do
     return $ Object pointed t sym
 compC_CMD (AddInclude inc)    = addInclude inc
 compC_CMD (AddDefinition def) = addGlobal def
-compC_CMD (AddExternFun fun res args) = do
-    tres  <- compTypeP res
+compC_CMD (AddExternFun fun (res :: proxy (exp res)) args) = do
+    tres  <- compType (Proxy :: Proxy exp) (Proxy :: Proxy res)
     targs <- mapM mkParam args
     addGlobal [cedecl| extern $ty:tres $id:fun($params:targs); |]
 compC_CMD (AddExternProc proc args) = do

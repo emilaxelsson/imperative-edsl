@@ -71,6 +71,8 @@ import Language.Embedded.Traversal
 import qualified Language.C.Syntax as C
 import Language.C.Quote.C (ToIdent (..))
 import Language.C.Monad
+import Language.Embedded.Backend.C.Expression
+
 
 
 --------------------------------------------------------------------------------
@@ -112,7 +114,7 @@ instance HFunctor (RefCMD exp)
     hfmap _ (SetRef r a) = SetRef r a
     hfmap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
-instance CompExp exp => DryInterp (RefCMD exp)
+instance FreeExp exp => DryInterp (RefCMD exp)
   where
     dryInterp NewRef       = liftM RefComp fresh
     dryInterp (InitRef _)  = liftM RefComp fresh
@@ -176,6 +178,7 @@ data ArrCMD exp (prog :: * -> *) a
     SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
     CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
     UnsafeFreezeArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> ArrCMD exp prog (IArr i a)
+    UnsafeThawArr   :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => IArr i a -> ArrCMD exp prog (Arr i a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -190,8 +193,9 @@ instance HFunctor (ArrCMD exp)
     hfmap _ (SetArr i a arr)      = SetArr i a arr
     hfmap _ (CopyArr a1 a2 l)     = CopyArr a1 a2 l
     hfmap _ (UnsafeFreezeArr arr) = UnsafeFreezeArr arr
+    hfmap _ (UnsafeThawArr arr)   = UnsafeThawArr arr
 
-instance CompExp exp => DryInterp (ArrCMD exp)
+instance FreeExp exp => DryInterp (ArrCMD exp)
   where
     dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
     dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
@@ -199,6 +203,7 @@ instance CompExp exp => DryInterp (ArrCMD exp)
     dryInterp (SetArr _ _ _)  = return ()
     dryInterp (CopyArr _ _ _) = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
+    dryInterp (UnsafeThawArr (IArrComp arr))  = return (ArrComp arr)
 
 type instance IExp (ArrCMD e)       = e
 type instance IExp (ArrCMD e :+: i) = e
@@ -361,7 +366,7 @@ instance HFunctor (FileCMD exp)
     hfmap _ (FGet hdl)            = FGet hdl
     hfmap _ (FEof hdl)            = FEof hdl
 
-instance CompExp exp => DryInterp (FileCMD exp)
+instance FreeExp exp => DryInterp (FileCMD exp)
   where
     dryInterp (FOpen _ _)     = liftM HandleComp $ freshStr "h"
     dryInterp (FClose _)      = return ()
@@ -467,7 +472,7 @@ instance HFunctor (C_CMD exp)
     hfmap _ (CallFun fun args)          = CallFun fun args
     hfmap _ (CallProc obj proc args)    = CallProc obj proc args
 
-instance CompExp exp => DryInterp (C_CMD exp)
+instance FreeExp exp => DryInterp (C_CMD exp)
   where
     dryInterp NewPtr                 = liftM PtrComp $ freshStr "p"
     dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
@@ -492,7 +497,7 @@ runRefCMD :: forall exp prog a . EvalExp exp => RefCMD exp prog a -> IO a
 runRefCMD (InitRef a)                       = fmap RefEval $ newIORef $ evalExp a
 runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "reading uninitialized reference"
 runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
-runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap litExp $ readIORef r
+runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap valExp $ readIORef r
 runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
@@ -507,7 +512,7 @@ runArrCMD (GetArr i (ArrEval arr)) = do
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else fmap litExp $ readArray arr' i'
+      else fmap valExp $ readArray arr' i'
 runArrCMD (SetArr i a (ArrEval arr)) = do
     arr'  <- readIORef arr
     let i' = evalExp i
@@ -540,6 +545,8 @@ runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
       [ readArray arr2' i >>= writeArray arr1' i | i <- genericTake l' [0..] ]
 runArrCMD (UnsafeFreezeArr (ArrEval arr)) =
     fmap IArrEval . freeze =<< readIORef arr
+runArrCMD (UnsafeThawArr (IArrEval arr)) =
+    fmap ArrEval . newIORef =<< thaw arr
 
 runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
 runControlCMD (If c t f)        = if evalExp c then t else f
@@ -557,7 +564,7 @@ runControlCMD (For (lo,step,hi) body) = loop (evalExp lo)
       | step >= 0         = i <  hi'
       | step < 0          = i >  hi'
     loop i
-      | cont i    = body (litExp i) >> loop (i + fromIntegral step)
+      | cont i    = body (valExp i) >> loop (i + fromIntegral step)
       | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
@@ -598,9 +605,9 @@ runFileCMD (FPrintf h format as)          = evalFPrintf as (Printf.hPrintf (eval
 runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
-        [(f,"")] -> return $ litExp f
+        [(f,"")] -> return $ valExp f
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
-runFileCMD (FEof h) = fmap litExp $ IO.hIsEOF $ evalHandle h
+runFileCMD (FEof h) = fmap valExp $ IO.hIsEOF $ evalHandle h
 
 runC_CMD :: C_CMD exp IO a -> IO a
 runC_CMD NewPtr               = error "cannot run programs involving newPtr"
