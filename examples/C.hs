@@ -19,12 +19,17 @@ type L =
 -- | Define a function in another module and call it.
 multiModule :: Program L ()
 multiModule = do
+  addInclude "<stdlib.h>"
+  addExternProc "func_in_other" []
   inModule "other" $ do
-    addInclude "<stdlib.h>"
     addDefinition [cedecl|
       void func_in_other(void) {
         puts("Hello from the other module!");
       } |]
-  addInclude "<stdlib.h>"
-  addExternProc "func_in_other" []
+    addInclude "<stdio.h>"
   callProc "func_in_other" []
+
+----------------------------------------
+
+testAll = do
+    icompileAll multiModule
