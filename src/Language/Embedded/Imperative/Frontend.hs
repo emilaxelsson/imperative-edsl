@@ -463,7 +463,7 @@ inModule :: (C_CMD (IExp instr) :<: instr)
     => String
     -> ProgramT instr m ()
     -> ProgramT instr m ()
-inModule mod cmd = singleE $ InModule mod cmd
+inModule mod prog = singleE $ InModule mod prog
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
