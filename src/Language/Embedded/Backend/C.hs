@@ -65,7 +65,10 @@ arrayInit as = C.CompoundInitializer
 --
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen, HFunctor instr) => Program instr a -> String
-compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
+compile = snd . head . compileAll
+
+compileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> [(String, String)]
+compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
 --
@@ -76,6 +79,9 @@ compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
+
+icompileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
+icompileAll = mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
 
 removeFileIfPossible :: FilePath -> IO ()
 removeFileIfPossible file =
