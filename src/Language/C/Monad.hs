@@ -215,7 +215,8 @@ cenvToCUnit env =
 prettyCGenT :: Monad m => CGenT m a -> m [(String, Doc)]
 prettyCGenT ma = do
     (_,cenv) <- runCGenT ma (defaultCEnv Flags)
-    return $ map (("", ppr) <*>) $ ("main", cenvToCUnit cenv) : Map.toList (_modules cenv)
+    return $ map (("", ppr) <*>)
+           $ ("main", cenvToCUnit cenv) : Map.toList (_modules cenv)
 
 prettyCGen :: CGen a -> [(String, Doc)]
 prettyCGen = runIdentity . prettyCGenT
