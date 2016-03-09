@@ -87,13 +87,13 @@ data Ref a
 
 instance ToIdent (Ref a)
   where
-    toIdent (RefComp r) = C.Id ('v' : show r)
+    toIdent (RefComp r) = C.Id r
 
 -- | Commands for mutable references
 data RefCMD exp (prog :: * -> *) a
   where
-    NewRef  :: VarPred exp a => RefCMD exp prog (Ref a)
-    InitRef :: VarPred exp a => exp a -> RefCMD exp prog (Ref a)
+    NewRef  :: VarPred exp a => String -> RefCMD exp prog (Ref a)
+    InitRef :: VarPred exp a => String -> exp a -> RefCMD exp prog (Ref a)
     GetRef  :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
     SetRef  :: VarPred exp a => Ref a -> exp a -> RefCMD exp prog ()
       -- `VarPred` for `SetRef` is not needed for code generation, but it can be useful when
@@ -108,18 +108,18 @@ data RefCMD exp (prog :: * -> *) a
 
 instance HFunctor (RefCMD exp)
   where
-    hfmap _ NewRef       = NewRef
-    hfmap _ (InitRef a)  = InitRef a
-    hfmap _ (GetRef r)   = GetRef r
-    hfmap _ (SetRef r a) = SetRef r a
+    hfmap _ (NewRef base)       = NewRef base
+    hfmap _ (InitRef base a)    = InitRef base a
+    hfmap _ (GetRef r)          = GetRef r
+    hfmap _ (SetRef r a)        = SetRef r a
     hfmap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
 instance FreeExp exp => DryInterp (RefCMD exp)
   where
-    dryInterp NewRef       = liftM RefComp fresh
-    dryInterp (InitRef _)  = liftM RefComp fresh
-    dryInterp (GetRef _)   = liftM varExp fresh
-    dryInterp (SetRef _ _) = return ()
+    dryInterp (NewRef base)    = liftM RefComp $ freshStr base
+    dryInterp (InitRef base _) = liftM RefComp $ freshStr base
+    dryInterp (GetRef _)       = liftM varExp $ freshStr "v"
+    dryInterp (SetRef _ _)     = return ()
     dryInterp (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 
 type instance IExp (RefCMD e)       = e
@@ -133,14 +133,14 @@ type instance IExp (RefCMD e :+: i) = e
 
 -- | Mutable array
 data Arr i a
-    = ArrComp String
+    = ArrComp VarId
     | ArrEval (IORef (IOArray i a))
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
 -- | Immutable array
 data IArr i a
-    = IArrComp String
+    = IArrComp VarId
     | IArrEval (Array i a)
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
@@ -172,8 +172,8 @@ instance ToIdent (IArr i a)
 -- | Commands for mutable arrays
 data ArrCMD exp (prog :: * -> *) a
   where
-    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> ArrCMD exp prog (Arr i a)
-    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => [a] -> ArrCMD exp prog (Arr i a)
+    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => String -> exp i -> ArrCMD exp prog (Arr i a)
+    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => String -> [a] -> ArrCMD exp prog (Arr i a)
     GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
     SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
     CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
@@ -187,8 +187,8 @@ data ArrCMD exp (prog :: * -> *) a
 
 instance HFunctor (ArrCMD exp)
   where
-    hfmap _ (NewArr n)            = NewArr n
-    hfmap _ (InitArr as)          = InitArr as
+    hfmap _ (NewArr base n)       = NewArr base n
+    hfmap _ (InitArr base as)     = InitArr base as
     hfmap _ (GetArr i arr)        = GetArr i arr
     hfmap _ (SetArr i a arr)      = SetArr i a arr
     hfmap _ (CopyArr a1 a2 l)     = CopyArr a1 a2 l
@@ -197,11 +197,11 @@ instance HFunctor (ArrCMD exp)
 
 instance FreeExp exp => DryInterp (ArrCMD exp)
   where
-    dryInterp (NewArr _)      = liftM ArrComp $ freshStr "a"
-    dryInterp (InitArr _)     = liftM ArrComp $ freshStr "a"
-    dryInterp (GetArr _ _)    = liftM varExp fresh
-    dryInterp (SetArr _ _ _)  = return ()
-    dryInterp (CopyArr _ _ _) = return ()
+    dryInterp (NewArr base _)  = liftM ArrComp $ freshStr base
+    dryInterp (InitArr base _) = liftM ArrComp $ freshStr base
+    dryInterp (GetArr _ _)     = liftM varExp $ freshStr "v"
+    dryInterp (SetArr _ _ _)   = return ()
+    dryInterp (CopyArr _ _ _)  = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
     dryInterp (UnsafeThawArr (IArrComp arr))  = return (ArrComp arr)
 
@@ -313,7 +313,7 @@ instance DryInterp PtrCMD
 
 -- | File handle
 data Handle
-    = HandleComp String
+    = HandleComp VarId
     | HandleEval IO.Handle
   deriving Typeable
 
@@ -371,8 +371,8 @@ instance FreeExp exp => DryInterp (FileCMD exp)
     dryInterp (FOpen _ _)     = liftM HandleComp $ freshStr "h"
     dryInterp (FClose _)      = return ()
     dryInterp (FPrintf _ _ _) = return ()
-    dryInterp (FGet _)        = liftM varExp fresh
-    dryInterp (FEof _)        = liftM varExp fresh
+    dryInterp (FGet _)        = liftM varExp $ freshStr "v"
+    dryInterp (FEof _)        = liftM varExp $ freshStr "v"
 
 type instance IExp (FileCMD e)       = e
 type instance IExp (FileCMD e :+: i) = e
@@ -384,7 +384,7 @@ type instance IExp (FileCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 -- | Pointer
-newtype Ptr a = PtrComp {ptrId :: String}
+newtype Ptr a = PtrComp {ptrId :: VarId}
   deriving Typeable
 
 instance ToIdent (Ptr a)
@@ -395,7 +395,7 @@ instance ToIdent (Ptr a)
 data Object = Object
     { pointed    :: Bool
     , objectType :: String
-    , objectId   :: String
+    , objectId   :: VarId
     }
   deriving (Eq, Show, Ord, Typeable)
 
@@ -443,10 +443,11 @@ instance Assignable Object
 
 data C_CMD exp (prog :: * -> *) a
   where
-    NewPtr   :: VarPred exp a => C_CMD exp prog (Ptr a)
+    NewPtr   :: VarPred exp a => String -> C_CMD exp prog (Ptr a)
     PtrToArr :: Ptr a -> C_CMD exp prog (Arr i a)
     NewObject
-        :: String  -- Type
+        :: String  -- Base name
+        -> String  -- Type
         -> Bool    -- Pointed?
         -> C_CMD exp prog Object
     AddInclude    :: String       -> C_CMD exp prog ()
@@ -462,9 +463,9 @@ data C_CMD exp (prog :: * -> *) a
 
 instance HFunctor (C_CMD exp)
   where
-    hfmap _ NewPtr                      = NewPtr
+    hfmap _ (NewPtr base)               = NewPtr base
     hfmap _ (PtrToArr p)                = PtrToArr p
-    hfmap _ (NewObject p t)             = NewObject p t
+    hfmap _ (NewObject base p t)        = NewObject base p t
     hfmap _ (AddInclude incl)           = AddInclude incl
     hfmap _ (AddDefinition def)         = AddDefinition def
     hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
@@ -474,14 +475,14 @@ instance HFunctor (C_CMD exp)
 
 instance FreeExp exp => DryInterp (C_CMD exp)
   where
-    dryInterp NewPtr                 = liftM PtrComp $ freshStr "p"
+    dryInterp (NewPtr base)          = liftM PtrComp $ freshStr base
     dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
-    dryInterp (NewObject t p)        = liftM (Object p t) $ freshStr "obj"
+    dryInterp (NewObject base t p)   = liftM (Object p t) $ freshStr base
     dryInterp (AddInclude _)         = return ()
     dryInterp (AddDefinition _)      = return ()
     dryInterp (AddExternFun _ _ _)   = return ()
     dryInterp (AddExternProc _ _)    = return ()
-    dryInterp (CallFun _ _)          = liftM varExp fresh
+    dryInterp (CallFun _ _)          = liftM varExp $ freshStr "v"
     dryInterp (CallProc _ _ _)       = return ()
 
 type instance IExp (C_CMD e)       = e
@@ -494,15 +495,15 @@ type instance IExp (C_CMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 runRefCMD :: forall exp prog a . EvalExp exp => RefCMD exp prog a -> IO a
-runRefCMD (InitRef a)                       = fmap RefEval $ newIORef $ evalExp a
-runRefCMD NewRef                            = fmap RefEval $ newIORef $ error "reading uninitialized reference"
+runRefCMD (InitRef _ a)                     = fmap RefEval $ newIORef $ evalExp a
+runRefCMD (NewRef _)                        = fmap RefEval $ newIORef $ error "reading uninitialized reference"
 runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
 runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap valExp $ readIORef r
 runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
 
 runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
-runArrCMD (InitArr as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
+runArrCMD (NewArr _ n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
+runArrCMD (InitArr _ as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrEval arr)) = do
     arr'  <- readIORef arr
     let i' = evalExp i
@@ -522,7 +523,7 @@ runArrCMD (SetArr i a (ArrEval arr)) = do
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else writeArray arr' (fromIntegral (evalExp i)) (evalExp a)
+      else writeArray arr' (fromIntegral i') (evalExp a)
 runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
     arr1'  <- readIORef arr1
     arr2'  <- readIORef arr2
@@ -610,9 +611,9 @@ runFileCMD (FGet h)   = do
 runFileCMD (FEof h) = fmap valExp $ IO.hIsEOF $ evalHandle h
 
 runC_CMD :: C_CMD exp IO a -> IO a
-runC_CMD NewPtr               = error "cannot run programs involving newPtr"
+runC_CMD (NewPtr base)        = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"
 runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
-runC_CMD (NewObject _ _)      = error "cannot run programs involving newObject"
+runC_CMD (NewObject base _ _) = error $ "cannot run programs involving newObject (base name " ++ base ++ ")"
 runC_CMD (AddInclude _)       = return ()
 runC_CMD (AddDefinition _)    = return ()
 runC_CMD (AddExternFun _ _ _) = return ()

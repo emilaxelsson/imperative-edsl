@@ -21,9 +21,6 @@ class FreeExp exp => CompExp exp where
   -- `exp a -> exp b` can be done by constructing an argument using `varExp`.
 
     -- | Compilation of expressions
-    --
-    -- /NOTE: It is assumed that free variables in the expression are rendered as @vIII@, where/
-    -- /      @III@ is the variable identifier./
     compExp :: (MonadC m) => exp a -> m Exp
 
     -- | Extract expression type
@@ -43,7 +40,7 @@ compTypeFromCMD _ = compType (Proxy :: Proxy exp)
 -- | Create and declare a fresh variable and return its name
 freshVar :: forall exp m a. (CompExp exp, VarPred exp a, MonadC m) => m (exp a, C.Id)
 freshVar = do
-    v <- fmap varExp freshId
+    v <- fmap varExp $ gensym "v"
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     C.Var n _ <- compExp v
     touchVar n

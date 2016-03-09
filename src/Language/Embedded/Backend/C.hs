@@ -202,7 +202,7 @@ compareCompiled' opts@(ExternalCompilerOpts {..}) prog ref inp = do
     if outRef /= outComp
       then error "runCompiled differs from reference program"
       else maybePutStrLn externalSilent
-             "#### runCompiled is consistent with reference program"
+             "  -- runCompiled is consistent with reference program\n\n\n\n"
 
 -- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code

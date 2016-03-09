@@ -221,7 +221,7 @@ data Sym sig
     -- Conditional
     Cond  :: Sym (Bool :-> a :-> a :-> Full a)
     -- Variable (only for compilation)
-    Var   :: String -> Sym (Full a)
+    Var   :: VarId -> Sym (Full a)
     -- Unsafe array indexing
     ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
 
@@ -270,8 +270,7 @@ instance FreeExp CExp
   where
     type VarPred CExp = CType
     valExp a = CExp $ Sym $ T $ Lit (show a) a
-    varExp = CExp . Sym . T . Var . showVar
-      where showVar v = 'v' : show v
+    varExp = CExp . Sym . T . Var
 
 instance EvalExp CExp where evalExp = evalCExp
 
@@ -306,16 +305,15 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go s@(Cast f) (a :* Nil) = do
       a' <- compCExp' a
       t <- typeOfSym s
-      if t == [cty|typename bool|] || t == [cty|float|] || t == [cty|double|]
-        then return [cexp|($ty:t) $a'|]
-        else return [cexp| $a' |]
-          -- Explicit casting is usually not needed. The reason for doing it for
-          -- floating-point types is that
+      return [cexp|($ty:t) $a'|]
+          -- Explicit casting is usually not needed. But sometimes it is. For
+          -- example
           --
           --     printf("%f",i);
           --
-          -- gives an error if `i` is an integer. I'm not sure if there's ever a
-          -- need to use an explicit when going to an integer type.
+          -- gives an error if `i` is an integer. The most robust option is
+          -- probably to always have explicit casts. In many cases it probably
+          -- also makes the generated code more readable.
     go Cond (c :* t :* f :* Nil) = do
       c' <- compCExp' c
       t' <- compCExp' t
@@ -385,7 +383,7 @@ constant :: CType a
 constant code const val = CExp $ Sym $ T $ Const code const val
 
 -- | Create a named variable
-variable :: CType a => String -> CExp a
+variable :: CType a => VarId -> CExp a
 variable = CExp . Sym . T . Var
 
 true, false :: CExp Bool
@@ -476,6 +474,10 @@ i2n a = constFold $ sugarSym (T $ Cast (fromInteger . toInteger)) a
 -- | Cast integer to 'Bool'
 i2b :: Integral a => CExp a -> CExp Bool
 i2b a = constFold $ sugarSym (T $ Cast (/=0)) a
+
+-- | Cast 'Bool' to integer
+b2i :: (Integral a, CType a) => CExp Bool -> CExp a
+b2i a = constFold $ sugarSym (T $ Cast (\c -> if c then 1 else 0)) a
 
 -- | Boolean negation
 not_ :: CExp Bool -> CExp Bool

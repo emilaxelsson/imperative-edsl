@@ -52,17 +52,21 @@ testCExp :: Prog ()
 testCExp = do
     a :: CExp Int32 <- fget stdin
     let b = a#==10 ? a*3 $ a-5+8
-    let c = not_ (a#==10) ? a*3 $ a-5+8
-    let d = a `quot_` b
-    let e = a #% b
-    let f = cond (i2b e) a b
-    let g = sin (i2n a) :: CExp Double
-    let h = g/23
-    let i = round_ (g*1000)              :: CExp Int32
-    let j = round_ (11.5 :: CExp Float)  :: CExp Int32
-    let k = round_ (-11.5 :: CExp Float) :: CExp Int32
-    let l = g**h
-    printf "%d %d %d %d %d %.3f %.3f %.3f %ld %d %d %.3f " b c d e f g (i2n a :: CExp Float) h i j k l
+    let c = sin (i2n a) :: CExp Double
+    let d = c/23
+    printf "%d " b
+    printf "%d " (not_ (a#==10) ? a*3 $ a-5+8)
+    printf "%d " (a `quot_` b)
+    printf "%d " (a #% b)
+    printf "%d " (cond (i2b a) a b)
+    printf "%d " (b2i (not_ (a#==10)) * a)
+    printf "%.3f " c
+    printf "%.3f " d
+    printf "%.3f " (i2n a :: CExp Float)
+    printf "%ld "  (round_ (c*1000)              :: CExp Int32)
+    printf "%d "   (round_ (11.5 :: CExp Float)  :: CExp Int32)
+    printf "%d "   (round_ (-11.5 :: CExp Float) :: CExp Int32)
+    printf "%.3f " (c**d)
 
 testRef :: Prog ()
 testRef = do
@@ -279,29 +283,30 @@ testExternArgs = do
 -- secondly, the tests would always fail when running a second time.
 
 testAll = do
-    compareCompiled  testTypes  (interpret testTypes)                  "0\n"
-    compareCompiled  testRef    (interpret testRef)                    ""
-    compareCompiledM testCExp   (interpret testCExp)                   "44\n"
-    compareCompiled  testArr1   (interpret testArr1)                   ""
-    compareCompiled  testArr2   (interpret testArr2)                   "20\n"
-    compareCompiled  testArr3   (interpret testArr3)                   ""
-    compareCompiled  testArr4   (interpret testArr4)                   ""
-    compareCompiled  testArr5   (interpret testArr5)                   ""
-    compareCompiled  testArr6   (runIO testArr6)                       ""
-    compareCompiled  testArr7   (runIO testArr6)                       ""
-    compareCompiled  testArr7   (runIO testArr7)                       ""
-    compareCompiled  testSwap1  (interpret testSwap1)                  ""
-    compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
-    compareCompiled  testIf1    (interpret testIf1)                    "12\n"
-    compareCompiled  testIf2    (interpret testIf2)                    "12\n"
-    compareCompiled  testFor1   (interpret testFor1)                   ""
-    compareCompiled  testFor2   (interpret testFor2)                   ""
-    compareCompiled  testFor3   (interpret testFor3)                   ""
-    compareCompiled  testAssert (interpret testAssert)                 "45"
-    compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
-    compileAndCheck  testExternArgs
+    tag "testTypes"  >> compareCompiled  testTypes  (interpret testTypes)                  "0\n"
+    tag "testRef"    >> compareCompiled  testRef    (interpret testRef)                    ""
+    tag "testCExp"   >> compareCompiledM testCExp   (interpret testCExp)                   "44\n"
+    tag "testArr1"   >> compareCompiled  testArr1   (interpret testArr1)                   ""
+    tag "testArr2"   >> compareCompiled  testArr2   (interpret testArr2)                   "20\n"
+    tag "testArr3"   >> compareCompiled  testArr3   (interpret testArr3)                   ""
+    tag "testArr4"   >> compareCompiled  testArr4   (interpret testArr4)                   ""
+    tag "testArr5"   >> compareCompiled  testArr5   (interpret testArr5)                   ""
+    tag "testArr6"   >> compareCompiled  testArr6   (runIO testArr6)                       ""
+    tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr6)                       ""
+    tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr7)                       ""
+    tag "testSwap1"  >> compareCompiled  testSwap1  (interpret testSwap1)                  ""
+    tag "testSwap2"  >> compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
+    tag "testIf1"    >> compareCompiled  testIf1    (interpret testIf1)                    "12\n"
+    tag "testIf2"    >> compareCompiled  testIf2    (interpret testIf2)                    "12\n"
+    tag "testFor1"   >> compareCompiled  testFor1   (interpret testFor1)                   ""
+    tag "testFor2"   >> compareCompiled  testFor2   (interpret testFor2)                   ""
+    tag "testFor3"   >> compareCompiled  testFor3   (interpret testFor3)                   ""
+    tag "testAssert" >> compareCompiled  testAssert (interpret testAssert)                 "45"
+    tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
+    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
+    tag "testExternArgs" >> compileAndCheck  testExternArgs
   where
+    tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'
         defaultExtCompilerOpts {externalFlagsPost = ["-lm"]}
 

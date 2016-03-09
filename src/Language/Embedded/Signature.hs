@@ -75,13 +75,13 @@ translateFunction sig = go sig (return ())
         addStm [cstm| *out = $e; |]
     go fun@(Lam Empty f) prelude = do
       t <- compType (expProxy fun) (argProxy fun)
-      v <- fmap varExp freshId
+      v <- fmap varExp $ gensym "v"
       Var n _ <- compExp v
       go (f v) $ prelude >> addParam [cparam| $ty:t $id:n |]
     go fun@(Lam n@(Native l) f) prelude = do
       t <- compType (expProxy fun) (elemProxy n fun)
       i <- freshId
-      let w = varExp i
+      let w = varExp ('v' : show i)
       Var (Id m _) _ <- compExp w
       let n = m ++ "_buf"
       withAlias i ('&':m) $ go (f w) $ do
@@ -96,7 +96,8 @@ translateFunction sig = go sig (return ())
     go fun@(Lam (Named s) f) prelude = do
       t <- compType (expProxy fun) (argProxy fun)
       i <- freshId
-      withAlias i s $ go (f $ varExp i) $ prelude >> addParam [cparam| $ty:t $id:s |]
+      let w = varExp ('v' : show i)
+      withAlias i s $ go (f w) $ prelude >> addParam [cparam| $ty:t $id:s |]
 
 argProxy :: Signature exp (b -> c) -> Proxy b
 argProxy _ = Proxy

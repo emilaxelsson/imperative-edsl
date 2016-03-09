@@ -38,13 +38,34 @@ import Language.Embedded.Imperative.Args
 --------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) => ProgramT instr m (Ref a)
-newRef = singleE NewRef
+newRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
+    ProgramT instr m (Ref a)
+newRef = newNamedRef "r"
+
+-- | Create an uninitialized named reference
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+newNamedRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
+    => String  -- ^ Base name
+    -> ProgramT instr m (Ref a)
+newNamedRef = singleE . NewRef
 
 -- | Create an initialized reference
-initRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
-    IExp instr a -> ProgramT instr m (Ref a)
-initRef = singleE . InitRef
+initRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
+    => IExp instr a  -- ^ Initial value
+    -> ProgramT instr m (Ref a)
+initRef = initNamedRef "r"
+
+-- | Create an initialized named reference
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+initNamedRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
+    => String        -- ^ Base name
+    -> IExp instr a  -- ^ Initial value
+    -> ProgramT instr m (Ref a)
+initNamedRef base a = singleE (InitRef base a)
 
 -- | Get the contents of a reference
 getRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
@@ -86,7 +107,7 @@ veryUnsafeFreezeRef (RefComp v) = varExp v
 -- * Arrays
 --------------------------------------------------------------------------------
 
--- | Create an uninitialized an array
+-- | Create an uninitialized array
 newArr
     :: ( VarPred (IExp instr) a
        , VarPred (IExp instr) i
@@ -94,8 +115,25 @@ newArr
        , Ix i
        , ArrCMD (IExp instr) :<: instr
        )
-    => IExp instr i -> ProgramT instr m (Arr i a)
-newArr = singleE . NewArr
+    => IExp instr i  -- ^ Length
+    -> ProgramT instr m (Arr i a)
+newArr = newNamedArr "a"
+
+-- | Create an uninitialized named array
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+newNamedArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => String        -- ^ Base name
+    -> IExp instr i  -- ^ Length
+    -> ProgramT instr m (Arr i a)
+newNamedArr base len = singleE (NewArr base len)
 
 -- | Create and initialize an array
 initArr
@@ -105,8 +143,25 @@ initArr
        , Ix i
        , ArrCMD (IExp instr) :<: instr
        )
-    => [a] -> ProgramT instr m (Arr i a)
-initArr = singleE . InitArr
+    => [a]  -- ^ Initial contents
+    -> ProgramT instr m (Arr i a)
+initArr = initNamedArr "a"
+
+-- | Create and initialize a named array
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+initNamedArr
+    :: ( VarPred (IExp instr) a
+       , VarPred (IExp instr) i
+       , Integral i
+       , Ix i
+       , ArrCMD (IExp instr) :<: instr
+       )
+    => String  -- ^ Base name
+    -> [a]     -- ^ Initial contents
+    -> ProgramT instr m (Arr i a)
+initNamedArr base init = singleE (InitArr base init)
 
 -- | Get an element of an array
 getArr
@@ -368,7 +423,16 @@ printf = fprintf stdout
 -- | Create a null pointer
 newPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr) =>
     ProgramT instr m (Ptr a)
-newPtr = singleE NewPtr
+newPtr = newNamedPtr "p"
+
+-- | Create a named null pointer
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+newNamedPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr)
+    => String  -- ^ Base name
+    -> ProgramT instr m (Ptr a)
+newNamedPtr = singleE . NewPtr
 
 -- | Cast a pointer to an array
 ptrToArr :: (C_CMD (IExp instr) :<: instr) => Ptr a -> ProgramT instr m (Arr i a)
@@ -380,7 +444,19 @@ newObject :: (C_CMD (IExp instr) :<: instr)
     => String  -- ^ Object type
     -> Bool    -- ^ Pointed?
     -> ProgramT instr m Object
-newObject t p = singleE $ NewObject t p
+newObject t p = newNamedObject "obj" t p
+
+-- | Create a pointer to a named abstract object. The only thing one can do with
+-- such objects is to pass them to 'callFun' or 'callProc'.
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+newNamedObject :: (C_CMD (IExp instr) :<: instr)
+    => String  -- ^ Base name
+    -> String  -- ^ Object type
+    -> Bool    -- ^ Pointed?
+    -> ProgramT instr m Object
+newNamedObject base t p = singleE $ NewObject base t p
 
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()

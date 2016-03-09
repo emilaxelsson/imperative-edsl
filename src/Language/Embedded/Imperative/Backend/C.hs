@@ -26,16 +26,16 @@ import Language.Embedded.Backend.C.Expression
 
 -- | Compile `RefCMD`
 compRefCMD :: CompExp exp => RefCMD exp prog a -> CGen a
-compRefCMD cmd@NewRef = do
+compRefCMD cmd@(NewRef base) = do
     t <- compTypeFromCMD cmd (proxyArg cmd)
-    r <- RefComp <$> freshId
+    r <- RefComp <$> gensym base
     case t of
       C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:r = NULL; |]
       _                  -> addLocal [cdecl| $ty:t $id:r; |]
     return r
-compRefCMD (InitRef (exp :: exp a)) = do
+compRefCMD (InitRef base (exp :: exp a)) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
-    r <- RefComp <$> freshId
+    r <- RefComp <$> gensym base
     v <- compExp exp
     addLocal [cdecl| $ty:t $id:r; |]
     addStm   [cstm| $id:r = $v; |]
@@ -69,8 +69,8 @@ compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
            => ArrCMD exp prog a -> CGen a
-compArrCMD cmd@(NewArr size) = do
-    sym <- gensym "a"
+compArrCMD cmd@(NewArr base size) = do
+    sym <- gensym base
     let sym' = '_':sym
     n <- compExp size
     t <- compTypeFromCMD cmd (proxyArg cmd)
@@ -83,8 +83,8 @@ compArrCMD cmd@(NewArr size) = do
         addLocal [cdecl| $ty:t * $id:sym; |]
         addStm [cstm| $id:sym = alloca($n * sizeof($ty:t)); |]
     return $ ArrComp sym
-compArrCMD cmd@(InitArr as) = do
-    sym <- gensym "a"
+compArrCMD cmd@(InitArr base as) = do
+    sym <- gensym base
     let sym' = '_':sym
     t   <- compTypeFromCMD cmd (proxyArg cmd)
     as' <- sequence [compExp (valExp a :: exp a') | (a :: a') <- as]
@@ -220,15 +220,15 @@ compFileCMD (FEof h) = do
     return v
 
 compC_CMD :: forall exp a . CompExp exp => C_CMD exp CGen a -> CGen a
-compC_CMD cmd@NewPtr = do
+compC_CMD cmd@(NewPtr base) = do
     addInclude "<stddef.h>"
-    sym <- gensym "p"
+    sym <- gensym base
     t   <- compTypeFromCMD cmd (proxyArg cmd)
     addLocal [cdecl| $ty:t * $id:sym = NULL; |]
     return $ PtrComp sym
 compC_CMD (PtrToArr (PtrComp p)) = return $ ArrComp p
-compC_CMD (NewObject t pointed) = do
-    sym <- gensym "obj"
+compC_CMD (NewObject base t pointed) = do
+    sym <- gensym base
     let t' = namedType t
     if pointed
       then addLocal [cdecl| $ty:t' * $id:sym; |]
