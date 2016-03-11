@@ -211,7 +211,7 @@ cenvToCUnit env =
     protos = nub $ reverse $ _prototypes env
     globs  = nub $ reverse $ _globals env
 
--- | Generate a C document
+-- | Generate C documents for each module
 prettyCGenT :: Monad m => CGenT m a -> m [(String, Doc)]
 prettyCGenT ma = do
     (_,cenv) <- runCGenT ma (defaultCEnv Flags)

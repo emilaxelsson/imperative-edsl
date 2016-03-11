@@ -59,6 +59,9 @@ arrayInit as = C.CompoundInitializer
 
 -- | Compile a program to C code represented as a string
 --
+-- This function returns only the first (main) module.
+-- To get every C translation units, use `compileAll`.
+--
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
 -- follows:
@@ -71,6 +74,9 @@ compileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> [(String
 compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
+--
+-- This function returns only the first (main) module.
+-- To get every C translation units, use `icompileAll`.
 --
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
@@ -112,6 +118,8 @@ maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
 maybePutStrLn _ _ = return ()
 
+-- TODO: it would be nice to have a version that compiles all modules of a program,
+-- as it currently compiles only the first (main) module.
 -- | Generate C code and use GCC to compile it
 compileC :: (Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts
