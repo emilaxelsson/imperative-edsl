@@ -211,13 +211,14 @@ cenvToCUnit env =
     protos = nub $ reverse $ _prototypes env
     globs  = nub $ reverse $ _globals env
 
--- | Generate a C document
-prettyCGenT :: Monad m => CGenT m a -> m Doc
+-- | Generate C documents for each module
+prettyCGenT :: Monad m => CGenT m a -> m [(String, Doc)]
 prettyCGenT ma = do
     (_,cenv) <- runCGenT ma (defaultCEnv Flags)
-    return $ ppr $ cenvToCUnit cenv
+    return $ map (("", ppr) <*>)
+           $ ("main", cenvToCUnit cenv) : Map.toList (_modules cenv)
 
-prettyCGen :: CGen a -> Doc
+prettyCGen :: CGen a -> [(String, Doc)]
 prettyCGen = runIdentity . prettyCGenT
 
 -- | Retrieve a fresh identifier

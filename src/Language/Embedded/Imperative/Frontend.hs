@@ -458,6 +458,13 @@ newNamedObject :: (C_CMD (IExp instr) :<: instr)
     -> ProgramT instr m Object
 newNamedObject base t p = singleE $ NewObject base t p
 
+-- | Generate code into another translation unit
+inModule :: (C_CMD (IExp instr) :<: instr)
+    => String
+    -> ProgramT instr m ()
+    -> ProgramT instr m ()
+inModule mod prog = singleE $ InModule mod prog
+
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
 addInclude = singleE . AddInclude

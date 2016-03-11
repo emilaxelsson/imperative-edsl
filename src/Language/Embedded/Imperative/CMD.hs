@@ -460,6 +460,7 @@ data C_CMD exp (prog :: * -> *) a
     AddExternProc :: String -> [FunArg exp] -> C_CMD exp prog ()
     CallFun       :: VarPred exp a => String -> [FunArg exp] -> C_CMD exp prog (exp a)
     CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
+    InModule      :: String -> prog () -> C_CMD exp prog ()
 
 instance HFunctor (C_CMD exp)
   where
@@ -472,6 +473,7 @@ instance HFunctor (C_CMD exp)
     hfmap _ (AddExternProc proc args)   = AddExternProc proc args
     hfmap _ (CallFun fun args)          = CallFun fun args
     hfmap _ (CallProc obj proc args)    = CallProc obj proc args
+    hfmap f (InModule mod prog)         = InModule mod (f prog)
 
 instance FreeExp exp => DryInterp (C_CMD exp)
   where
@@ -484,6 +486,7 @@ instance FreeExp exp => DryInterp (C_CMD exp)
     dryInterp (AddExternProc _ _)    = return ()
     dryInterp (CallFun _ _)          = liftM varExp $ freshStr "v"
     dryInterp (CallProc _ _ _)       = return ()
+    dryInterp (InModule _ _)         = return ()
 
 type instance IExp (C_CMD e)       = e
 type instance IExp (C_CMD e :+: i) = e
@@ -620,6 +623,7 @@ runC_CMD (AddExternFun _ _ _) = return ()
 runC_CMD (AddExternProc _ _)  = return ()
 runC_CMD (CallFun _ _)        = error "cannot run programs involving callFun"
 runC_CMD (CallProc _ _ _)     = error "cannot run programs involving callProc"
+runC_CMD (InModule _ prog)    = prog
 
 instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
 instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD

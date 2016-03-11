@@ -59,15 +59,24 @@ arrayInit as = C.CompoundInitializer
 
 -- | Compile a program to C code represented as a string
 --
+-- This function returns only the first (main) module.
+-- To get every C translation units, use `compileAll`.
+--
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
 -- follows:
 --
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen, HFunctor instr) => Program instr a -> String
-compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
+compile = snd . head . compileAll
+
+compileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> [(String, String)]
+compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
+--
+-- This function returns only the first (main) module.
+-- To get every C translation units, use `icompileAll`.
 --
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
@@ -76,6 +85,9 @@ compile = pretty 80 . prettyCGen . liftSharedLocals . wrapMain . interpret
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
 icompile = putStrLn . compile
+
+icompileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
+icompileAll = mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
 
 removeFileIfPossible :: FilePath -> IO ()
 removeFileIfPossible file =
@@ -106,6 +118,8 @@ maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
 maybePutStrLn _ _ = return ()
 
+-- TODO: it would be nice to have a version that compiles all modules of a program,
+-- as it currently compiles only the first (main) module.
 -- | Generate C code and use GCC to compile it
 compileC :: (Interp instr CGen, HFunctor instr)
     => ExternalCompilerOpts

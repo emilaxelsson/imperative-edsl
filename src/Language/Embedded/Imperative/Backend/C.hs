@@ -253,6 +253,7 @@ compC_CMD (CallProc obj fun as) = do
     case obj of
       Nothing -> addStm [cstm| $id:fun($args:as'); |]
       Just o  -> addStm [cstm| $id:o = $id:fun($args:as'); |]
+compC_CMD (InModule mod prog) = inModule mod prog
 
 instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
 instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
