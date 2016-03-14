@@ -12,7 +12,6 @@ import Language.Embedded.Expression
 import Language.Embedded.Backend.C.Expression
 
 import Language.C.Quote.C
-import Language.C.Syntax (Id(..),Exp(..))
 
 
 -- * Language
@@ -24,31 +23,34 @@ data Ann exp a where
   Named  :: String -> Ann exp a
 
 -- | Signatures
-data Signature exp a where
-  Ret    :: (VarPred exp a) => String -> exp a -> Signature exp a
-  Ptr    :: (VarPred exp a) => String -> exp a -> Signature exp a
-  Lam    :: (VarPred exp a) => Ann exp a -> (exp a -> Signature exp b)
-         -> Signature exp (a -> b)
+data Signature exp pred a where
+  Ret    :: pred a => String -> exp a -> Signature exp pred a
+  Ptr    :: pred a => String -> exp a -> Signature exp pred a
+  Lam    :: pred a => Ann exp a -> (Val a -> Signature exp pred b)
+         -> Signature exp pred (a -> b)
 
 
 -- * Combinators
 
-lam :: (VarPred exp a)
-    => (exp a -> Signature exp b) -> Signature exp (a -> b)
-lam f = Lam Empty $ \x -> f x
+lam :: (pred a, FreeExp exp, VarPred exp a)
+    => (exp a -> Signature exp pred b) -> Signature exp pred (a -> b)
+lam f = Lam Empty $ \x -> f (valToExp x)
 
-name :: (VarPred exp a)
-     => String -> (exp a -> Signature exp b) -> Signature exp (a -> b)
-name s f = Lam (Named s) $ \x -> f x
+name :: (pred a, FreeExp exp, VarPred exp a)
+     => String -> (exp a -> Signature exp pred b) -> Signature exp pred (a -> b)
+name s f = Lam (Named s) $ \x -> f (valToExp x)
 
-ret,ptr :: (VarPred exp a)
-        => String -> exp a -> Signature exp a
+ret,ptr :: (pred a)
+        => String -> exp a -> Signature exp pred a
 ret = Ret
 ptr = Ptr
 
-arg :: (VarPred exp a)
-    => Ann exp a -> (exp a -> exp b) -> (exp b -> Signature exp c) -> Signature exp (a -> c)
-arg s g f = Lam s $ \x -> f (g x)
+arg :: (pred a, FreeExp exp, VarPred exp a)
+    => Ann exp a
+    -> (exp a -> exp b)
+    -> (exp b -> Signature exp pred c)
+    -> Signature exp pred (a -> c)
+arg s g f = Lam s $ \x -> f $ g $ valToExp x
 
 
 
@@ -56,55 +58,48 @@ arg s g f = Lam s $ \x -> f (g x)
 
 -- | Compile a function @Signature@ to C code
 translateFunction :: forall m exp a. (MonadC m, CompExp exp)
-                  => Signature exp a -> m ()
+                  => Signature exp CType a -> m ()
 translateFunction sig = go sig (return ())
   where
-    go :: Signature exp d -> m () -> m ()
-    go (Ret n (a :: exp d)) prelude = do
-      t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy d)
+    go :: Signature exp CType d -> m () -> m ()
+    go (Ret n a) prelude = do
+      t <- cType a
       inFunctionTy t n $ do
         prelude
         e <- compExp a
         addStm [cstm| return $e; |]
-    go (Ptr n (a :: exp d)) prelude = do
-      t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy d)
+    go (Ptr n a) prelude = do
+      t <- cType a
       inFunction n $ do
         prelude
         e <- compExp a
         addParam [cparam| $ty:t *out |]
         addStm [cstm| *out = $e; |]
     go fun@(Lam Empty f) prelude = do
-      t <- compType (expProxy fun) (argProxy fun)
-      v <- fmap varExp $ gensym "v"
-      Var n _ <- compExp v
-      go (f v) $ prelude >> addParam [cparam| $ty:t $id:n |]
+      t <- cType (argProxy fun)
+      v <- freshVar
+      go (f v) $ prelude >> addParam [cparam| $ty:t $id:v |]
     go fun@(Lam n@(Native l) f) prelude = do
-      t <- compType (expProxy fun) (elemProxy n fun)
+      t <- cType n
       i <- freshId
-      let w = varExp ('v' : show i)
-      Var (Id m _) _ <- compExp w
-      let n = m ++ "_buf"
-      withAlias i ('&':m) $ go (f w) $ do
+      let vi = 'v' : show i
+      let w = ValComp vi
+      let n = vi ++ "_buf"
+      withAlias i ('&':vi) $ go (f w) $ do
         prelude
         len <- compExp l
-        addLocal [cdecl| struct array $id:m = { .buffer = $id:n
-                                              , .length=$len
-                                              , .elemSize=sizeof($ty:t)
-                                              , .bytes=sizeof($ty:t)*$len
-                                              }; |]
+        addLocal [cdecl| struct array $id:vi = { .buffer = $id:n
+                                               , .length=$len
+                                               , .elemSize=sizeof($ty:t)
+                                               , .bytes=sizeof($ty:t)*$len
+                                               }; |]
         addParam [cparam| $ty:t * $id:n |]
     go fun@(Lam (Named s) f) prelude = do
-      t <- compType (expProxy fun) (argProxy fun)
+      t <- cType (argProxy fun)
       i <- freshId
-      let w = varExp ('v' : show i)
+      let w = ValComp ('v' : show i)
       withAlias i s $ go (f w) $ prelude >> addParam [cparam| $ty:t $id:s |]
 
-argProxy :: Signature exp (b -> c) -> Proxy b
+argProxy :: Signature exp pred (b -> c) -> Proxy b
 argProxy _ = Proxy
-
-elemProxy :: Ann exp [b] -> Signature exp ([b] -> c) -> Proxy b
-elemProxy _ _ = Proxy
-
-expProxy :: Signature exp a -> Proxy exp
-expProxy _ = Proxy
 

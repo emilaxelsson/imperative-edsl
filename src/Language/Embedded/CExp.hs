@@ -15,9 +15,7 @@ module Language.Embedded.CExp where
 
 
 import Data.Array
-import Data.Int
 import Data.Maybe
-import Data.Word
 #if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
 #endif
@@ -31,103 +29,14 @@ import Language.Syntactic.TH
 import Language.Syntactic
 #endif
 
-#if MIN_VERSION_syntactic(3,0,0)
-import Data.TypeRep hiding (Typeable, gcast)
-import Data.TypeRep.TH
-import Data.TypeRep.Types.Basic
-import Data.TypeRep.Types.Tuple
-import Data.TypeRep.Types.IntWord
-#endif
-
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
 import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
-import Language.Embedded.Backend.C.Expression
+import Language.Embedded.Backend.C
 import Language.Embedded.Imperative.CMD (IArr (..))
-
-
-
---------------------------------------------------------------------------------
--- * Types
---------------------------------------------------------------------------------
-
-instance ToExp Int8   where toExp = toExp . toInteger
-instance ToExp Int16  where toExp = toExp . toInteger
-instance ToExp Int32  where toExp = toExp . toInteger
-instance ToExp Int64  where toExp = toExp . toInteger
-instance ToExp Word8  where toExp = toExp . toInteger
-instance ToExp Word16 where toExp = toExp . toInteger
-instance ToExp Word32 where toExp = toExp . toInteger
-instance ToExp Word64 where toExp = toExp . toInteger
-
--- | Types supported by C
-class (Show a, Eq a, Typeable a) => CType a
-  where
-    cType :: MonadC m => proxy a -> m Type
-
-    cLit         :: MonadC m => a -> m Exp
-    default cLit :: (ToExp a, MonadC m) => a -> m Exp
-    cLit = return . flip toExp mempty
-
-instance CType Bool
-  where
-    cType _ = do
-        addSystemInclude "stdbool.h"
-        return [cty| typename bool |]
-    cLit b = do
-        addSystemInclude "stdbool.h"
-        return $ if b then [cexp| true |] else [cexp| false |]
-
-instance CType Int8   where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int8_t   |]
-instance CType Int16  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int16_t  |]
-instance CType Int32  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int32_t  |]
-instance CType Int64  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int64_t  |]
-instance CType Word8  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint8_t  |]
-instance CType Word16 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint16_t |]
-instance CType Word32 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint32_t |]
-instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint64_t |]
-
-instance CType Float  where cType _ = return [cty| float |]
-instance CType Double where cType _ = return [cty| double |]
-
-#if MIN_VERSION_syntactic(3,0,0)
-instance ShowClass CType where showClass _ = "CType"
-
-pCType :: Proxy CType
-pCType = Proxy
-
-deriveWitness ''CType ''BoolType
-deriveWitness ''CType ''FloatType
-deriveWitness ''CType ''DoubleType
-deriveWitness ''CType ''IntWordType
-
-derivePWitness ''CType ''BoolType
-derivePWitness ''CType ''FloatType
-derivePWitness ''CType ''DoubleType
-derivePWitness ''CType ''IntWordType
-
-instance PWitness CType CharType t
-instance PWitness CType ListType t
-instance PWitness CType TupleType t
-instance PWitness CType FunType t
-#endif
-
--- | Return whether the type of the expression is a floating-point numeric type
-isFloat :: forall a . CType a => CExp a -> Bool
-isFloat a = t == typeOf (undefined :: Float) || t == typeOf (undefined :: Double)
-  where
-    t = typeOf (undefined :: a)
-
--- | Return whether the type of the expression is a non-floating-point type
-isExact :: CType a => CExp a -> Bool
-isExact = not . isFloat
-
--- | Return whether the type of the expression is a non-floating-point type
-isExact' :: CType a => ASTF T a -> Bool
-isExact' = isExact . CExp
 
 
 
@@ -325,10 +234,7 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       touchVar arr
       return [cexp| $id:arr[$i'] |]
 
-instance CompExp CExp
-  where
-    compExp  = compCExp
-    compType _ p = cType p
+instance CompExp CExp where compExp = compCExp
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal
@@ -365,6 +271,20 @@ pattern OpP op a b  <- CExp (Sym (T (Op op)) :$ a :$ b)
 pattern OpP' op a b <- Sym (T (Op op)) :$ a :$ b
 pattern UOpP op a   <- CExp (Sym (T (UOp op)) :$ a)
 pattern UOpP' op a  <- Sym (T (UOp op)) :$ a
+
+-- | Return whether the type of the expression is a floating-point numeric type
+isFloat :: forall a . CType a => CExp a -> Bool
+isFloat a = t == typeOf (undefined :: Float) || t == typeOf (undefined :: Double)
+  where
+    t = typeOf (undefined :: a)
+
+-- | Return whether the type of the expression is a non-floating-point type
+isExact :: CType a => CExp a -> Bool
+isExact = not . isFloat
+
+-- | Return whether the type of the expression is a non-floating-point type
+isExact' :: CType a => ASTF T a -> Bool
+isExact' = isExact . CExp
 
 
 

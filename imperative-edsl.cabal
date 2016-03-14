@@ -39,8 +39,8 @@ library
     Language.C.Monad
     Language.Embedded.Expression
     Language.Embedded.Traversal
-    Language.Embedded.Imperative.Args
     Language.Embedded.Imperative.CMD
+    Language.Embedded.Imperative.Args
     Language.Embedded.Imperative.Frontend.General
     Language.Embedded.Imperative.Frontend
     Language.Embedded.Imperative
@@ -60,6 +60,7 @@ library
 
   default-extensions:
     ConstraintKinds
+    DataKinds
     DefaultSignatures
     DeriveDataTypeable
     DeriveFoldable
@@ -71,6 +72,7 @@ library
     GeneralizedNewtypeDeriving
     MultiParamTypeClasses
     PatternSynonyms
+    PolyKinds
     Rank2Types
     RecordWildCards
     ScopedTypeVariables
@@ -80,18 +82,18 @@ library
     ViewPatterns
 
   other-extensions:
-    PolyKinds
+    CPP
     QuasiQuotes
     UndecidableInstances
 
   build-depends:
     array,
     base >=4 && <5,
-    constraints,
     containers,
     deepseq,
     directory,
     exception-transformers,
+    ghc-prim,
     language-c-quote >= 0.11 && < 0.12,
     mainland-pretty >= 0.4 && < 0.5,
     microlens >= 0.3.0.0,
@@ -99,9 +101,7 @@ library
     microlens-th,
     mtl,
     process,
-    operational-alacarte < 0.2,
-    tagged,
-      -- tagged needed for GHC 7.6
+    operational-alacarte >= 0.2,
     BoundedChan,
     srcloc,
     time >= 1.5.0.1

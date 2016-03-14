@@ -2,11 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- Front end for imperative instructions
---
--- These instructions are general imperative constructs independent of the back
--- end, except for the stuff under \"External function calls\" which is
--- C-specific.
+-- Front end for imperative programs
 
 module Language.Embedded.Imperative.Frontend where
 
@@ -18,18 +14,13 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import System.IO.Unsafe
-#if __GLASGOW_HASKELL__ < 708
-import Data.Proxy
-#endif
-
-import Language.C.Quote.C
 
 import Control.Monad.Operational.Higher
 import System.IO.Fake
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
-import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Args
+import Language.Embedded.Imperative.Frontend.General
 
 
 
@@ -38,55 +29,56 @@ import Language.Embedded.Imperative.Args
 --------------------------------------------------------------------------------
 
 -- | Create an uninitialized reference
-newRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
-    ProgramT instr m (Ref a)
+newRef :: (pred a, RefCMD :<: instr) =>
+    ProgramT instr (Param2 exp pred) m (Ref a)
 newRef = newNamedRef "r"
 
 -- | Create an uninitialized named reference
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-newNamedRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
+newNamedRef :: (pred a, RefCMD :<: instr)
     => String  -- ^ Base name
-    -> ProgramT instr m (Ref a)
-newNamedRef = singleE . NewRef
+    -> ProgramT instr (Param2 exp pred) m (Ref a)
+newNamedRef = singleInj . NewRef
 
 -- | Create an initialized reference
-initRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
-    => IExp instr a  -- ^ Initial value
-    -> ProgramT instr m (Ref a)
+initRef :: (pred a, RefCMD :<: instr)
+    => exp a  -- ^ Initial value
+    -> ProgramT instr (Param2 exp pred) m (Ref a)
 initRef = initNamedRef "r"
 
 -- | Create an initialized named reference
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-initNamedRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr)
-    => String        -- ^ Base name
-    -> IExp instr a  -- ^ Initial value
-    -> ProgramT instr m (Ref a)
-initNamedRef base a = singleE (InitRef base a)
+initNamedRef :: (pred a, RefCMD :<: instr)
+    => String  -- ^ Base name
+    -> exp a   -- ^ Initial value
+    -> ProgramT instr (Param2 exp pred) m (Ref a)
+initNamedRef base a = singleInj (InitRef base a)
 
 -- | Get the contents of a reference
-getRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
-    Ref a -> ProgramT instr m (IExp instr a)
-getRef = singleE . GetRef
+getRef :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m) =>
+    Ref a -> ProgramT instr (Param2 exp pred) m (exp a)
+getRef = fmap valToExp . singleInj . GetRef
 
 -- | Set the contents of a reference
-setRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
-    Ref a -> IExp instr a -> ProgramT instr m ()
-setRef r = singleE . SetRef r
+setRef :: (pred a, RefCMD :<: instr) =>
+    Ref a -> exp a -> ProgramT instr (Param2 exp pred) m ()
+setRef r = singleInj . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr, Monad m) =>
-    Ref a -> (IExp instr a -> IExp instr a) -> ProgramT instr m ()
+modifyRef :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m) =>
+    Ref a -> (exp a -> exp a) -> ProgramT instr (Param2 exp pred) m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
 -- | Freeze the contents of reference (only safe if the reference is not updated
 -- as long as the resulting value is alive)
-unsafeFreezeRef :: (VarPred (IExp instr) a, RefCMD (IExp instr) :<: instr) =>
-    Ref a -> ProgramT instr m (IExp instr a)
-unsafeFreezeRef = singleE . UnsafeFreezeRef
+unsafeFreezeRef
+    :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m)
+    => Ref a -> ProgramT instr (Param2 exp pred) m (exp a)
+unsafeFreezeRef = fmap valToExp . singleInj . UnsafeFreezeRef
 
 -- | Read the value of a reference without returning in the monad
 --
@@ -108,112 +100,71 @@ veryUnsafeFreezeRef (RefComp v) = varExp v
 --------------------------------------------------------------------------------
 
 -- | Create an uninitialized array
-newArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => IExp instr i  -- ^ Length
-    -> ProgramT instr m (Arr i a)
+newArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => exp i  -- ^ Length
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
 newArr = newNamedArr "a"
 
 -- | Create an uninitialized named array
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-newNamedArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => String        -- ^ Base name
-    -> IExp instr i  -- ^ Length
-    -> ProgramT instr m (Arr i a)
-newNamedArr base len = singleE (NewArr base len)
+newNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => String -- ^ Base name
+    -> exp i  -- ^ Length
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+newNamedArr base len = singleInj (NewArr base len)
 
 -- | Create and initialize an array
-initArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
+initArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     => [a]  -- ^ Initial contents
-    -> ProgramT instr m (Arr i a)
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
 initArr = initNamedArr "a"
 
 -- | Create and initialize a named array
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-initNamedArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
+initNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     => String  -- ^ Base name
     -> [a]     -- ^ Initial contents
-    -> ProgramT instr m (Arr i a)
-initNamedArr base init = singleE (InitArr base init)
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+initNamedArr base init = singleInj (InitArr base init)
 
 -- | Get an element of an array
 getArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
+    :: ( pred a
+       , FreeExp exp
+       , VarPred exp a
        , Integral i
        , Ix i
-       , ArrCMD (IExp instr) :<: instr
+       , ArrCMD :<: instr
+       , Monad m
        )
-    => IExp instr i -> Arr i a -> ProgramT instr m (IExp instr a)
-getArr i arr = singleE $ GetArr i arr
+    => exp i -> Arr i a -> ProgramT instr (Param2 exp pred) m (exp a)
+getArr i arr = fmap valToExp $ singleInj $ GetArr i arr
 
 -- | Set an element of an array
-setArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => IExp instr i -> IExp instr a -> Arr i a -> ProgramT instr m ()
-setArr i a arr = singleE (SetArr i a arr)
+setArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+    exp i -> exp a -> Arr i a -> ProgramT instr (Param2 exp pred) m ()
+setArr i a arr = singleInj (SetArr i a arr)
 
 -- | Copy the contents of an array to another array. The number of elements to
 -- copy must not be greater than the number of allocated elements in either
 -- array.
-copyArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => Arr i a       -- ^ Destination
-    -> Arr i a       -- ^ Source
-    -> IExp instr i  -- ^ Number of elements
-    -> ProgramT instr m ()
-copyArr arr1 arr2 len = singleE $ CopyArr arr1 arr2 len
+copyArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => Arr i a  -- ^ Destination
+    -> Arr i a  -- ^ Source
+    -> exp i    -- ^ Number of elements
+    -> ProgramT instr (Param2 exp pred) m ()
+copyArr arr1 arr2 len = singleInj $ CopyArr arr1 arr2 len
 
 -- | Freeze a mutable array to an immutable one. This involves copying the array
 -- to a newly allocated one.
-freezeArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       , Monad m
-       )
+freezeArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m)
     => Arr i a
-    -> IExp instr i  -- ^ Length of array
-    -> ProgramT instr m (IArr i a)
+    -> exp i  -- ^ Length of array
+    -> ProgramT instr (Param2 exp pred) m (IArr i a)
 freezeArr arr n = do
     arr2 <- newArr n
     copyArr arr2 arr n
@@ -222,29 +173,16 @@ freezeArr arr n = do
 -- | Freeze a mutable array to an immutable one without making a copy. This is
 -- generally only safe if the the mutable array is not updated as long as the
 -- immutable array is alive.
-unsafeFreezeArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => Arr i a -> ProgramT instr m (IArr i a)
-unsafeFreezeArr arr = singleE $ UnsafeFreezeArr arr
+unsafeFreezeArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+    Arr i a -> ProgramT instr (Param2 exp pred) m (IArr i a)
+unsafeFreezeArr arr = singleInj $ UnsafeFreezeArr arr
 
--- | Thaw an immutable array to a mutable one without making a copy. This
--- involves copying the array to a newly allocated one.
-thawArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       , Monad m
-       )
+-- | Thaw an immutable array to a mutable one. This involves copying the array
+-- to a newly allocated one.
+thawArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m)
     => IArr i a
-    -> IExp instr i  -- ^ Length of array
-    -> ProgramT instr m (Arr i a)
+    -> exp i  -- ^ Number of elements to copy
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
 thawArr arr n = do
     arr2 <- unsafeThawArr arr
     arr3 <- newArr n
@@ -254,26 +192,13 @@ thawArr arr n = do
 -- | Thaw an immutable array to a mutable one without making a copy. This is
 -- generally only safe if the the mutable array is not updated as long as the
 -- immutable array is alive.
-unsafeThawArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       )
-    => IArr i a -> ProgramT instr m (Arr i a)
-unsafeThawArr arr = singleE $ UnsafeThawArr arr
+unsafeThawArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+    IArr i a -> ProgramT instr (Param2 exp pred) m (Arr i a)
+unsafeThawArr arr = singleInj $ UnsafeThawArr arr
 
 -- | Create and initialize an immutable array
-initIArr
-    :: ( VarPred (IExp instr) a
-       , VarPred (IExp instr) i
-       , Integral i
-       , Ix i
-       , ArrCMD (IExp instr) :<: instr
-       , Monad m
-       )
-    => [a] -> ProgramT instr m (IArr i a)
+initIArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m) =>
+    [a] -> ProgramT instr (Param2 exp pred) m (IArr i a)
 initIArr = unsafeFreezeArr <=< initArr
 
 
@@ -283,57 +208,61 @@ initIArr = unsafeFreezeArr <=< initArr
 --------------------------------------------------------------------------------
 
 -- | Conditional statement
-iff :: (ControlCMD (IExp instr) :<: instr)
-    => IExp instr Bool      -- ^ Condition
-    -> ProgramT instr m ()  -- ^ True branch
-    -> ProgramT instr m ()  -- ^ False branch
-    -> ProgramT instr m ()
-iff b t f = singleE $ If b t f
+iff :: (ControlCMD :<: instr)
+    => exp Bool      -- ^ Condition
+    -> ProgramT instr (Param2 exp pred) m ()  -- ^ True branch
+    -> ProgramT instr (Param2 exp pred) m ()  -- ^ False branch
+    -> ProgramT instr (Param2 exp pred) m ()
+iff b t f = singleInj $ If b t f
 
 -- | Conditional statement that returns an expression
 ifE
-    :: ( VarPred (IExp instr) a
-       , ControlCMD (IExp instr) :<: instr
-       , RefCMD (IExp instr)     :<: instr
+    :: ( pred a
+       , FreeExp exp
+       , VarPred exp a
+       , ControlCMD :<: instr
+       , RefCMD     :<: instr
        , Monad m
        )
-    => IExp instr Bool                  -- ^ Condition
-    -> ProgramT instr m (IExp instr a)  -- ^ True branch
-    -> ProgramT instr m (IExp instr a)  -- ^ False branch
-    -> ProgramT instr m (IExp instr a)
+    => exp Bool                                    -- ^ Condition
+    -> ProgramT instr (Param2 exp pred) m (exp a)  -- ^ True branch
+    -> ProgramT instr (Param2 exp pred) m (exp a)  -- ^ False branch
+    -> ProgramT instr (Param2 exp pred) m (exp a)
 ifE b t f = do
     r <- newRef
     iff b (t >>= setRef r) (f >>= setRef r)
     getRef r
 
 -- | While loop
-while :: (ControlCMD (IExp instr) :<: instr)
-    => ProgramT instr m (IExp instr Bool)  -- ^ Continue condition
-    -> ProgramT instr m ()                 -- ^ Loop body
-    -> ProgramT instr m ()
-while b t = singleE $ While b t
+while :: (ControlCMD :<: instr)
+    => ProgramT instr (Param2 exp pred) m (exp Bool)  -- ^ Continue condition
+    -> ProgramT instr (Param2 exp pred) m ()          -- ^ Loop body
+    -> ProgramT instr (Param2 exp pred) m ()
+while b t = singleInj $ While b t
 
 -- | For loop
 for
-    :: ( ControlCMD (IExp instr) :<: instr
+    :: ( FreeExp exp
+       , ControlCMD :<: instr
        , Integral n
-       , VarPred (IExp instr) n
+       , pred n
+       , VarPred exp n
        )
-    => IxRange (IExp instr n)                 -- ^ Index range
-    -> (IExp instr n -> ProgramT instr m ())  -- ^ Loop body
-    -> ProgramT instr m ()
-for range = singleE . For range
+    => IxRange (exp n)                                   -- ^ Index range
+    -> (exp n -> ProgramT instr (Param2 exp pred) m ())  -- ^ Loop body
+    -> ProgramT instr (Param2 exp pred) m ()
+for range body = singleInj $ For range (body . valToExp)
 
 -- | Break out from a loop
-break :: (ControlCMD (IExp instr) :<: instr) => ProgramT instr m ()
-break = singleE Break
+break :: (ControlCMD :<: instr) => ProgramT instr (Param2 exp pred) m ()
+break = singleInj Break
 
 -- | Assertion
-assert :: (ControlCMD (IExp instr) :<: instr)
-    => IExp instr Bool  -- ^ Expression that should be true
-    -> String           -- ^ Message in case of failure
-    -> ProgramT instr m ()
-assert cond msg = singleE $ Assert cond msg
+assert :: (ControlCMD :<: instr)
+    => exp Bool  -- ^ Expression that should be true
+    -> String    -- ^ Message in case of failure
+    -> ProgramT instr (Param2 exp pred) m ()
+assert cond msg = singleInj $ Assert cond msg
 
 
 
@@ -348,7 +277,8 @@ assert cond msg = singleE $ Assert cond msg
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: (IsPointer a, PtrCMD :<: instr) => a -> a -> ProgramT instr m ()
+unsafeSwap :: (IsPointer a, PtrCMD :<: instr) =>
+    a -> a -> ProgramT instr (Param2 exp pred) m ()
 unsafeSwap a b = singleInj $ SwapPtr a b
 
 
@@ -358,32 +288,34 @@ unsafeSwap a b = singleInj $ SwapPtr a b
 --------------------------------------------------------------------------------
 
 -- | Open a file
-fopen :: (FileCMD (IExp instr) :<: instr) => FilePath -> IOMode -> ProgramT instr m Handle
-fopen file = singleE . FOpen file
+fopen :: (FileCMD :<: instr) =>
+    FilePath -> IOMode -> ProgramT instr (Param2 exp pred) m Handle
+fopen file = singleInj . FOpen file
 
 -- | Close a file
-fclose :: (FileCMD (IExp instr) :<: instr) => Handle -> ProgramT instr m ()
-fclose = singleE . FClose
+fclose :: (FileCMD :<: instr) => Handle -> ProgramT instr (Param2 exp pred) m ()
+fclose = singleInj . FClose
 
 -- | Check for end of file
-feof :: (VarPred (IExp instr) Bool, FileCMD (IExp instr) :<: instr) =>
-    Handle -> ProgramT instr m (IExp instr Bool)
-feof = singleE . FEof
+feof :: (FreeExp exp, VarPred exp Bool, FileCMD :<: instr, Monad m) =>
+    Handle -> ProgramT instr (Param2 exp pred) m (exp Bool)
+feof = fmap valToExp . singleInj . FEof
 
 class PrintfType r
   where
     type PrintfExp r :: * -> *
     fprf :: Handle -> String -> [PrintfArg (PrintfExp r)] -> r
 
-instance (FileCMD (IExp instr) :<: instr, a ~ ()) => PrintfType (ProgramT instr m a)
+instance (FileCMD :<: instr, a ~ ()) =>
+    PrintfType (ProgramT instr (Param2 exp pred) m a)
   where
-    type PrintfExp (ProgramT instr m a) = IExp instr
-    fprf h form as = singleE $ FPrintf h form (reverse as)
+    type PrintfExp (ProgramT instr (Param2 exp pred) m a) = exp
+    fprf h form as = singleInj $ FPrintf h form (reverse as)
 
-instance (Formattable a, VarPred exp a, PrintfType r, exp ~ PrintfExp r) =>
+instance (Formattable a, PrintfType r, exp ~ PrintfExp r) =>
     PrintfType (exp a -> r)
   where
-    type PrintfExp (exp a -> r) = exp
+    type PrintfExp  (exp a -> r) = exp
     fprf h form as = \a -> fprf h form (PrintfArg a : as)
 
 -- | Print to a handle. Accepts a variable number of arguments.
@@ -391,24 +323,27 @@ fprintf :: PrintfType r => Handle -> String -> r
 fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
-fput :: forall instr a m
-    .  (Formattable a, VarPred (IExp instr) a, FileCMD (IExp instr) :<: instr)
+fput :: forall instr exp pred a m
+    .  (Formattable a, VarPred exp a, FileCMD :<: instr)
     => Handle
-    -> String        -- ^ Prefix
-    -> IExp instr a  -- ^ Expression to print
-    -> String        -- ^ Suffix
-    -> ProgramT instr m ()
+    -> String  -- ^ Prefix
+    -> exp a   -- ^ Expression to print
+    -> String  -- ^ Suffix
+    -> ProgramT instr (Param2 exp pred) m ()
 fput hdl prefix a suffix =
     fprintf hdl (prefix ++ formatSpecifier (Proxy :: Proxy a) ++ suffix) a
 
 -- | Get a single value from a handle
 fget
     :: ( Formattable a
-       , VarPred (IExp instr) a
-       , FileCMD (IExp instr) :<: instr
+       , pred a
+       , FreeExp exp
+       , VarPred exp a
+       , FileCMD :<: instr
+       , Monad m
        )
-    => Handle -> ProgramT instr m (IExp instr a)
-fget = singleE . FGet
+    => Handle -> ProgramT instr (Param2 exp pred) m (exp a)
+fget = fmap valToExp . singleInj . FGet
 
 -- | Print to @stdout@. Accepts a variable number of arguments.
 printf :: PrintfType r => String -> r
@@ -421,29 +356,28 @@ printf = fprintf stdout
 --------------------------------------------------------------------------------
 
 -- | Create a null pointer
-newPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr) =>
-    ProgramT instr m (Ptr a)
+newPtr :: (pred a, C_CMD :<: instr) => ProgramT instr (Param2 exp pred) m (Ptr a)
 newPtr = newNamedPtr "p"
 
 -- | Create a named null pointer
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-newNamedPtr :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr)
+newNamedPtr :: (pred a, C_CMD :<: instr)
     => String  -- ^ Base name
-    -> ProgramT instr m (Ptr a)
-newNamedPtr = singleE . NewPtr
+    -> ProgramT instr (Param2 exp pred) m (Ptr a)
+newNamedPtr = singleInj . NewPtr
 
 -- | Cast a pointer to an array
-ptrToArr :: (C_CMD (IExp instr) :<: instr) => Ptr a -> ProgramT instr m (Arr i a)
-ptrToArr = singleE . PtrToArr
+ptrToArr :: (C_CMD :<: instr) => Ptr a -> ProgramT instr (Param2 exp pred) m (Arr i a)
+ptrToArr = singleInj . PtrToArr
 
 -- | Create a pointer to an abstract object. The only thing one can do with such
 -- objects is to pass them to 'callFun' or 'callProc'.
-newObject :: (C_CMD (IExp instr) :<: instr)
+newObject :: (C_CMD :<: instr)
     => String  -- ^ Object type
     -> Bool    -- ^ Pointed?
-    -> ProgramT instr m Object
+    -> ProgramT instr (Param2 exp pred) m Object
 newObject t p = newNamedObject "obj" t p
 
 -- | Create a pointer to a named abstract object. The only thing one can do with
@@ -451,23 +385,23 @@ newObject t p = newNamedObject "obj" t p
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-newNamedObject :: (C_CMD (IExp instr) :<: instr)
+newNamedObject :: (C_CMD :<: instr)
     => String  -- ^ Base name
     -> String  -- ^ Object type
     -> Bool    -- ^ Pointed?
-    -> ProgramT instr m Object
-newNamedObject base t p = singleE $ NewObject base t p
+    -> ProgramT instr (Param2 exp pred) m Object
+newNamedObject base t p = singleInj $ NewObject base t p
 
 -- | Generate code into another translation unit
-inModule :: (C_CMD (IExp instr) :<: instr)
+inModule :: (C_CMD :<: instr)
     => String
-    -> ProgramT instr m ()
-    -> ProgramT instr m ()
-inModule mod prog = singleE $ InModule mod prog
+    -> ProgramT instr (Param2 exp pred) m ()
+    -> ProgramT instr (Param2 exp pred) m ()
+inModule mod prog = singleInj $ InModule mod prog
 
 -- | Add an @#include@ statement to the generated code
-addInclude :: (C_CMD (IExp instr) :<: instr) => String -> ProgramT instr m ()
-addInclude = singleE . AddInclude
+addInclude :: (C_CMD :<: instr) => String -> ProgramT instr (Param2 exp pred) m ()
+addInclude = singleInj . AddInclude
 
 -- | Add a global definition to the generated code
 --
@@ -490,71 +424,72 @@ addInclude = singleE . AddInclude
 -- >           // goes here
 -- >       }
 -- >       |]
-addDefinition :: (C_CMD (IExp instr) :<: instr) => Definition -> ProgramT instr m ()
-addDefinition = singleE . AddDefinition
+addDefinition :: (C_CMD :<: instr) => Definition -> ProgramT instr (Param2 exp pred) m ()
+addDefinition = singleInj . AddDefinition
 
 -- | Declare an external function
-addExternFun :: (VarPred exp res, C_CMD exp :<: instr, exp ~ IExp instr)
-    => String           -- ^ Function name
-    -> proxy (exp res)  -- ^ Proxy for expression and result type
-    -> [FunArg exp]     -- ^ Arguments (only used to determine types)
-    -> ProgramT instr m ()
-addExternFun fun res args = singleE $ AddExternFun fun res args
+addExternFun :: (pred res, C_CMD :<: instr)
+    => String             -- ^ Function name
+    -> proxy res          -- ^ Proxy for result type
+    -> [FunArg exp pred]  -- ^ Arguments (only used to determine types)
+    -> ProgramT instr (Param2 exp pred) m ()
+addExternFun fun res args = singleInj $ AddExternFun fun res args
 
 -- | Declare an external procedure
-addExternProc :: (C_CMD exp :<: instr, exp ~ IExp instr)
+addExternProc :: (C_CMD :<: instr)
     => String        -- ^ Procedure name
-    -> [FunArg exp]  -- ^ Arguments (only used to determine types)
-    -> ProgramT instr m ()
-addExternProc proc args = singleE $ AddExternProc proc args
+    -> [FunArg exp pred]  -- ^ Arguments (only used to determine types)
+    -> ProgramT instr (Param2 exp pred) m ()
+addExternProc proc args = singleInj $ AddExternProc proc args
 
 -- | Call a function
-callFun :: (VarPred (IExp instr) a, C_CMD (IExp instr) :<: instr)
-    => String                 -- ^ Function name
-    -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m (IExp instr a)
-callFun fun as = singleE $ CallFun fun as
+callFun :: (pred a, FreeExp exp, VarPred exp a, C_CMD :<: instr, Monad m)
+    => String             -- ^ Function name
+    -> [FunArg exp pred]  -- ^ Arguments
+    -> ProgramT instr (Param2 exp pred) m (exp a)
+callFun fun as = fmap valToExp $ singleInj $ CallFun fun as
 
 -- | Call a procedure
-callProc :: (C_CMD (IExp instr) :<: instr)
-    => String                 -- ^ Procedure name
-    -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m ()
-callProc fun as = singleE $ CallProc (Nothing :: Maybe Object) fun as
+callProc :: (C_CMD :<: instr)
+    => String             -- ^ Procedure name
+    -> [FunArg exp pred]  -- ^ Arguments
+    -> ProgramT instr (Param2 exp pred) m ()
+callProc fun as = singleInj $ CallProc (Nothing :: Maybe Object) fun as
 
 -- | Call a procedure and assign its result
-callProcAssign :: (Assignable obj, C_CMD (IExp instr) :<: instr)
-    => obj                    -- ^ Object to which the result should be assigned
-    -> String                 -- ^ Procedure name
-    -> [FunArg (IExp instr)]  -- ^ Arguments
-    -> ProgramT instr m ()
-callProcAssign obj fun as = singleE $ CallProc (Just obj) fun as
+callProcAssign :: (Assignable obj, C_CMD :<: instr)
+    => obj                -- ^ Object to which the result should be assigned
+    -> String             -- ^ Procedure name
+    -> [FunArg exp pred]  -- ^ Arguments
+    -> ProgramT instr (Param2 exp pred) m ()
+callProcAssign obj fun as = singleInj $ CallProc (Just obj) fun as
   -- The reason for having both `callProc` and `callProcAssign` instead of a
   -- single one with a `Maybe obj` is that the caller would have to resolve the
   -- overloading when passing `Nothing` (as currently done in `callProc`).
 
 -- | Declare and call an external function
-externFun :: forall instr m exp res
-    .  (VarPred exp res, C_CMD exp :<: instr, exp ~ IExp instr, Monad m)
-    => String        -- ^ Function name
-    -> [FunArg exp]  -- ^ Arguments
-    -> ProgramT instr m (exp res)
+externFun :: forall instr m exp pred res
+    .  (pred res, FreeExp exp, VarPred exp res, C_CMD :<: instr, Monad m)
+    => String             -- ^ Function name
+    -> [FunArg exp pred]  -- ^ Arguments
+    -> ProgramT instr (Param2 exp pred) m (exp res)
 externFun fun args = do
-    addExternFun fun (Proxy :: Proxy (exp res)) args
+    addExternFun fun (Proxy :: Proxy res) args
     callFun fun args
 
 -- | Declare and call an external procedure
-externProc :: (C_CMD exp :<: instr, exp ~ IExp instr, Monad m)
+externProc :: (C_CMD :<: instr, Monad m)
     => String        -- ^ Procedure name
-    -> [FunArg exp]  -- ^ Arguments
-    -> ProgramT instr m ()
+    -> [FunArg exp pred]  -- ^ Arguments
+    -> ProgramT instr (Param2 exp pred) m ()
 externProc proc args = do
     addExternProc proc args
     callProc proc args
 
 -- | Get current time as number of seconds passed today
-getTime :: (VarPred (IExp instr) Double, C_CMD (IExp instr) :<: instr, Monad m) =>
-    ProgramT instr m (IExp instr Double)
+getTime
+    :: (pred Double, FreeExp exp, VarPred exp Double, C_CMD :<: instr, Monad m)
+    => ProgramT instr (Param2 exp pred) m (exp Double)
 getTime = do
     addInclude "<sys/time.h>"
     addInclude "<sys/resource.h>"
@@ -574,40 +509,40 @@ getTime = do
 
 -- Arguments
 
--- | Constant string argument
-strArg :: String -> FunArg exp
-strArg = FunArg . StrArg
-
 -- | Value argument
-valArg :: VarPred exp a => exp a -> FunArg exp
-valArg = FunArg . ValArg
+valArg :: pred a => exp a -> FunArg exp pred
+valArg = ValArg
 
 -- | Reference argument
-refArg :: VarPred exp a => Ref a -> FunArg exp
+refArg :: (pred a, Arg RefArg pred) => Ref a -> FunArg exp pred
 refArg = FunArg . RefArg
 
 -- | Mutable array argument
-arrArg :: VarPred exp a => Arr i a -> FunArg exp
+arrArg :: (pred a, Arg ArrArg pred) => Arr i a -> FunArg exp pred
 arrArg = FunArg . ArrArg
 
 -- | Immutable array argument
-iarrArg :: VarPred exp a => IArr i a -> FunArg exp
+iarrArg :: (pred a, Arg IArrArg pred) => IArr i a -> FunArg exp pred
 iarrArg = FunArg . IArrArg
 
 -- | Pointer argument
-ptrArg :: VarPred exp a => Ptr a -> FunArg exp
+ptrArg :: (pred a, Arg PtrArg pred) => Ptr a -> FunArg exp pred
 ptrArg = FunArg . PtrArg
 
 -- | Abstract object argument
-objArg :: Object -> FunArg exp
+objArg :: Object -> FunArg exp pred
 objArg = FunArg . ObjArg
 
+-- | Constant string argument
+strArg :: String -> FunArg exp pred
+strArg = FunArg . StrArg
+
 -- | Modifier that takes the address of another argument
-addr :: FunArg exp -> FunArg exp
+addr :: (Arg (FunArg exp) pred) => FunArg exp pred -> FunArg exp pred
 addr = FunArg . Addr
 
 -- | Modifier that dereferences another argument
-deref :: FunArg exp -> FunArg exp
+deref :: (Arg (FunArg exp) pred) => FunArg exp pred -> FunArg exp pred
 deref = FunArg . Deref
 
 
@@ -619,13 +554,14 @@ deref = FunArg . Deref
 -- | Run a program in 'IO'. Note that not all instructions are supported for
 -- running in 'IO'. For example, calls to external C functions are not
 -- supported.
-runIO :: (Interp instr IO, HFunctor instr) => Program instr a -> IO a
-runIO = interpret
+runIO :: (EvalExp exp, InterpBi instr IO (Param1 pred), HBifunctor instr) =>
+    Program instr (Param2 exp pred) a -> IO a
+runIO = interpretBi (return . evalExp)
 
 -- | Like 'runIO' but with explicit input/output connected to @stdin@/@stdout@
-captureIO :: (Interp instr IO, HFunctor instr)
-    => Program instr a  -- ^ Program to run
-    -> String           -- ^ Input to send to @stdin@
-    -> IO String        -- ^ Result from @stdout@
+captureIO :: (EvalExp exp, InterpBi instr IO (Param1 pred), HBifunctor instr)
+    => Program instr (Param2 exp pred) a  -- ^ Program to run
+    -> String                             -- ^ Input to send to @stdin@
+    -> IO String                          -- ^ Result from @stdout@
 captureIO = fakeIO . runIO
 

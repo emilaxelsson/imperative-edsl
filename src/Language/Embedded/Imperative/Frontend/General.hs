@@ -15,6 +15,7 @@ module Language.Embedded.Imperative.Frontend.General
   , Handle
   , stdin
   , stdout
+  , PrintfArg
   , Formattable
   , Ptr
   , Object
@@ -23,8 +24,8 @@ module Language.Embedded.Imperative.Frontend.General
   , Definition
   , cedecl
   ) where
-  -- Note: Important not to export the constructors of `Ref`, `Arr` or `Handle`,
-  -- since the user is not supposed to inspect such values.
+  -- Note: Important not to export the constructors of `Ref`, `Arr`, etc. since
+  -- the user is not supposed to inspect such values.
 
 import qualified System.IO as IO
 
