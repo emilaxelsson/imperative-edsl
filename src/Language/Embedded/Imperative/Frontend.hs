@@ -163,7 +163,7 @@ copyArr arr1 arr2 len = singleInj $ CopyArr arr1 arr2 len
 -- to a newly allocated one.
 freezeArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m)
     => Arr i a
-    -> exp i  -- ^ Length of array
+    -> exp i  -- ^ Length of new array
     -> ProgramT instr (Param2 exp pred) m (IArr i a)
 freezeArr arr n = do
     arr2 <- newArr n
@@ -437,7 +437,7 @@ addExternFun fun res args = singleInj $ AddExternFun fun res args
 
 -- | Declare an external procedure
 addExternProc :: (C_CMD :<: instr)
-    => String        -- ^ Procedure name
+    => String             -- ^ Procedure name
     -> [FunArg exp pred]  -- ^ Arguments (only used to determine types)
     -> ProgramT instr (Param2 exp pred) m ()
 addExternProc proc args = singleInj $ AddExternProc proc args
