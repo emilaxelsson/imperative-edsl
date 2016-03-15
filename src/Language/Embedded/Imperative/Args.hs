@@ -73,30 +73,3 @@ instance Arg StrArg pred where
   mkArg   (StrArg s) = return [cexp| $string:s |]
   mkParam (StrArg s) = return [cparam| const char* |]
 
--- | Modifier that takes the address of another argument
-newtype Addr arg pred = Addr (arg pred)
-
-instance Arg arg pred => Arg (Addr arg) pred where
-  mkArg (Addr arg) = do
-    e <- mkArg arg
-    return [cexp| &$e |]
-  mkParam (Addr arg) = do
-    p <- mkParam arg
-    case p of
-       Param mid spec decl loc -> return $ Param mid spec (Ptr [] decl loc) loc
-       _ -> error "mkParam for Addr: cannot deal with antiquotes"
-
--- | Modifier that dereferences another argument
-newtype Deref arg pred = Deref (arg pred)
-
-instance Arg arg pred => Arg (Deref arg) pred where
-  mkArg (Deref arg) = do
-    e <- mkArg arg
-    return [cexp| *$e |]
-  mkParam (Deref arg) = do
-    p <- mkParam arg
-    case p of
-       Param mid spec (Ptr [] decl _) loc -> return $ Param mid spec decl loc
-       Param _ _ _ _ -> error "mkParam for Deref: cannot dereference non-pointer parameter"
-       _ -> error "mkParam for Deref: cannot deal with antiquotes"
-

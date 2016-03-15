@@ -68,8 +68,6 @@ import Data.Traversable (Traversable, traverse)
 
 import Control.Monad.Operational.Higher
 
-import Language.C.Quote.C (ToIdent)
-
 import Control.Monads
 import Language.Embedded.Expression
 import Language.Embedded.Traversal
@@ -483,30 +481,53 @@ class Arg arg pred
 
 data FunArg exp pred
   where
-    ValArg :: pred a => exp a -> FunArg exp pred
-    FunArg :: Arg arg pred => arg pred -> FunArg exp pred
+    ValArg   :: pred a => exp a -> FunArg exp pred
+    AddrArg  :: FunArg exp pred -> FunArg exp pred
+    DerefArg :: FunArg exp pred -> FunArg exp pred
+    FunArg   :: Arg arg pred => arg pred -> FunArg exp pred
 
 instance CompExp exp => Arg (FunArg exp) CType
   where
     mkArg (ValArg a) = compExp a
+    mkArg (AddrArg arg) = do
+        e <- mkArg arg
+        return [cexp| &$e |]
+    mkArg (DerefArg arg) = do
+        e <- mkArg arg
+        return [cexp| *$e |]
     mkArg (FunArg a) = mkArg a
 
     mkParam (ValArg (a :: exp a)) = do
         t <- cType (Proxy :: Proxy a)
         return [cparam| $ty:t |]
+    mkParam (AddrArg arg) = do
+      p <- mkParam arg
+      case p of
+         C.Param mid spec decl loc -> return $ C.Param mid spec (C.Ptr [] decl loc) loc
+         _ -> error "mkParam for Addr: cannot deal with antiquotes"
+    mkParam (DerefArg arg) = do
+      p <- mkParam arg
+      case p of
+         C.Param mid spec (C.Ptr [] decl _) loc -> return $ C.Param mid spec decl loc
+         C.Param _ _ _ _ -> error "mkParam for Deref: cannot dereference non-pointer parameter"
+         _ -> error "mkParam for Deref: cannot deal with antiquotes"
     mkParam (FunArg a) = mkParam a
 
 mapFunArg ::
     (forall a . exp1 a -> exp2 a) -> FunArg exp1 pred -> FunArg exp2 pred
-mapFunArg f (ValArg a) = ValArg (f a)
-mapFunArg f (FunArg a) = FunArg a
+mapFunArg f (ValArg a)   = ValArg (f a)
+mapFunArg f (AddrArg a)  = AddrArg $ mapFunArg f a
+mapFunArg f (DerefArg a) = DerefArg $ mapFunArg f a
+mapFunArg f (FunArg a)   = FunArg a
 
 mapFunArgM :: Monad m
     => (forall a . exp1 a -> m (exp2 a))
     -> FunArg exp1 pred
     -> m (FunArg exp2 pred)
-mapFunArgM f (ValArg a) = liftM ValArg (f a)
-mapFunArgM f (FunArg a) = return (FunArg a)
+mapFunArgM f (ValArg a)   = liftM ValArg (f a)
+mapFunArgM f (AddrArg a)  = liftM AddrArg $ mapFunArgM f a
+mapFunArgM f (DerefArg a) = liftM DerefArg $ mapFunArgM f a
+mapFunArgM f (FunArg a)   = return (FunArg a)
 
 class ToIdent obj => Assignable obj
 

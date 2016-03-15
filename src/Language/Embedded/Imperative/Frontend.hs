@@ -538,12 +538,12 @@ strArg :: String -> FunArg exp pred
 strArg = FunArg . StrArg
 
 -- | Modifier that takes the address of another argument
-addr :: (Arg (FunArg exp) pred) => FunArg exp pred -> FunArg exp pred
-addr = FunArg . Addr
+addr :: FunArg exp pred -> FunArg exp pred
+addr = AddrArg
 
 -- | Modifier that dereferences another argument
-deref :: (Arg (FunArg exp) pred) => FunArg exp pred -> FunArg exp pred
-deref = FunArg . Deref
+deref :: FunArg exp pred -> FunArg exp pred
+deref = DerefArg
 
 
 
