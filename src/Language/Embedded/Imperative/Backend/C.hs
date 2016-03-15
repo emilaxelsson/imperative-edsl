@@ -65,6 +65,10 @@ compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 -- This extra pointer is not needed when using `alloca` since then the array is
 -- a pointer anyway. One option might be to use `alloca` for all arrays, but
 -- that doesn't permit defining constant arrays using a literal as above.
+--
+-- Pointers that are used between multiple functions will be lifted to shared globals.
+-- To ensure the correctness of the resulting program the underlying arrays must also
+-- be lifted, hence the extra `touchVar` application on their symbols.
 
 -- | Compile `ArrCMD`
 compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
@@ -94,22 +98,31 @@ compArrCMD cmd@(InitArr base as) = do
 compArrCMD (GetArr expi arr) = do
     (v,n) <- freshVar
     i     <- compExp expi
+    touchVar $ BaseArrOf arr  -- explanation above
     touchVar arr
     addStm [cstm| $id:n = $id:arr[ $i ]; |]
     return v
 compArrCMD (SetArr expi expv arr) = do
     v <- compExp expv
     i <- compExp expi
+    touchVar $ BaseArrOf arr  -- explanation above
     touchVar arr
     addStm [cstm| $id:arr[ $i ] = $v; |]
 compArrCMD cmd@(CopyArr arr1 arr2 expl) = do
     addInclude "<string.h>"
+    mapM_ touchVar [BaseArrOf arr1,BaseArrOf arr2]  -- explanation above
     mapM_ touchVar [arr1,arr2]
     l <- compExp expl
     t <- compTypeFromCMD cmd arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
 compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
 compArrCMD (UnsafeThawArr (IArrComp arr))  = return $ ArrComp arr
+
+-- | Generates the symbol name as an identifier for a given array.
+newtype BaseArrOf i a = BaseArrOf (Arr i a)
+instance ToIdent (BaseArrOf i a)
+    where toIdent (BaseArrOf (ArrComp sym)) = toIdent $ '_':sym
+
 
 -- | Compile `ControlCMD`
 compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
