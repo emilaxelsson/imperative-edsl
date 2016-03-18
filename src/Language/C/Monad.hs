@@ -415,7 +415,10 @@ liftSharedLocals prog = do
     let (globs, shared) = unzip $ map (extractDecls (`Set.member` uvs)) oldglobs
         sharedList = Set.toList $ Set.unions shared
         sharedDecls = map (\ig -> C.DecDef ig (SrcLoc NoLoc)) sharedList
-    void $ globals <<.= (globs ++ sharedDecls)
+    -- Reverse is a trick that ensures the correct order of declarations for arrays
+    -- and their wrapper pointers. It depends on the naming schema of identifiers:
+    -- arrays are prefixed with underscores, while their wrappers are not.
+    void $ globals <<.= (globs ++ reverse sharedDecls)
   where
     -- Only keep vars shared between functions by intersecting with the union
     -- of all other funs' uvs. TODO: optimize.
