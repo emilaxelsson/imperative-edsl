@@ -286,10 +286,11 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     typeOfSym _ = cType (Proxy :: Proxy (DenResult sig))
 
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
-    go (Var v) Nil   = return [cexp| $id:v |]
+    go (Var v) Nil   = touchVar v >> return [cexp| $id:v |]
     go (Lit _ a) Nil = cLit a
     go (Const code const _) Nil = do
       code
+      touchVar const
       return [cexp| $id:const |]
     go (Fun code fun _) args = do
       code
@@ -321,6 +322,7 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       return $ C.Cond c' t' f' mempty
     go (ArrIx arr) (i :* Nil) = do
       i' <- compCExp' i
+      touchVar arr
       return [cexp| $id:arr[$i'] |]
 
 instance CompExp CExp
