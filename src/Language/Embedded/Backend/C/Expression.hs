@@ -14,14 +14,6 @@ import Data.Typeable
 import Data.Monoid
 #endif
 
-#if MIN_VERSION_syntactic(3,0,0)
-import Data.TypeRep hiding (Typeable, gcast)
-import Data.TypeRep.TH
-import Data.TypeRep.Types.Basic
-import Data.TypeRep.Types.Tuple
-import Data.TypeRep.Types.IntWord
-#endif
-
 import Language.C.Monad
 import Language.C.Quote.C
 import Language.C.Syntax (Exp,Type)
@@ -78,28 +70,6 @@ instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [ct
 
 instance CType Float  where cType _ = return [cty| float |]
 instance CType Double where cType _ = return [cty| double |]
-
-#if MIN_VERSION_syntactic(3,0,0)
-instance ShowClass CType where showClass _ = "CType"
-
-pCType :: Proxy CType
-pCType = Proxy
-
-deriveWitness ''CType ''BoolType
-deriveWitness ''CType ''FloatType
-deriveWitness ''CType ''DoubleType
-deriveWitness ''CType ''IntWordType
-
-derivePWitness ''CType ''BoolType
-derivePWitness ''CType ''FloatType
-derivePWitness ''CType ''DoubleType
-derivePWitness ''CType ''IntWordType
-
-instance PWitness CType CharType t
-instance PWitness CType ListType t
-instance PWitness CType TupleType t
-instance PWitness CType FunType t
-#endif
 
 -- | Remove one layer of a nested proxy
 proxyArg :: proxy1 (proxy2 a) -> Proxy a
