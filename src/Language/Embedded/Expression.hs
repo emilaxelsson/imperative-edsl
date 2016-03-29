@@ -33,7 +33,7 @@ class FreeExp exp
 -- | Value
 data Val a
     = ValComp VarId  -- ^ Symbolic value
-    | ValEval a      -- ^ Concrete value
+    | ValRun a       -- ^ Concrete value
   deriving Typeable
 
 instance ToIdent (Val a) where toIdent (ValComp r) = toIdent r
@@ -41,7 +41,7 @@ instance ToIdent (Val a) where toIdent (ValComp r) = toIdent r
 -- | Convert a value to an expression
 valToExp :: (VarPred exp a, FreeExp exp) => Val a -> exp a
 valToExp (ValComp v) = varExp v
-valToExp (ValEval a) = valExp a
+valToExp (ValRun a)  = valExp a
 
 -- | Expressions that support evaluation
 class FreeExp exp => EvalExp exp

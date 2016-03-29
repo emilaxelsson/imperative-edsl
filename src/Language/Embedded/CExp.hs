@@ -156,7 +156,7 @@ evalSym (UOp uop)     = evalUnary uop
 evalSym (Op bop)      = evalBinary bop
 evalSym (Cast f)      = f
 evalSym Cond          = \c t f -> if c then t else f
-evalSym (ArrIx (IArrEval arr)) = \i ->
+evalSym (ArrIx (IArrRun arr)) = \i ->
     if i<l || i>h
       then error $ "index "
                 ++ show (toInteger i)

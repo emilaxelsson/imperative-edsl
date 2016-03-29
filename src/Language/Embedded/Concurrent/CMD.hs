@@ -56,20 +56,20 @@ waitFlag :: Flag a -> IO a
 waitFlag (Flag _ var) = CC.withMVar var return
 
 data ThreadId
-  = TIDEval CC.ThreadId (Flag ())
+  = TIDRun CC.ThreadId (Flag ())
   | TIDComp TID
     deriving (Typeable)
 
 instance Show ThreadId where
-  show (TIDEval tid _) = show tid
-  show (TIDComp tid)   = tid
+  show (TIDRun tid _) = show tid
+  show (TIDComp tid)  = tid
 
 data Closeable
 data Uncloseable
 
 -- | A bounded channel.
 data Chan t a
-  = ChanEval (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
+  = ChanRun (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
   | ChanComp CID
 
 data ThreadCMD fs a where
@@ -128,44 +128,44 @@ runThreadCMD (ForkWithId p) = do
   f <- newFlag
   tidvar <- CC.newEmptyMVar
   cctid <- CC.forkIO . void $ CC.takeMVar tidvar >>= p >> setFlag f ()
-  let tid = TIDEval cctid f
+  let tid = TIDRun cctid f
   CC.putMVar tidvar tid
   return tid
-runThreadCMD (Kill (TIDEval t f)) = do
+runThreadCMD (Kill (TIDRun t f)) = do
   setFlag f ()
   CC.killThread t
   return ()
-runThreadCMD (Wait (TIDEval _ f)) = do
+runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
 runChanCMD :: ChanCMD (Param3 IO IO pred) a -> IO a
 runChanCMD (NewChan sz) = do
   sz' <- sz
-  ChanEval <$> Bounded.newBoundedChan (fromIntegral sz')
-           <*> newIORef False
-           <*> newIORef True
-runChanCMD (ReadChan (ChanEval c closedref lastread)) = do
+  ChanRun <$> Bounded.newBoundedChan (fromIntegral sz')
+          <*> newIORef False
+          <*> newIORef True
+runChanCMD (ReadChan (ChanRun c closedref lastread)) = do
   closed <- readIORef closedref
   mval <- Bounded.tryReadChan c
   case mval of
     Just x -> do
-        return $ ValEval x
+        return $ ValRun x
     Nothing
       | closed -> do
         writeIORef lastread False
         return undefined
       | otherwise -> do
-        ValEval <$> Bounded.readChan c
-runChanCMD (WriteChan (ChanEval c closedref _) x) = do
+        ValRun <$> Bounded.readChan c
+runChanCMD (WriteChan (ChanRun c closedref _) x) = do
   closed <- readIORef closedref
   x' <- x
   if closed
-    then return (ValEval False)
-    else Bounded.writeChan c x' >> return (ValEval True)
-runChanCMD (CloseChan (ChanEval _ closedref _)) = do
+    then return (ValRun False)
+    else Bounded.writeChan c x' >> return (ValRun True)
+runChanCMD (CloseChan (ChanRun _ closedref _)) = do
   writeIORef closedref True
-runChanCMD (ReadOK (ChanEval _ _ lastread)) = do
-  ValEval <$> readIORef lastread
+runChanCMD (ReadOK (ChanRun _ _ lastread)) = do
+  ValRun <$> readIORef lastread
 
 instance InterpBi ThreadCMD IO (Param1 pred) where
   interpBi = runThreadCMD

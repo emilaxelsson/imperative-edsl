@@ -87,7 +87,7 @@ import Language.Embedded.Backend.C.Expression
 -- | Mutable reference
 data Ref a
     = RefComp VarId
-    | RefEval (IORef a)
+    | RefRun (IORef a)
   deriving Typeable
 
 instance ToIdent (Ref a) where toIdent (RefComp r) = C.Id r
@@ -150,14 +150,14 @@ instance DryInterp RefCMD
 -- | Mutable array
 data Arr i a
     = ArrComp VarId
-    | ArrEval (IORef (IOArray i a))
+    | ArrRun (IORef (IOArray i a))
         -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
 -- | Immutable array
 data IArr i a
     = IArrComp VarId
-    | IArrEval (Array i a)
+    | IArrRun (Array i a)
   deriving Typeable
 
 -- In a way, it's not terribly useful to have `Arr` parameterized on the index
@@ -165,9 +165,9 @@ data IArr i a
 -- which integer type is used since we can always cast between them.
 --
 -- Another option would be to remove the parameter and allow any integer type
--- when indexing (and use e.g. `IOArray Word32` for evaluation). However this
--- has the big downside of losing type inference. E.g. the statement
--- `getArr arr 0` would be ambiguously typed.
+-- when indexing (and use e.g. `IOArray Word32` for running). However this has
+-- the big downside of losing type inference. E.g. the statement `getArr arr 0`
+-- would be ambiguously typed.
 --
 -- Yet another option is to hard-code a specific index type. But this would
 -- limit the use of arrays to specific platforms.
@@ -336,7 +336,7 @@ class ToIdent a => IsPointer a
 
 instance IsPointer (Arr i a)
   where
-    runSwapPtr (ArrEval arr1) (ArrEval arr2) = do
+    runSwapPtr (ArrRun arr1) (ArrRun arr2) = do
         arr1' <- readIORef arr1
         arr2' <- readIORef arr2
         writeIORef arr1 arr2'
@@ -366,7 +366,7 @@ instance DryInterp PtrCMD
 -- | File handle
 data Handle
     = HandleComp VarId
-    | HandleEval IO.Handle
+    | HandleRun IO.Handle
   deriving Typeable
 
 instance ToIdent Handle where toIdent (HandleComp h) = C.Id h
@@ -612,19 +612,20 @@ instance DryInterp C_CMD
 --------------------------------------------------------------------------------
 
 runRefCMD :: RefCMD (Param3 IO IO pred) a -> IO a
-runRefCMD (NewRef _)              = fmap RefEval $ newIORef $ error "reading uninitialized reference"
-runRefCMD (InitRef _ a)           = fmap RefEval . newIORef =<< a
-runRefCMD (SetRef (RefEval r) a)  = writeIORef r =<< a
-runRefCMD (GetRef (RefEval r))    = ValEval <$> readIORef r
+runRefCMD (NewRef _)              = fmap RefRun $ newIORef $ error "reading uninitialized reference"
+runRefCMD (InitRef _ a)           = fmap RefRun . newIORef =<< a
+runRefCMD (SetRef (RefRun r) a)   = writeIORef r =<< a
+runRefCMD (GetRef (RefRun r))     = ValRun <$> readIORef r
 runRefCMD cmd@(UnsafeFreezeRef r) = runRefCMD (GetRef r `asTypeOf` cmd)
 
 runArrCMD :: ArrCMD (Param3 IO IO pred) a -> IO a
 runArrCMD (NewArr _ n) = do
     n'  <- n
     arr <- newArray_ (0, fromIntegral n'-1)
-    ArrEval <$> newIORef arr
-runArrCMD (InitArr _ as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
-runArrCMD (GetArr i (ArrEval arr)) = do
+    ArrRun <$> newIORef arr
+runArrCMD (InitArr _ as) =
+    fmap ArrRun . newIORef =<< newListArray (0, genericLength as - 1) as
+runArrCMD (GetArr i (ArrRun arr)) = do
     arr'  <- readIORef arr
     i'    <- i
     (l,h) <- getBounds arr'
@@ -633,8 +634,8 @@ runArrCMD (GetArr i (ArrEval arr)) = do
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else ValEval <$> readArray arr' i'
-runArrCMD (SetArr i a (ArrEval arr)) = do
+      else ValRun <$> readArray arr' i'
+runArrCMD (SetArr i a (ArrRun arr)) = do
     arr'  <- readIORef arr
     i'    <- i
     a'    <- a
@@ -645,7 +646,7 @@ runArrCMD (SetArr i a (ArrEval arr)) = do
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
       else writeArray arr' (fromIntegral i') a'
-runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
+runArrCMD (CopyArr (ArrRun arr1) (ArrRun arr2) l) = do
     arr1'  <- readIORef arr1
     arr2'  <- readIORef arr2
     l'     <- l
@@ -665,10 +666,10 @@ runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
               ++ " allocated elements"
     else sequence_
       [ readArray arr2' i >>= writeArray arr1' i | i <- genericTake l' [0..] ]
-runArrCMD (UnsafeFreezeArr (ArrEval arr)) =
-    fmap IArrEval . freeze =<< readIORef arr
-runArrCMD (UnsafeThawArr (IArrEval arr)) =
-    fmap ArrEval . newIORef =<< thaw arr
+runArrCMD (UnsafeFreezeArr (ArrRun arr)) =
+    fmap IArrRun . freeze =<< readIORef arr
+runArrCMD (UnsafeThawArr (IArrRun arr)) =
+    fmap ArrRun . newIORef =<< thaw arr
 
 runControlCMD :: ControlCMD (Param3 IO IO pred) a -> IO a
 runControlCMD (If c t f)        = c >>= \c' -> if c' then t else f
@@ -688,7 +689,7 @@ runControlCMD (For (lo,step,hi) body) = do
       | step >= 0         = i <  h
       | step < 0          = i >  h
     loop i h
-      | cont i h  = body (ValEval i) >> loop (i + fromIntegral step) h
+      | cont i h  = body (ValRun i) >> loop (i + fromIntegral step) h
       | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
 runControlCMD (Assert cond msg) = do
@@ -698,10 +699,10 @@ runControlCMD (Assert cond msg) = do
 runPtrCMD :: PtrCMD (Param3 IO IO pred) a -> IO a
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
-evalHandle :: Handle -> IO.Handle
-evalHandle (HandleEval h)        = h
-evalHandle (HandleComp "stdin")  = IO.stdin
-evalHandle (HandleComp "stdout") = IO.stdout
+runHandle :: Handle -> IO.Handle
+runHandle (HandleRun h)         = h
+runHandle (HandleComp "stdin")  = IO.stdin
+runHandle (HandleComp "stdout") = IO.stdout
 
 readWord :: IO.Handle -> IO String
 readWord h = do
@@ -721,17 +722,17 @@ runFPrintf []               pf = pf
 runFPrintf (PrintfArg a:as) pf = a >>= \a' -> runFPrintf as (pf a')
 
 runFileCMD :: FileCMD (Param3 IO IO pred) a -> IO a
-runFileCMD (FOpen file mode)              = HandleEval <$> IO.openFile file mode
-runFileCMD (FClose (HandleEval h))        = IO.hClose h
+runFileCMD (FOpen file mode)              = HandleRun <$> IO.openFile file mode
+runFileCMD (FClose (HandleRun h))         = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
 runFileCMD (FClose (HandleComp "stdout")) = return ()
-runFileCMD (FPrintf h format as)          = runFPrintf as (Printf.hPrintf (evalHandle h) format)
+runFileCMD (FPrintf h format as)          = runFPrintf as (Printf.hPrintf (runHandle h) format)
 runFileCMD (FGet h)   = do
-    w <- readWord $ evalHandle h
+    w <- readWord $ runHandle h
     case reads w of
-        [(f,"")] -> return $ ValEval f
+        [(f,"")] -> return $ ValRun f
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
-runFileCMD (FEof h) = fmap ValEval $ IO.hIsEOF $ evalHandle h
+runFileCMD (FEof h) = fmap ValRun $ IO.hIsEOF $ runHandle h
 
 runC_CMD :: C_CMD (Param3 IO IO pred) a -> IO a
 runC_CMD (NewPtr base)        = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"

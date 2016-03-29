@@ -86,11 +86,11 @@ unsafeFreezeRef = fmap valToExp . singleInj . UnsafeFreezeRef
 -- It is almost always better to use 'unsafeFreezeRef' instead.
 --
 -- 'veryUnsafeFreezeRef' behaves predictably when doing code generation, but it
--- can give strange results when evaluating in 'IO', as explained here:
+-- can give strange results when running in 'IO', as explained here:
 --
 -- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
 veryUnsafeFreezeRef :: (FreeExp exp, VarPred exp a) => Ref a -> exp a
-veryUnsafeFreezeRef (RefEval r) = valExp $! unsafePerformIO $! readIORef r
+veryUnsafeFreezeRef (RefRun r)  = valExp $! unsafePerformIO $! readIORef r
 veryUnsafeFreezeRef (RefComp v) = varExp v
 
 
