@@ -36,7 +36,7 @@ module Language.Embedded.Imperative
   , (:<:)
     -- * Interface for expression types
   , FreeExp
-  , VarPred
+  , FreePred
   , EvalExp
   , CompExp
     -- * Front end

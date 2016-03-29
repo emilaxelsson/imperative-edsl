@@ -19,7 +19,7 @@ import Language.C.Quote.C
 -- | Signature annotations
 data Ann exp a where
   Empty  :: Ann exp a
-  Native :: (VarPred exp a) => exp len -> Ann exp [a]
+  Native :: (FreePred exp a) => exp len -> Ann exp [a]
   Named  :: String -> Ann exp a
 
 -- | Signatures
@@ -32,11 +32,11 @@ data Signature exp pred a where
 
 -- * Combinators
 
-lam :: (pred a, FreeExp exp, VarPred exp a)
+lam :: (pred a, FreeExp exp, FreePred exp a)
     => (exp a -> Signature exp pred b) -> Signature exp pred (a -> b)
 lam f = Lam Empty $ \x -> f (valToExp x)
 
-name :: (pred a, FreeExp exp, VarPred exp a)
+name :: (pred a, FreeExp exp, FreePred exp a)
      => String -> (exp a -> Signature exp pred b) -> Signature exp pred (a -> b)
 name s f = Lam (Named s) $ \x -> f (valToExp x)
 
@@ -45,7 +45,7 @@ ret,ptr :: (pred a)
 ret = Ret
 ptr = Ptr
 
-arg :: (pred a, FreeExp exp, VarPred exp a)
+arg :: (pred a, FreeExp exp, FreePred exp a)
     => Ann exp a
     -> (exp a -> exp b)
     -> (exp b -> Signature exp pred c)

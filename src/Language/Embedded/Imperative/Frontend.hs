@@ -59,7 +59,7 @@ initNamedRef :: (pred a, RefCMD :<: instr)
 initNamedRef base a = singleInj (InitRef base a)
 
 -- | Get the contents of a reference
-getRef :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m) =>
+getRef :: (pred a, FreeExp exp, FreePred exp a, RefCMD :<: instr, Monad m) =>
     Ref a -> ProgramT instr (Param2 exp pred) m (exp a)
 getRef = fmap valToExp . singleInj . GetRef
 
@@ -69,14 +69,14 @@ setRef :: (pred a, RefCMD :<: instr) =>
 setRef r = singleInj . SetRef r
 
 -- | Modify the contents of reference
-modifyRef :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m) =>
+modifyRef :: (pred a, FreeExp exp, FreePred exp a, RefCMD :<: instr, Monad m) =>
     Ref a -> (exp a -> exp a) -> ProgramT instr (Param2 exp pred) m ()
 modifyRef r f = setRef r . f =<< unsafeFreezeRef r
 
 -- | Freeze the contents of reference (only safe if the reference is not updated
 -- as long as the resulting value is alive)
 unsafeFreezeRef
-    :: (pred a, FreeExp exp, VarPred exp a, RefCMD :<: instr, Monad m)
+    :: (pred a, FreeExp exp, FreePred exp a, RefCMD :<: instr, Monad m)
     => Ref a -> ProgramT instr (Param2 exp pred) m (exp a)
 unsafeFreezeRef = fmap valToExp . singleInj . UnsafeFreezeRef
 
@@ -89,7 +89,7 @@ unsafeFreezeRef = fmap valToExp . singleInj . UnsafeFreezeRef
 -- can give strange results when running in 'IO', as explained here:
 --
 -- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
-veryUnsafeFreezeRef :: (FreeExp exp, VarPred exp a) => Ref a -> exp a
+veryUnsafeFreezeRef :: (FreeExp exp, FreePred exp a) => Ref a -> exp a
 veryUnsafeFreezeRef (RefRun r)  = valExp $! unsafePerformIO $! readIORef r
 veryUnsafeFreezeRef (RefComp v) = varExp v
 
@@ -135,7 +135,7 @@ initNamedArr base init = singleInj (InitArr base init)
 getArr
     :: ( pred a
        , FreeExp exp
-       , VarPred exp a
+       , FreePred exp a
        , Integral i
        , Ix i
        , ArrCMD :<: instr
@@ -219,7 +219,7 @@ iff b t f = singleInj $ If b t f
 ifE
     :: ( pred a
        , FreeExp exp
-       , VarPred exp a
+       , FreePred exp a
        , ControlCMD :<: instr
        , RefCMD     :<: instr
        , Monad m
@@ -246,7 +246,7 @@ for
        , ControlCMD :<: instr
        , Integral n
        , pred n
-       , VarPred exp n
+       , FreePred exp n
        )
     => IxRange (exp n)                                   -- ^ Index range
     -> (exp n -> ProgramT instr (Param2 exp pred) m ())  -- ^ Loop body
@@ -297,7 +297,7 @@ fclose :: (FileCMD :<: instr) => Handle -> ProgramT instr (Param2 exp pred) m ()
 fclose = singleInj . FClose
 
 -- | Check for end of file
-feof :: (FreeExp exp, VarPred exp Bool, FileCMD :<: instr, Monad m) =>
+feof :: (FreeExp exp, FreePred exp Bool, FileCMD :<: instr, Monad m) =>
     Handle -> ProgramT instr (Param2 exp pred) m (exp Bool)
 feof = fmap valToExp . singleInj . FEof
 
@@ -324,7 +324,7 @@ fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
 fput :: forall instr exp pred a m
-    .  (Formattable a, VarPred exp a, FileCMD :<: instr)
+    .  (Formattable a, FreePred exp a, FileCMD :<: instr)
     => Handle
     -> String  -- ^ Prefix
     -> exp a   -- ^ Expression to print
@@ -338,7 +338,7 @@ fget
     :: ( Formattable a
        , pred a
        , FreeExp exp
-       , VarPred exp a
+       , FreePred exp a
        , FileCMD :<: instr
        , Monad m
        )
@@ -443,7 +443,7 @@ addExternProc :: (C_CMD :<: instr)
 addExternProc proc args = singleInj $ AddExternProc proc args
 
 -- | Call a function
-callFun :: (pred a, FreeExp exp, VarPred exp a, C_CMD :<: instr, Monad m)
+callFun :: (pred a, FreeExp exp, FreePred exp a, C_CMD :<: instr, Monad m)
     => String             -- ^ Function name
     -> [FunArg exp pred]  -- ^ Arguments
     -> ProgramT instr (Param2 exp pred) m (exp a)
@@ -469,7 +469,7 @@ callProcAssign obj fun as = singleInj $ CallProc (Just obj) fun as
 
 -- | Declare and call an external function
 externFun :: forall instr m exp pred res
-    .  (pred res, FreeExp exp, VarPred exp res, C_CMD :<: instr, Monad m)
+    .  (pred res, FreeExp exp, FreePred exp res, C_CMD :<: instr, Monad m)
     => String             -- ^ Function name
     -> [FunArg exp pred]  -- ^ Arguments
     -> ProgramT instr (Param2 exp pred) m (exp res)
@@ -488,7 +488,7 @@ externProc proc args = do
 
 -- | Get current time as number of seconds passed today
 getTime
-    :: (pred Double, FreeExp exp, VarPred exp Double, C_CMD :<: instr, Monad m)
+    :: (pred Double, FreeExp exp, FreePred exp Double, C_CMD :<: instr, Monad m)
     => ProgramT instr (Param2 exp pred) m (exp Double)
 getTime = do
     addInclude "<sys/time.h>"

@@ -177,7 +177,7 @@ evalCExp (CExp e) = go e
 
 instance FreeExp CExp
   where
-    type VarPred CExp = CType
+    type FreePred CExp = CType
     valExp a = CExp $ Sym $ T $ Lit (show a) a
     varExp = CExp . Sym . T . Var
 

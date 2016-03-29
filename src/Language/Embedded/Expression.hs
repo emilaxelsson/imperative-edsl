@@ -22,13 +22,13 @@ class FreeExp exp
   where
     -- | Constraint on the types of values and variables in an expression
     -- language
-    type VarPred exp :: * -> Constraint
+    type FreePred exp :: * -> Constraint
 
     -- | Construct a value expression
-    valExp :: VarPred exp a => a -> exp a
+    valExp :: FreePred exp a => a -> exp a
 
     -- | Construct a named variable expression
-    varExp :: VarPred exp a => VarId -> exp a
+    varExp :: FreePred exp a => VarId -> exp a
 
 -- | Value
 data Val a
@@ -39,7 +39,7 @@ data Val a
 instance ToIdent (Val a) where toIdent (ValComp r) = toIdent r
 
 -- | Convert a value to an expression
-valToExp :: (VarPred exp a, FreeExp exp) => Val a -> exp a
+valToExp :: (FreeExp exp, FreePred exp a) => Val a -> exp a
 valToExp (ValComp v) = varExp v
 valToExp (ValRun a)  = valExp a
 

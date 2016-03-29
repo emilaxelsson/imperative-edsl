@@ -63,7 +63,7 @@ newCloseableChan = singleInj . NewChan
 --   is an item available.
 --   If 'closeChan' has been called on the channel *and* if the channel is
 --   empty, @readChan@ returns an undefined value immediately.
-readChan :: (pred a, FreeExp exp, VarPred exp a, ChanCMD :<: instr, Monad m)
+readChan :: (pred a, FreeExp exp, FreePred exp a, ChanCMD :<: instr, Monad m)
          => Chan t a
          -> ProgramT instr (Param2 exp pred) m (exp a)
 readChan = fmap valToExp . singleInj . ReadChan
@@ -73,7 +73,7 @@ readChan = fmap valToExp . singleInj . ReadChan
 --   become non-blocking no-ops and return @False@, otherwise returns @True@.
 writeChan :: (pred a,
               FreeExp exp,
-              VarPred exp Bool,
+              FreePred exp Bool,
               ChanCMD :<: instr,
               Monad m
              )
@@ -86,7 +86,7 @@ writeChan c = fmap valToExp . singleInj . WriteChan c
 --   succeed?
 --   Always returns @True@ unless 'closeChan' has been called on the channel.
 --   Always returns @True@ if the channel has never been read.
-lastChanReadOK :: (FreeExp exp, VarPred exp Bool, ChanCMD :<: instr, Monad m)
+lastChanReadOK :: (FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
                => Chan Closeable a
                -> ProgramT instr (Param2 exp pred) m (exp Bool)
 lastChanReadOK = fmap valToExp . singleInj . ReadOK
