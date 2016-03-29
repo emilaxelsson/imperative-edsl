@@ -22,7 +22,7 @@ module Language.Embedded.Imperative.CMD
   , borderIncl
   , IxRange
   , ControlCMD (..)
-    -- * Pointers
+    -- * Generic pointer manipulation
   , IsPointer (..)
   , PtrCMD (..)
     -- * File handling
@@ -323,7 +323,7 @@ instance DryInterp ControlCMD
 
 
 --------------------------------------------------------------------------------
--- * Pointers
+-- * Generic pointer manipulation
 --------------------------------------------------------------------------------
 
 -- The reason for not implementing `SwapPtr` using the `Ptr` type is that it's
