@@ -13,14 +13,17 @@
 -- Some examples of using the library are found in the @examples@ directory.
 
 module Language.Embedded.Imperative
-  ( module Control.Monad
-  , module Data.Int
-  , module Data.Word
-    -- * Program monad
+  ( -- * Program monad
+    module Control.Monad
   , ProgramT
   , Program
   , interpretT
   , interpret
+  , interpretBiT
+  , interpretBi
+  , Param1
+  , Param2
+  , Param3
     -- * Imperative instructions
   , RefCMD
   , ArrCMD
@@ -28,17 +31,17 @@ module Language.Embedded.Imperative
   , PtrCMD
   , FileCMD
   , C_CMD
-    -- * Types of Printf arguments
-  , PrintfArg
     -- * Composing instruction sets
   , (:+:)
   , (:<:)
     -- * Interface for expression types
-  , IExp
   , FreeExp
+  , VarPred
   , EvalExp
   , CompExp
     -- * Front end
+  , module Data.Int
+  , module Data.Word
   , module Language.Embedded.Imperative.Frontend.General
   , module Language.Embedded.Imperative.Frontend
   ) where
@@ -52,9 +55,9 @@ import Data.Word
 import Control.Monad.Operational.Higher
 
 import Language.Embedded.Expression
-import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Imperative.Frontend
+import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Imperative.Backend.C ()
 

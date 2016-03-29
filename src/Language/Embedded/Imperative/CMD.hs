@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Imperative commands. These commands can be used with the 'Program' monad,
 -- and different command types can be combined using (':+:').
@@ -27,21 +29,25 @@ module Language.Embedded.Imperative.CMD
   , Handle (..)
   , stdin
   , stdout
+  , PrintfArg (..)
+  , mapPrintfArg
+  , mapPrintfArgM
   , Formattable (..)
   , FileCMD (..)
-  , PrintfArg (..)
     -- * C-specific commands
   , Ptr (..)
   , Object (..)
-  , FunArg (..)
-  , VarPredCast
   , Arg (..)
+  , FunArg (..)
+  , mapFunArg
+  , mapFunArgM
   , Assignable
   , C_CMD (..)
   ) where
 
 
 
+import Control.Monad.Reader
 import Data.Array
 import Data.Array.IO
 import Data.Char (isSpace)
@@ -55,12 +61,9 @@ import qualified System.IO as IO
 import qualified Text.Printf as Printf
 
 #if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
 import Data.Foldable hiding (sequence_)
-import Data.Traversable
-#endif
-
-#if __GLASGOW_HASKELL__ < 708
-import Data.Proxy
+import Data.Traversable (Traversable, traverse)
 #endif
 
 import Control.Monad.Operational.Higher
@@ -68,9 +71,11 @@ import Control.Monad.Operational.Higher
 import Control.Monads
 import Language.Embedded.Expression
 import Language.Embedded.Traversal
+
+-- C-specific imports:
 import qualified Language.C.Syntax as C
-import Language.C.Quote.C (ToIdent (..))
-import Language.C.Monad
+import Language.C.Quote.C
+import Language.C.Monad (CGen)
 import Language.Embedded.Backend.C.Expression
 
 
@@ -85,28 +90,26 @@ data Ref a
     | RefEval (IORef a)
   deriving Typeable
 
-instance ToIdent (Ref a)
-  where
-    toIdent (RefComp r) = C.Id r
+instance ToIdent (Ref a) where toIdent (RefComp r) = C.Id r
 
 -- | Commands for mutable references
-data RefCMD exp (prog :: * -> *) a
+data RefCMD fs a
   where
-    NewRef  :: VarPred exp a => String -> RefCMD exp prog (Ref a)
-    InitRef :: VarPred exp a => String -> exp a -> RefCMD exp prog (Ref a)
-    GetRef  :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
-    SetRef  :: VarPred exp a => Ref a -> exp a -> RefCMD exp prog ()
-      -- `VarPred` for `SetRef` is not needed for code generation, but it can be useful when
-      -- interpreting with a dynamically typed store. `VarPred` can then be used to supply a
-      -- `Typeable` dictionary for casting.
-    UnsafeFreezeRef :: VarPred exp a => Ref a -> RefCMD exp prog (exp a)
+    NewRef  :: pred a => String -> RefCMD (Param3 prog exp pred) (Ref a)
+    InitRef :: pred a => String -> exp a -> RefCMD (Param3 prog exp pred) (Ref a)
+    GetRef  :: pred a => Ref a -> RefCMD (Param3 prog exp pred) (Val a)
+    SetRef  :: pred a => Ref a -> exp a -> RefCMD (Param3 prog exp pred) ()
+      -- `pred a` for `SetRef` is not needed for code generation, but it can be
+      -- useful when interpreting with a dynamically typed store. It can then be
+      -- used e.g. to supply a `Typeable` constraint for casting.
+    UnsafeFreezeRef :: pred a => Ref a -> RefCMD (Param3 prog exp pred) (Val a)
       -- Like `GetRef` but without using a fresh variable for the result. This
       -- is only safe if the reference is never written to after the freezing.
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
 
-instance HFunctor (RefCMD exp)
+instance HFunctor RefCMD
   where
     hfmap _ (NewRef base)       = NewRef base
     hfmap _ (InitRef base a)    = InitRef base a
@@ -114,16 +117,29 @@ instance HFunctor (RefCMD exp)
     hfmap _ (SetRef r a)        = SetRef r a
     hfmap _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
-instance FreeExp exp => DryInterp (RefCMD exp)
+instance HBifunctor RefCMD
+  where
+    hbimap _ _ (NewRef base)       = NewRef base
+    hbimap _ f (InitRef base a)    = InitRef base (f a)
+    hbimap _ _ (GetRef r)          = GetRef r
+    hbimap _ f (SetRef r a)        = SetRef r (f a)
+    hbimap _ _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
+
+instance (RefCMD :<: instr) => Reexpressible RefCMD instr
+  where
+    reexpressInstrEnv reexp (NewRef base)       = lift $ singleInj $ NewRef base
+    reexpressInstrEnv reexp (InitRef base a)    = lift . singleInj . InitRef base =<< reexp a
+    reexpressInstrEnv reexp (GetRef r)          = lift $ singleInj $ GetRef r
+    reexpressInstrEnv reexp (SetRef r a)        = lift . singleInj . SetRef r =<< reexp a
+    reexpressInstrEnv reexp (UnsafeFreezeRef r) = lift $ singleInj $ UnsafeFreezeRef r
+
+instance DryInterp RefCMD
   where
     dryInterp (NewRef base)    = liftM RefComp $ freshStr base
     dryInterp (InitRef base _) = liftM RefComp $ freshStr base
-    dryInterp (GetRef _)       = liftM varExp $ freshStr "v"
+    dryInterp (GetRef _)       = liftM ValComp $ freshStr "v"
     dryInterp (SetRef _ _)     = return ()
-    dryInterp (UnsafeFreezeRef (RefComp v)) = return $ varExp v
-
-type instance IExp (RefCMD e)       = e
-type instance IExp (RefCMD e :+: i) = e
+    dryInterp (UnsafeFreezeRef (RefComp v)) = return $ ValComp v
 
 
 
@@ -161,31 +177,26 @@ data IArr i a
 -- of `imperative-edsl` may always chose to make a wrapper interface that uses
 -- a specific index type.
 
-instance ToIdent (Arr i a)
-  where
-    toIdent (ArrComp arr) = C.Id arr
-
-instance ToIdent (IArr i a)
-  where
-    toIdent (IArrComp arr) = C.Id arr
+instance ToIdent (Arr i a)  where toIdent (ArrComp arr)  = C.Id arr
+instance ToIdent (IArr i a) where toIdent (IArrComp arr) = C.Id arr
 
 -- | Commands for mutable arrays
-data ArrCMD exp (prog :: * -> *) a
+data ArrCMD fs a
   where
-    NewArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => String -> exp i -> ArrCMD exp prog (Arr i a)
-    InitArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => String -> [a] -> ArrCMD exp prog (Arr i a)
-    GetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD exp prog (exp a)
-    SetArr  :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD exp prog ()
-    CopyArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD exp prog ()
-    UnsafeFreezeArr :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => Arr i a -> ArrCMD exp prog (IArr i a)
-    UnsafeThawArr   :: (VarPred exp a, VarPred exp i, Integral i, Ix i) => IArr i a -> ArrCMD exp prog (Arr i a)
+    NewArr  :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    InitArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    GetArr  :: (pred a, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD (Param3 prog exp pred) (Val a)
+    SetArr  :: (pred a, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD (Param3 prog exp pred) ()
+    CopyArr :: (pred a, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) ()
+    UnsafeFreezeArr :: (pred a, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
+    UnsafeThawArr   :: (pred a, Integral i, Ix i) => IArr i a -> ArrCMD (Param3 prog exp pred) (Arr i a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
-  -- Not all `VarPred` constraints are needed by the back ends in
-  -- imperative-edsl, but they may still be useful for other back ends.
+  -- Not all `pred` constraints are needed by the back ends in imperative-edsl,
+  -- but they may still be useful for other back ends.
 
-instance HFunctor (ArrCMD exp)
+instance HFunctor ArrCMD
   where
     hfmap _ (NewArr base n)       = NewArr base n
     hfmap _ (InitArr base as)     = InitArr base as
@@ -195,18 +206,35 @@ instance HFunctor (ArrCMD exp)
     hfmap _ (UnsafeFreezeArr arr) = UnsafeFreezeArr arr
     hfmap _ (UnsafeThawArr arr)   = UnsafeThawArr arr
 
-instance FreeExp exp => DryInterp (ArrCMD exp)
+instance HBifunctor ArrCMD
+  where
+    hbimap _ f (NewArr base n)       = NewArr base (f n)
+    hbimap _ _ (InitArr base as)     = InitArr base as
+    hbimap _ f (GetArr i arr)        = GetArr (f i) arr
+    hbimap _ f (SetArr i a arr)      = SetArr (f i) (f a) arr
+    hbimap _ f (CopyArr a1 a2 l)     = CopyArr a1 a2 (f l)
+    hbimap _ _ (UnsafeFreezeArr arr) = UnsafeFreezeArr arr
+    hbimap _ _ (UnsafeThawArr arr)   = UnsafeThawArr arr
+
+instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
+  where
+    reexpressInstrEnv reexp (NewArr base n)       = lift . singleInj . NewArr base =<< reexp n
+    reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
+    reexpressInstrEnv reexp (GetArr i arr)        = lift . singleInj . flip GetArr arr =<< reexp i
+    reexpressInstrEnv reexp (SetArr i a arr)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr i' a' arr
+    reexpressInstrEnv reexp (CopyArr a1 a2 l)     = lift . singleInj . CopyArr a1 a2 =<< reexp l
+    reexpressInstrEnv reexp (UnsafeFreezeArr arr) = lift $ singleInj $ UnsafeFreezeArr arr
+    reexpressInstrEnv reexp (UnsafeThawArr arr)   = lift $ singleInj $ UnsafeThawArr arr
+
+instance DryInterp ArrCMD
   where
     dryInterp (NewArr base _)  = liftM ArrComp $ freshStr base
     dryInterp (InitArr base _) = liftM ArrComp $ freshStr base
-    dryInterp (GetArr _ _)     = liftM varExp $ freshStr "v"
+    dryInterp (GetArr _ _)     = liftM ValComp $ freshStr "v"
     dryInterp (SetArr _ _ _)   = return ()
     dryInterp (CopyArr _ _ _)  = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
     dryInterp (UnsafeThawArr (IArrComp arr))  = return (ArrComp arr)
-
-type instance IExp (ArrCMD e)       = e
-type instance IExp (ArrCMD e :+: i) = e
 
 
 
@@ -243,33 +271,55 @@ borderIncl _        = False
 -- index which may be inclusive or exclusive.
 type IxRange i = (i, Int, Border i)
 
-data ControlCMD exp prog a
+data ControlCMD fs a
   where
-    If     :: exp Bool -> prog () -> prog () -> ControlCMD exp prog ()
-    While  :: prog (exp Bool) -> prog () -> ControlCMD exp prog ()
-    For    :: (VarPred exp n, Integral n) =>
-              IxRange (exp n) -> (exp n -> prog ()) -> ControlCMD exp prog ()
-    Break  :: ControlCMD exp prog ()
-    Assert :: exp Bool -> String -> ControlCMD exp prog ()
+    If     :: exp Bool -> prog () -> prog () -> ControlCMD (Param3 prog exp pred) ()
+    While  :: prog (exp Bool) -> prog () -> ControlCMD (Param3 prog exp pred) ()
+    For    :: (pred i, Integral i) => IxRange (exp i) -> (Val i -> prog ()) -> ControlCMD (Param3 prog exp pred) ()
+    Break  :: ControlCMD (Param3 prog exp pred) ()
+    Assert :: exp Bool -> String -> ControlCMD (Param3 prog exp pred) ()
 
-instance HFunctor (ControlCMD exp)
+instance HFunctor ControlCMD
   where
-    hfmap g (If c t f)        = If c (g t) (g f)
-    hfmap g (While cont body) = While (g cont) (g body)
-    hfmap g (For ir body)     = For ir (g . body)
+    hfmap f (If c thn els)    = If c (f thn) (f els)
+    hfmap f (While cont body) = While (f cont) (f body)
+    hfmap f (For rng body)    = For rng (f . body)
     hfmap _ Break             = Break
     hfmap _ (Assert cond msg) = Assert cond msg
 
-instance DryInterp (ControlCMD exp)
+instance HBifunctor ControlCMD
+  where
+    hbimap f g (If c thn els)          = If (g c) (f thn) (f els)
+    hbimap f g (While cont body)       = While (f $ fmap g cont) (f body)
+    hbimap f g (For (lo,step,hi) body) = For (g lo, step, fmap g hi) (f . body)
+    hbimap _ _ Break                   = Break
+    hbimap _ g (Assert cond msg)       = Assert (g cond) msg
+
+instance (ControlCMD :<: instr) => Reexpressible ControlCMD instr
+  where
+    reexpressInstrEnv reexp (If c thn els) = do
+        c' <- reexp c
+        ReaderT $ \env ->
+          singleInj $ If c' (runReaderT thn env) (runReaderT els env)
+    reexpressInstrEnv reexp (While cont body) = ReaderT $ \env ->
+        singleInj $ While
+            (runReaderT (cont >>= reexp) env)
+            (runReaderT body env)
+    reexpressInstrEnv reexp (For (lo,step,hi) body) = do
+        lo' <- reexp lo
+        hi' <- traverse reexp hi
+        ReaderT $ \env -> singleInj $
+            For (lo',step,hi') (flip runReaderT env . body)
+    reexpressInstrEnv reexp Break             = lift $ singleInj Break
+    reexpressInstrEnv reexp (Assert cond msg) = lift . singleInj . flip Assert msg =<< reexp cond
+
+instance DryInterp ControlCMD
   where
     dryInterp (If _ _ _)   = return ()
     dryInterp (While _ _)  = return ()
     dryInterp (For _ _)    = return ()
     dryInterp Break        = return ()
     dryInterp (Assert _ _) = return ()
-
-type instance IExp (ControlCMD e)       = e
-type instance IExp (ControlCMD e :+: i) = e
 
 
 
@@ -293,13 +343,16 @@ instance IsPointer (Arr i a)
         writeIORef arr1 arr2'
         writeIORef arr2 arr1'
 
-data PtrCMD (prog :: * -> *) a
+data PtrCMD fs a
   where
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD prog ()
+    SwapPtr :: IsPointer a => a -> a -> PtrCMD (Param3 prog exp pred) ()
 
-instance HFunctor PtrCMD
+instance HFunctor   PtrCMD where hfmap _    (SwapPtr a b) = SwapPtr a b
+instance HBifunctor PtrCMD where hbimap _ _ (SwapPtr a b) = SwapPtr a b
+
+instance (PtrCMD :<: instr) => Reexpressible PtrCMD instr
   where
-    hfmap _ (SwapPtr a b) = SwapPtr a b
+    reexpressInstrEnv reexp (SwapPtr a b) = lift $ singleInj (SwapPtr a b)
 
 instance DryInterp PtrCMD
   where
@@ -317,9 +370,7 @@ data Handle
     | HandleEval IO.Handle
   deriving Typeable
 
-instance ToIdent Handle
-  where
-    toIdent (HandleComp h) = C.Id h
+instance ToIdent Handle where toIdent (HandleComp h) = C.Id h
 
 -- | Handle to stdin
 stdin :: Handle
@@ -328,6 +379,20 @@ stdin = HandleComp "stdin"
 -- | Handle to stdout
 stdout :: Handle
 stdout = HandleComp "stdout"
+
+data PrintfArg exp
+  where
+    PrintfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
+
+mapPrintfArg
+    :: (forall a . exp1 a -> exp2 a)
+    -> PrintfArg exp1 -> PrintfArg exp2
+mapPrintfArg f (PrintfArg exp) = PrintfArg (f exp)
+
+mapPrintfArgM :: Monad m
+    => (forall a . exp1 a -> m (exp2 a))
+    -> PrintfArg exp1 -> m (PrintfArg exp2)
+mapPrintfArgM f (PrintfArg exp) = liftM PrintfArg (f exp)
 
 -- | Values that can be printed\/scanned using @printf@\/@scanf@
 class (Typeable a, Read a, Printf.PrintfArg a) => Formattable a
@@ -347,18 +412,15 @@ instance Formattable Word64 where formatSpecifier _ = "%u"
 instance Formattable Float  where formatSpecifier _ = "%f"
 instance Formattable Double where formatSpecifier _ = "%f"
 
-data FileCMD exp (prog :: * -> *) a
+data FileCMD fs a
   where
-    FOpen   :: FilePath -> IOMode                       -> FileCMD exp prog Handle
-    FClose  :: Handle                                   -> FileCMD exp prog ()
-    FEof    :: VarPred exp Bool => Handle               -> FileCMD exp prog (exp Bool)
-    FPrintf :: Handle -> String -> [PrintfArg exp]      -> FileCMD exp prog ()
-    FGet    :: (Formattable a, VarPred exp a) => Handle -> FileCMD exp prog (exp a)
+    FOpen   :: FilePath -> IOMode                  -> FileCMD (Param3 prog exp pred) Handle
+    FClose  :: Handle                              -> FileCMD (Param3 prog exp pred) ()
+    FEof    :: Handle                              -> FileCMD (Param3 prog exp pred) (Val Bool)
+    FPrintf :: Handle -> String -> [PrintfArg exp] -> FileCMD (Param3 prog exp pred) ()
+    FGet    :: (pred a, Formattable a) => Handle   -> FileCMD (Param3 prog exp pred) (Val a)
 
-data PrintfArg exp where
-  PrintfArg :: (Printf.PrintfArg a, VarPred exp a) => exp a -> PrintfArg exp
-
-instance HFunctor (FileCMD exp)
+instance HFunctor FileCMD
   where
     hfmap _ (FOpen file mode)     = FOpen file mode
     hfmap _ (FClose hdl)          = FClose hdl
@@ -366,16 +428,29 @@ instance HFunctor (FileCMD exp)
     hfmap _ (FGet hdl)            = FGet hdl
     hfmap _ (FEof hdl)            = FEof hdl
 
-instance FreeExp exp => DryInterp (FileCMD exp)
+instance HBifunctor FileCMD
+  where
+    hbimap _ _ (FOpen file mode)     = FOpen file mode
+    hbimap _ _ (FClose hdl)          = FClose hdl
+    hbimap _ f (FPrintf hdl form as) = FPrintf hdl form (map (mapPrintfArg f) as)
+    hbimap _ _ (FGet hdl)            = FGet hdl
+    hbimap _ _ (FEof hdl)            = FEof hdl
+
+instance (FileCMD :<: instr) => Reexpressible FileCMD instr
+  where
+    reexpressInstrEnv reexp (FOpen file mode)   = lift $ singleInj $ FOpen file mode
+    reexpressInstrEnv reexp (FClose h)          = lift $ singleInj $ FClose h
+    reexpressInstrEnv reexp (FEof h)            = lift $ singleInj $ FEof h
+    reexpressInstrEnv reexp (FPrintf h form as) = lift . singleInj . FPrintf h form =<< mapM (mapPrintfArgM reexp) as
+    reexpressInstrEnv reexp (FGet h)            = lift $ singleInj $ FGet h
+
+instance DryInterp FileCMD
   where
     dryInterp (FOpen _ _)     = liftM HandleComp $ freshStr "h"
     dryInterp (FClose _)      = return ()
     dryInterp (FPrintf _ _ _) = return ()
-    dryInterp (FGet _)        = liftM varExp $ freshStr "v"
-    dryInterp (FEof _)        = liftM varExp $ freshStr "v"
-
-type instance IExp (FileCMD e)       = e
-type instance IExp (FileCMD e :+: i) = e
+    dryInterp (FGet _)        = liftM ValComp $ freshStr "v"
+    dryInterp (FEof _)        = liftM ValComp $ freshStr "v"
 
 
 
@@ -384,12 +459,10 @@ type instance IExp (FileCMD e :+: i) = e
 --------------------------------------------------------------------------------
 
 -- | Pointer
-newtype Ptr a = PtrComp {ptrId :: VarId}
+newtype Ptr (a :: *) = PtrComp {ptrId :: VarId}
   deriving Typeable
 
-instance ToIdent (Ptr a)
-  where
-    toIdent = C.Id . ptrId
+instance ToIdent (Ptr a) where toIdent = C.Id . ptrId
 
 -- | Abstract object
 data Object = Object
@@ -399,39 +472,62 @@ data Object = Object
     }
   deriving (Eq, Show, Ord, Typeable)
 
-instance ToIdent Object
+instance ToIdent Object where toIdent (Object _ _ o) = C.Id o
+
+class Arg arg pred
   where
-    toIdent (Object _ _ o) = C.Id o
+    mkArg   :: arg pred -> CGen C.Exp
+    mkParam :: arg pred -> CGen C.Param
 
-data FunArg exp where
-  FunArg :: Arg arg => arg exp -> FunArg exp
+data FunArg exp pred
+  where
+    ValArg   :: pred a => exp a -> FunArg exp pred
+    AddrArg  :: FunArg exp pred -> FunArg exp pred
+    DerefArg :: FunArg exp pred -> FunArg exp pred
+    FunArg   :: Arg arg pred => arg pred -> FunArg exp pred
 
--- | Evidence that @`VarPred` exp1@ implies @`VarPred` exp2@
-type VarPredCast exp1 exp2 = forall a b .
-    VarPred exp1 a => Proxy a -> (VarPred exp2 a => b) -> b
+instance CompExp exp => Arg (FunArg exp) CType
+  where
+    mkArg (ValArg a) = compExp a
+    mkArg (AddrArg arg) = do
+        e <- mkArg arg
+        return [cexp| &$e |]
+    mkArg (DerefArg arg) = do
+        e <- mkArg arg
+        return [cexp| *$e |]
+    mkArg (FunArg a) = mkArg a
 
-class Arg arg where
-  mkArg   :: CompExp exp => arg exp -> CGen C.Exp
-  mkParam :: CompExp exp => arg exp -> CGen C.Param
+    mkParam (ValArg (a :: exp a)) = do
+        t <- cType (Proxy :: Proxy a)
+        return [cparam| $ty:t |]
+    mkParam (AddrArg arg) = do
+      p <- mkParam arg
+      case p of
+         C.Param mid spec decl loc -> return $ C.Param mid spec (C.Ptr [] decl loc) loc
+         _ -> error "mkParam for Addr: cannot deal with antiquotes"
+    mkParam (DerefArg arg) = do
+      p <- mkParam arg
+      case p of
+         C.Param mid spec (C.Ptr [] decl _) loc -> return $ C.Param mid spec decl loc
+         C.Param _ _ _ _ -> error "mkParam for Deref: cannot dereference non-pointer parameter"
+         _ -> error "mkParam for Deref: cannot deal with antiquotes"
+    mkParam (FunArg a) = mkParam a
 
-  -- | Map over the expression(s) in an argument
-  mapArg  :: VarPredCast exp1 exp2
-          -> (forall a . VarPred exp1 a => exp1 a -> exp2 a)
-          -> arg exp1
-          -> arg exp2
+mapFunArg ::
+    (forall a . exp1 a -> exp2 a) -> FunArg exp1 pred -> FunArg exp2 pred
+mapFunArg f (ValArg a)   = ValArg (f a)
+mapFunArg f (AddrArg a)  = AddrArg $ mapFunArg f a
+mapFunArg f (DerefArg a) = DerefArg $ mapFunArg f a
+mapFunArg f (FunArg a)   = FunArg a
 
-  -- | Monadic map over the expression(s) in an argument
-  mapMArg :: Monad m
-          => VarPredCast exp1 exp2
-          -> (forall a . VarPred exp1 a => exp1 a -> m (exp2 a))
-          -> arg exp1
-          -> m (arg exp2)
-
-instance Arg FunArg where
-  mkArg   (FunArg arg) = mkArg arg
-  mkParam (FunArg arg) = mkParam arg
-  mapArg  predCast f (FunArg arg) = FunArg (mapArg predCast f arg)
-  mapMArg predCast f (FunArg arg) = liftM FunArg (mapMArg predCast f arg)
+mapFunArgM :: Monad m
+    => (forall a . exp1 a -> m (exp2 a))
+    -> FunArg exp1 pred
+    -> m (FunArg exp2 pred)
+mapFunArgM f (ValArg a)   = liftM ValArg (f a)
+mapFunArgM f (AddrArg a)  = liftM AddrArg $ mapFunArgM f a
+mapFunArgM f (DerefArg a) = liftM DerefArg $ mapFunArgM f a
+mapFunArgM f (FunArg a)   = return (FunArg a)
 
 class ToIdent obj => Assignable obj
 
@@ -441,41 +537,63 @@ instance Assignable (IArr i a)
 instance Assignable (Ptr a)
 instance Assignable Object
 
-data C_CMD exp (prog :: * -> *) a
+data C_CMD fs a
   where
-    NewPtr   :: VarPred exp a => String -> C_CMD exp prog (Ptr a)
-    PtrToArr :: Ptr a -> C_CMD exp prog (Arr i a)
+    NewPtr   :: pred a => String -> C_CMD (Param3 prog exp pred) (Ptr a)
+    PtrToArr :: Ptr a -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewObject
         :: String  -- Base name
         -> String  -- Type
         -> Bool    -- Pointed?
-        -> C_CMD exp prog Object
-    AddInclude    :: String       -> C_CMD exp prog ()
-    AddDefinition :: C.Definition -> C_CMD exp prog ()
-    AddExternFun  :: VarPred exp res
-                  => String
-                  -> proxy (exp res)
-                  -> [FunArg exp]
-                  -> C_CMD exp prog ()
-    AddExternProc :: String -> [FunArg exp] -> C_CMD exp prog ()
-    CallFun       :: VarPred exp a => String -> [FunArg exp] -> C_CMD exp prog (exp a)
-    CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp] -> C_CMD exp prog ()
-    InModule      :: String -> prog () -> C_CMD exp prog ()
+        -> C_CMD (Param3 prog exp pred) Object
+    AddInclude    :: String       -> C_CMD (Param3 prog exp pred) ()
+    AddDefinition :: C.Definition -> C_CMD (Param3 prog exp pred) ()
+    AddExternFun  :: pred res => String -> proxy res -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) ()
+    AddExternProc :: String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) ()
+    CallFun       :: pred a => String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) (Val a)
+    CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) ()
+    InModule      :: String -> prog () -> C_CMD (Param3 prog exp pred) ()
 
-instance HFunctor (C_CMD exp)
+instance HFunctor C_CMD
   where
-    hfmap _ (NewPtr base)               = NewPtr base
-    hfmap _ (PtrToArr p)                = PtrToArr p
-    hfmap _ (NewObject base p t)        = NewObject base p t
-    hfmap _ (AddInclude incl)           = AddInclude incl
-    hfmap _ (AddDefinition def)         = AddDefinition def
-    hfmap _ (AddExternFun fun res args) = AddExternFun fun res args
-    hfmap _ (AddExternProc proc args)   = AddExternProc proc args
-    hfmap _ (CallFun fun args)          = CallFun fun args
-    hfmap _ (CallProc obj proc args)    = CallProc obj proc args
-    hfmap f (InModule mod prog)         = InModule mod (f prog)
+    hfmap _ (NewPtr base)             = NewPtr base
+    hfmap _ (PtrToArr p)              = PtrToArr p
+    hfmap _ (NewObject base p t)      = NewObject base p t
+    hfmap _ (AddInclude incl)         = AddInclude incl
+    hfmap _ (AddDefinition def)       = AddDefinition def
+    hfmap _ (AddExternFun fun p args) = AddExternFun fun p args
+    hfmap _ (AddExternProc proc args) = AddExternProc proc args
+    hfmap _ (CallFun fun args)        = CallFun fun args
+    hfmap _ (CallProc obj proc args)  = CallProc obj proc args
+    hfmap f (InModule mod prog)       = InModule mod (f prog)
 
-instance FreeExp exp => DryInterp (C_CMD exp)
+instance HBifunctor C_CMD
+  where
+    hbimap _ _ (NewPtr base)             = NewPtr base
+    hbimap _ _ (PtrToArr p)              = PtrToArr p
+    hbimap _ _ (NewObject base p t)      = NewObject base p t
+    hbimap _ _ (AddInclude incl)         = AddInclude incl
+    hbimap _ _ (AddDefinition def)       = AddDefinition def
+    hbimap _ f (AddExternFun fun p args) = AddExternFun fun p (map (mapFunArg f) args)
+    hbimap _ f (AddExternProc proc args) = AddExternProc proc (map (mapFunArg f) args)
+    hbimap _ f (CallFun fun args)        = CallFun fun (map (mapFunArg f) args)
+    hbimap _ f (CallProc obj proc args)  = CallProc obj proc (map (mapFunArg f) args)
+    hbimap f _ (InModule mod prog)       = InModule mod (f prog)
+
+instance (C_CMD :<: instr) => Reexpressible C_CMD instr
+  where
+    reexpressInstrEnv reexp (NewPtr base)             = lift $ singleInj $ NewPtr base
+    reexpressInstrEnv reexp (PtrToArr p)              = lift $ singleInj $ PtrToArr p
+    reexpressInstrEnv reexp (NewObject base p t)      = lift $ singleInj $ NewObject base p t
+    reexpressInstrEnv reexp (AddInclude incl)         = lift $ singleInj $ AddInclude incl
+    reexpressInstrEnv reexp (AddDefinition def)       = lift $ singleInj $ AddDefinition def
+    reexpressInstrEnv reexp (AddExternFun fun p args) = lift . singleInj . AddExternFun fun p =<< mapM (mapFunArgM reexp) args
+    reexpressInstrEnv reexp (AddExternProc proc args) = lift . singleInj . AddExternProc proc =<< mapM (mapFunArgM reexp) args
+    reexpressInstrEnv reexp (CallFun fun args)        = lift . singleInj . CallFun fun =<< mapM (mapFunArgM reexp) args
+    reexpressInstrEnv reexp (CallProc obj proc args)  = lift . singleInj . CallProc obj proc =<< mapM (mapFunArgM reexp) args
+    reexpressInstrEnv reexp (InModule mod prog)       = ReaderT $ \env -> singleInj $ InModule mod (runReaderT prog env)
+
+instance DryInterp C_CMD
   where
     dryInterp (NewPtr base)          = liftM PtrComp $ freshStr base
     dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
@@ -484,12 +602,9 @@ instance FreeExp exp => DryInterp (C_CMD exp)
     dryInterp (AddDefinition _)      = return ()
     dryInterp (AddExternFun _ _ _)   = return ()
     dryInterp (AddExternProc _ _)    = return ()
-    dryInterp (CallFun _ _)          = liftM varExp $ freshStr "v"
+    dryInterp (CallFun _ _)          = liftM ValComp $ freshStr "v"
     dryInterp (CallProc _ _ _)       = return ()
     dryInterp (InModule _ _)         = return ()
-
-type instance IExp (C_CMD e)       = e
-type instance IExp (C_CMD e :+: i) = e
 
 
 
@@ -497,40 +612,44 @@ type instance IExp (C_CMD e :+: i) = e
 -- * Running commands
 --------------------------------------------------------------------------------
 
-runRefCMD :: forall exp prog a . EvalExp exp => RefCMD exp prog a -> IO a
-runRefCMD (InitRef _ a)                     = fmap RefEval $ newIORef $ evalExp a
-runRefCMD (NewRef _)                        = fmap RefEval $ newIORef $ error "reading uninitialized reference"
-runRefCMD (SetRef (RefEval r) a)            = writeIORef r $ evalExp a
-runRefCMD (GetRef (RefEval (r :: IORef b))) = fmap valExp $ readIORef r
-runRefCMD (UnsafeFreezeRef r)               = runRefCMD (GetRef r)
+runRefCMD :: RefCMD (Param3 IO IO pred) a -> IO a
+runRefCMD (NewRef _)              = fmap RefEval $ newIORef $ error "reading uninitialized reference"
+runRefCMD (InitRef _ a)           = fmap RefEval . newIORef =<< a
+runRefCMD (SetRef (RefEval r) a)  = writeIORef r =<< a
+runRefCMD (GetRef (RefEval r))    = ValEval <$> readIORef r
+runRefCMD cmd@(UnsafeFreezeRef r) = runRefCMD (GetRef r `asTypeOf` cmd)
 
-runArrCMD :: EvalExp exp => ArrCMD exp prog a -> IO a
-runArrCMD (NewArr _ n)   = fmap ArrEval . newIORef =<< newArray_ (0, fromIntegral (evalExp n)-1)
+runArrCMD :: ArrCMD (Param3 IO IO pred) a -> IO a
+runArrCMD (NewArr _ n) = do
+    n'  <- n
+    arr <- newArray_ (0, fromIntegral n'-1)
+    ArrEval <$> newIORef arr
 runArrCMD (InitArr _ as) = fmap ArrEval . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrEval arr)) = do
     arr'  <- readIORef arr
-    let i' = evalExp i
+    i'    <- i
     (l,h) <- getBounds arr'
     if i'<l || i'>h
       then error $ "getArr: index "
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else fmap valExp $ readArray arr' i'
+      else ValEval <$> readArray arr' i'
 runArrCMD (SetArr i a (ArrEval arr)) = do
     arr'  <- readIORef arr
-    let i' = evalExp i
+    i'    <- i
+    a'    <- a
     (l,h) <- getBounds arr'
     if i'<l || i'>h
       then error $ "setArr: index "
                 ++ show (toInteger i')
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
-      else writeArray arr' (fromIntegral i') (evalExp a)
+      else writeArray arr' (fromIntegral i') a'
 runArrCMD (CopyArr (ArrEval arr1) (ArrEval arr2) l) = do
     arr1'  <- readIORef arr1
     arr2'  <- readIORef arr2
-    let l' = evalExp l
+    l'     <- l
     (0,h1) <- getBounds arr1'
     (0,h2) <- getBounds arr2'
     if l'>h2+1
@@ -552,29 +671,32 @@ runArrCMD (UnsafeFreezeArr (ArrEval arr)) =
 runArrCMD (UnsafeThawArr (IArrEval arr)) =
     fmap ArrEval . newIORef =<< thaw arr
 
-runControlCMD :: EvalExp exp => ControlCMD exp IO a -> IO a
-runControlCMD (If c t f)        = if evalExp c then t else f
+runControlCMD :: ControlCMD (Param3 IO IO pred) a -> IO a
+runControlCMD (If c t f)        = c >>= \c' -> if c' then t else f
 runControlCMD (While cont body) = loop
   where loop = do
-          c <- cont
-          when (evalExp c) $ body >> loop
-runControlCMD (For (lo,step,hi) body) = loop (evalExp lo)
+          c <- join cont
+          when c (body >> loop)
+runControlCMD (For (lo,step,hi) body) = do
+    lo' <- lo
+    hi' <- borderVal hi
+    loop lo' hi'
   where
     incl = borderIncl hi
-    hi'  = evalExp $ borderVal hi
-    cont i
-      | incl && (step>=0) = i <= hi'
-      | incl && (step<0)  = i >= hi'
-      | step >= 0         = i <  hi'
-      | step < 0          = i >  hi'
-    loop i
-      | cont i    = body (valExp i) >> loop (i + fromIntegral step)
+    cont i h
+      | incl && (step>=0) = i <= h
+      | incl && (step<0)  = i >= h
+      | step >= 0         = i <  h
+      | step < 0          = i >  h
+    loop i h
+      | cont i h  = body (ValEval i) >> loop (i + fromIntegral step) h
       | otherwise = return ()
 runControlCMD Break = error "cannot run programs involving break"
-runControlCMD (Assert cond msg) = unless (evalExp cond) $ error $
-    "Assertion failed: " ++ msg
+runControlCMD (Assert cond msg) = do
+    cond' <- cond
+    unless cond' $ error $ "Assertion failed: " ++ msg
 
-runPtrCMD :: PtrCMD prog a -> IO a
+runPtrCMD :: PtrCMD (Param3 IO IO pred) a -> IO a
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
 
 evalHandle :: Handle -> IO.Handle
@@ -595,25 +717,24 @@ readWord h = do
         cs <- readWord h
         return (c:cs)
 
-evalFPrintf :: EvalExp exp =>
-    [PrintfArg exp] -> (forall r . Printf.HPrintfType r => r) -> IO ()
-evalFPrintf []            pf = pf
-evalFPrintf (PrintfArg a:as) pf = evalFPrintf as (pf $ evalExp a)
+runFPrintf :: [PrintfArg IO] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+runFPrintf []               pf = pf
+runFPrintf (PrintfArg a:as) pf = a >>= \a' -> runFPrintf as (pf a')
 
-runFileCMD :: EvalExp exp => FileCMD exp IO a -> IO a
-runFileCMD (FOpen file mode)              = fmap HandleEval $ IO.openFile file mode
+runFileCMD :: FileCMD (Param3 IO IO pred) a -> IO a
+runFileCMD (FOpen file mode)              = HandleEval <$> IO.openFile file mode
 runFileCMD (FClose (HandleEval h))        = IO.hClose h
 runFileCMD (FClose (HandleComp "stdin"))  = return ()
 runFileCMD (FClose (HandleComp "stdout")) = return ()
-runFileCMD (FPrintf h format as)          = evalFPrintf as (Printf.hPrintf (evalHandle h) format)
+runFileCMD (FPrintf h format as)          = runFPrintf as (Printf.hPrintf (evalHandle h) format)
 runFileCMD (FGet h)   = do
     w <- readWord $ evalHandle h
     case reads w of
-        [(f,"")] -> return $ valExp f
+        [(f,"")] -> return $ ValEval f
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
-runFileCMD (FEof h) = fmap valExp $ IO.hIsEOF $ evalHandle h
+runFileCMD (FEof h) = fmap ValEval $ IO.hIsEOF $ evalHandle h
 
-runC_CMD :: C_CMD exp IO a -> IO a
+runC_CMD :: C_CMD (Param3 IO IO pred) a -> IO a
 runC_CMD (NewPtr base)        = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"
 runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
 runC_CMD (NewObject base _ _) = error $ "cannot run programs involving newObject (base name " ++ base ++ ")"
@@ -625,10 +746,10 @@ runC_CMD (CallFun _ _)        = error "cannot run programs involving callFun"
 runC_CMD (CallProc _ _ _)     = error "cannot run programs involving callProc"
 runC_CMD (InModule _ prog)    = prog
 
-instance EvalExp exp => Interp (RefCMD exp)     IO where interp = runRefCMD
-instance EvalExp exp => Interp (ArrCMD exp)     IO where interp = runArrCMD
-instance EvalExp exp => Interp (ControlCMD exp) IO where interp = runControlCMD
-instance                Interp PtrCMD           IO where interp = runPtrCMD
-instance EvalExp exp => Interp (FileCMD exp)    IO where interp = runFileCMD
-instance EvalExp exp => Interp (C_CMD exp)      IO where interp = runC_CMD
+instance InterpBi RefCMD     IO (Param1 pred) where interpBi = runRefCMD
+instance InterpBi ArrCMD     IO (Param1 pred) where interpBi = runArrCMD
+instance InterpBi ControlCMD IO (Param1 pred) where interpBi = runControlCMD
+instance InterpBi PtrCMD     IO (Param1 pred) where interpBi = runPtrCMD
+instance InterpBi FileCMD    IO (Param1 pred) where interpBi = runFileCMD
+instance InterpBi C_CMD      IO (Param1 pred) where interpBi = runC_CMD
 

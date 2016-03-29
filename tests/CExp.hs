@@ -20,6 +20,7 @@ import Language.Syntactic (Denotation)
 #endif
 
 import Language.Embedded.Imperative
+import Language.Embedded.Backend.C
 import Language.Embedded.CExp
 
 
