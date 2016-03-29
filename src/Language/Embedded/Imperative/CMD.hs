@@ -158,7 +158,6 @@ data Arr i a
 data IArr i a
     = IArrComp VarId
     | IArrEval (Array i a)
-        -- The `IORef` is needed in order to make the `IsPointer` instance
   deriving Typeable
 
 -- In a way, it's not terribly useful to have `Arr` parameterized on the index
