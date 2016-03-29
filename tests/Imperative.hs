@@ -257,6 +257,7 @@ testExternArgs :: Prog ()
 testExternArgs = do
     let v = 55 :: CExp Int32
     externProc "val_proc" [valArg v]
+    _ :: CExp Int32 <- externFun "val_fun" [valArg v]
     r <- initRef v
     externProc "ref_proc1" [refArg r]
     externProc "ref_proc2" [deref $ refArg r]  -- TODO Simplify
@@ -279,6 +280,13 @@ testExternArgs = do
     externProc "str_proc1"  [strArg s]
     externProc "str_proc2"  [deref $ strArg s]
     return ()
+
+testCallFun :: Prog ()
+testCallFun = do
+    addInclude "<math.h>"
+    i :: CExp Int32 <- fget stdin
+    a <- callFun "sin" [valArg (i2n i :: CExp Double)]
+    printf "%.3f\n" (a :: CExp Double)
 
 
 
@@ -312,6 +320,7 @@ testAll = do
     tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
     tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
     tag "testExternArgs" >> compileAndCheck  testExternArgs
+    tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'
