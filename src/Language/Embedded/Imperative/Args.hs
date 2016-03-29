@@ -7,7 +7,6 @@ module Language.Embedded.Imperative.Args where
 import Data.Proxy
 
 import Language.C.Quote.C
-import Language.C.Syntax hiding (Deref)
 
 import Language.C.Monad
 import Language.Embedded.Imperative.CMD
