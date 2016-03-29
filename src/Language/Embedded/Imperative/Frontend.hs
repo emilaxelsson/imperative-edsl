@@ -90,7 +90,7 @@ unsafeFreezeRef = fmap valToExp . singleInj . UnsafeFreezeRef
 --
 -- <http://fun-discoveries.blogspot.se/2015/09/strictness-can-fix-non-termination.html>
 veryUnsafeFreezeRef :: (FreeExp exp, FreePred exp a) => Ref a -> exp a
-veryUnsafeFreezeRef (RefRun r)  = valExp $! unsafePerformIO $! readIORef r
+veryUnsafeFreezeRef (RefRun r)  = constExp $! unsafePerformIO $! readIORef r
 veryUnsafeFreezeRef (RefComp v) = varExp v
 
 
