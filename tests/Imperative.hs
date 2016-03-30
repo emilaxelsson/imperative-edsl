@@ -59,8 +59,7 @@ testCExp :: Prog ()
 testCExp = do
     a :: CExp Int32 <- fget stdin
     let b = a#==10 ? a*3 $ a-5+8
-    let c = sin (i2n a) :: CExp Double
-    let d = c/23
+    let c = i2n a/23 :: CExp Double
     printf "%d " b
     printf "%d " (not_ (a#==10) ? a*3 $ a-5+8)
     printf "%d " (a `quot_` b)
@@ -68,12 +67,7 @@ testCExp = do
     printf "%d " (cond (i2b a) a b)
     printf "%d " (b2i (not_ (a#==10)) * a)
     printf "%.3f " c
-    printf "%.3f " d
     printf "%.3f " (i2n a :: CExp Float)
-    printf "%ld "  (round_ (c*1000)              :: CExp Int32)
-    printf "%d "   (round_ (11.5 :: CExp Float)  :: CExp Int32)
-    printf "%d "   (round_ (-11.5 :: CExp Float) :: CExp Int32)
-    printf "%.3f " (c**d)
 
 testRef :: Prog ()
 testRef = do

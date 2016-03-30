@@ -355,17 +355,6 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
     recip = error "recip not implemented for CExp"
 
-instance (Floating a, Ord a, CType a) => Floating (CExp a)
-  where
-    pi = withCode (addGlobal pi_def) $ constant "EDSL_PI" pi
-      where
-        pi_def = [cedecl|$esc:("#define EDSL_PI 3.141592653589793")|]
-          -- This is the value of `pi :: Double`.
-          -- Apparently there is no standard C99 definition of pi.
-    a ** b = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "pow" (**)) a b
-    sin a  = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "sin" sin) a
-    cos a  = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "cos" cos) a
-
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
 quot_ (LitP 0) b = 0
@@ -382,12 +371,6 @@ LitP 0 #% _          = 0
 _      #% LitP 1     = 0
 a      #% b | a == b = 0
 a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
-
-round_ :: (RealFrac a, Integral b, CType b) => CExp a -> CExp b
-round_
-    = withCode (addInclude "<math.h>")
-    . constFold
-    . sugarSym (T $ Fun "lround" round)
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
