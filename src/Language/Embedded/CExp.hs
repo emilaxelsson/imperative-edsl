@@ -21,13 +21,9 @@ import Data.Monoid
 #endif
 import Data.Typeable
 
-#if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic
 import Language.Syntactic.Functional (Denotation)
 import Language.Syntactic.TH
-#else
-import Language.Syntactic
-#endif
 
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
@@ -116,11 +112,7 @@ data Sym sig
     -- Predefined constant
     Const :: SupportCode -> String -> a -> Sym (Full a)
     -- Function call
-    Fun   ::
-#if MIN_VERSION_syntactic(3,0,0)
-             Signature sig =>
-#endif
-             SupportCode -> String -> Denotation sig -> Sym sig
+    Fun   :: Signature sig => SupportCode -> String -> Denotation sig -> Sym sig
     -- Unary operator
     UOp   :: Unary (a -> b) -> Sym (a :-> Full b)
     -- Binary operator
@@ -499,9 +491,7 @@ arr #! i = sugarSym (T $ ArrIx arr) i
 -- Instances
 --------------------------------------------------------------------------------
 
-#if MIN_VERSION_syntactic(3,0,0)
 deriveSymbol ''Sym
-#endif
 
 instance Render Sym
   where
@@ -514,8 +504,6 @@ instance Render Sym
     renderSym (Var v)        = v
     renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
     renderSym (ArrIx _)              = "ArrIx ..."
-
-#if MIN_VERSION_syntactic(3,0,0)
 
     renderArgs = renderArgsSmart
 
@@ -541,28 +529,6 @@ instance Equality T
 instance StringTree T
   where
     stringTreeSym as (T s) = stringTreeSym as s
-
-#else
-
-instance Semantic Sym
-  where
-    semantics s = Sem (renderSym s) (evalSym s)
-
-instance Equality Sym
-  where
-    equal    = equalDefault
-    exprHash = exprHashDefault
-
-instance Semantic T
-  where
-    semantics (T s) = semantics s
-
-instance Equality T
-  where
-    equal (T s) (T t) = equal s t
-    exprHash (T s)    = exprHash s
-
-#endif
 
 deriving instance Eq (CExp a)
   -- Must be placed here due to the sequential dependencies introduced by

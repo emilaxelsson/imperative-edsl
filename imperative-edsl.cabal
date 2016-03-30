@@ -28,10 +28,6 @@ source-repository head
   type:     git
   location: git@github.com:emilaxelsson/imperative-edsl.git
 
-Flag old-syntactic
-  Description: Use syntactic < 2
-  Default:     False
-
 library
   exposed-modules:
     Control.Monads
@@ -104,14 +100,8 @@ library
     operational-alacarte >= 0.2,
     BoundedChan,
     srcloc,
+    syntactic >= 3.2,
     time >= 1.5.0.1
-
-  if flag(old-syntactic)
-    build-depends:
-      syntactic < 2
-  else
-    build-depends:
-      syntactic >= 3.2
 
   hs-source-dirs: src
 
