@@ -7,6 +7,7 @@ module Language.Embedded.Imperative.Args where
 
 import Control.Monad
 import Data.Proxy
+import Language.C.Monad
 import Language.C.Quote.C
 import Language.C.Syntax hiding (Deref)
 import Language.Embedded.Expression
@@ -35,7 +36,7 @@ data RefArg exp where
   RefArg :: VarPred exp a => Ref a -> RefArg exp
 
 instance Arg RefArg where
-  mkArg   (RefArg r) = return [cexp| &$id:r |]
+  mkArg   (RefArg r) = touchVar r >> return [cexp| &$id:r |]
   mkParam (RefArg (r :: Ref a) :: RefArg exp) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
@@ -51,7 +52,7 @@ data ArrArg exp where
   ArrArg :: VarPred exp a => Arr i a -> ArrArg exp
 
 instance Arg ArrArg where
-  mkArg   (ArrArg a) = return [cexp| $id:a |]
+  mkArg   (ArrArg a) = touchVar a >> return [cexp| $id:a |]
   mkParam (ArrArg (_ :: Arr i a) :: ArrArg exp) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
@@ -67,7 +68,7 @@ data IArrArg exp where
   IArrArg :: VarPred exp a => IArr i a -> IArrArg exp
 
 instance Arg IArrArg where
-  mkArg   (IArrArg a) = return [cexp| $id:a |]
+  mkArg   (IArrArg a) = touchVar a >> return [cexp| $id:a |]
   mkParam (IArrArg (_ :: IArr i a) :: IArrArg exp) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
@@ -83,7 +84,7 @@ data PtrArg exp where
   PtrArg :: VarPred exp a => Ptr a -> PtrArg exp
 
 instance Arg PtrArg where
-  mkArg   (PtrArg p) = return [cexp| $id:p |]
+  mkArg   (PtrArg p) = touchVar p >> return [cexp| $id:p |]
   mkParam (PtrArg (_ :: Ptr a) :: PtrArg exp) = do
     t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
@@ -99,7 +100,7 @@ data ObjArg exp where
   ObjArg :: Object -> ObjArg exp
 
 instance Arg ObjArg where
-  mkArg   (ObjArg o) = return [cexp| $id:o |]
+  mkArg   (ObjArg o) = touchVar o >> return [cexp| $id:o |]
   mkParam (ObjArg (Object True t _))  = let t' = namedType t in return [cparam| $ty:t'* |]
   mkParam (ObjArg (Object False t _)) = let t' = namedType t in return [cparam| $ty:t' |]
   mapArg  _ _ (ObjArg o) = ObjArg o
