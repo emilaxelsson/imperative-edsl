@@ -102,17 +102,18 @@ binaryOp BiGt   = Gt
 binaryOp BiLe   = Le
 binaryOp BiGe   = Ge
 
-type SupportCode = forall m . MonadC m => m ()
-
 -- | Syntactic symbols for C
 data Sym sig
   where
     -- Literal
     Lit   :: String -> a -> Sym (Full a)
     -- Predefined constant
-    Const :: SupportCode -> String -> a -> Sym (Full a)
+    Const :: String -> a -> Sym (Full a)
+      -- The difference between `Lit` and `Const` is that the latter gets turned
+      -- into a variable in the C code. It is like `Var`, except that it can
+      -- also be evaluated.
     -- Function call
-    Fun   :: Signature sig => SupportCode -> String -> Denotation sig -> Sym sig
+    Fun   :: Signature sig => String -> Denotation sig -> Sym sig
     -- Unary operator
     UOp   :: Unary (a -> b) -> Sym (a :-> Full b)
     -- Binary operator
@@ -125,6 +126,8 @@ data Sym sig
     Var   :: VarId -> Sym (Full a)
     -- Unsafe array indexing
     ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
+    -- Attach extra code to an expression
+    WithCode :: (forall m . MonadC m => m ()) -> Sym (a :-> Full a)
 
 data T sig
   where
@@ -141,13 +144,13 @@ instance Syntactic (CExp a)
     sugar   = CExp
 
 evalSym :: Sym sig -> Denotation sig
-evalSym (Lit _ a)     = a
-evalSym (Const _ _ a) = a
-evalSym (Fun _ _ f)   = f
-evalSym (UOp uop)     = evalUnary uop
-evalSym (Op bop)      = evalBinary bop
-evalSym (Cast f)      = f
-evalSym Cond          = \c t f -> if c then t else f
+evalSym (Lit _ a)   = a
+evalSym (Const _ a) = a
+evalSym (Fun _ f)   = f
+evalSym (UOp uop)   = evalUnary uop
+evalSym (Op bop)    = evalBinary bop
+evalSym (Cast f)    = f
+evalSym Cond        = \c t f -> if c then t else f
 evalSym (ArrIx (IArrRun arr)) = \i ->
     if i<l || i>h
       then error $ "index "
@@ -157,6 +160,7 @@ evalSym (ArrIx (IArrRun arr)) = \i ->
       else arr!i
   where
     (l,h) = bounds arr
+evalSym (WithCode _) = id
 evalSym (Var v) = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
@@ -189,12 +193,10 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil   = touchVar v >> return [cexp| $id:v |]
     go (Lit _ a) Nil = cLit a
-    go (Const code const _) Nil = do
-      code
+    go (Const const _) Nil = do
       touchVar const
       return [cexp| $id:const |]
-    go (Fun code fun _) args = do
-      code
+    go (Fun fun _) args = do
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
     go (UOp uop) (a :* Nil) = do
@@ -225,6 +227,7 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       i' <- compCExp' i
       touchVar arr
       return [cexp| $id:arr[$i'] |]
+    go (WithCode code) (a :* Nil) = code >> compCExp' a
 
 instance CompExp CExp where compExp = compCExp
 
@@ -290,19 +293,21 @@ value a = CExp $ Sym $ T $ Lit (show a) a
 
 -- | Predefined constant
 constant :: CType a
-    => SupportCode  -- ^ Supporting C code
-    -> String       -- ^ Name of constant
-    -> a            -- ^ Value of constant
+    => String  -- ^ Name of constant
+    -> a       -- ^ Value of constant
     -> CExp a
-constant code const val = CExp $ Sym $ T $ Const code const val
+constant const val = CExp $ Sym $ T $ Const const val
 
 -- | Create a named variable
 variable :: CType a => VarId -> CExp a
 variable = CExp . Sym . T . Var
 
+withCode :: CType a => (forall m . MonadC m => m ()) -> CExp a -> CExp a
+withCode code = CExp . smartSym' (T $ WithCode code) . unCExp
+
 true, false :: CExp Bool
-true  = constant (addInclude "<stdbool.h>") "true" True
-false = constant (addInclude "<stdbool.h>") "false" False
+true  = withCode (addInclude "<stdbool.h>") $ constant "true" True
+false = withCode (addInclude "<stdbool.h>") $ constant "false" False
 
 instance (Num a, Ord a, CType a) => Num (CExp a)
   where
@@ -352,14 +357,14 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
 instance (Floating a, Ord a, CType a) => Floating (CExp a)
   where
-    pi = constant (addGlobal pi_def) "EDSL_PI" pi
+    pi = withCode (addGlobal pi_def) $ constant "EDSL_PI" pi
       where
         pi_def = [cedecl|$esc:("#define EDSL_PI 3.141592653589793")|]
           -- This is the value of `pi :: Double`.
           -- Apparently there is no standard C99 definition of pi.
-    a ** b = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "pow" (**)) a b
-    sin a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "sin" sin) a
-    cos a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "cos" cos) a
+    a ** b = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "pow" (**)) a b
+    sin a  = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "sin" sin) a
+    cos a  = withCode (addInclude "<math.h>") $ constFold $ sugarSym (T $ Fun "cos" cos) a
 
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
@@ -379,7 +384,10 @@ a      #% b | a == b = 0
 a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
 
 round_ :: (RealFrac a, Integral b, CType b) => CExp a -> CExp b
-round_ = constFold . sugarSym (T $ Fun (addInclude "<math.h>") "lround" round)
+round_
+    = withCode (addInclude "<math.h>")
+    . constFold
+    . sugarSym (T $ Fun "lround" round)
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
@@ -495,15 +503,16 @@ deriveSymbol ''Sym
 
 instance Render Sym
   where
-    renderSym (Lit a _)      = a
-    renderSym (Const _ a _)  = a
-    renderSym (Fun _ name _) = name
-    renderSym (UOp op)       = show $ unaryOp op
-    renderSym (Op op)        = show $ binaryOp op
-    renderSym (Cast _)       = "cast"
-    renderSym (Var v)        = v
+    renderSym (Lit a _)    = a
+    renderSym (Const a _)  = a
+    renderSym (Fun name _) = name
+    renderSym (UOp op)     = show $ unaryOp op
+    renderSym (Op op)      = show $ binaryOp op
+    renderSym (Cast _)     = "cast"
+    renderSym (Var v)      = v
     renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
     renderSym (ArrIx _)              = "ArrIx ..."
+    renderSym (WithCode _) = "WithCode ..."
 
     renderArgs = renderArgsSmart
 
