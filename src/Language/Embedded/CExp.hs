@@ -54,15 +54,6 @@ import Language.Embedded.Imperative.CMD (IArr (..))
 -- * Types
 --------------------------------------------------------------------------------
 
-instance ToExp Int8   where toExp = toExp . toInteger
-instance ToExp Int16  where toExp = toExp . toInteger
-instance ToExp Int32  where toExp = toExp . toInteger
-instance ToExp Int64  where toExp = toExp . toInteger
-instance ToExp Word8  where toExp = toExp . toInteger
-instance ToExp Word16 where toExp = toExp . toInteger
-instance ToExp Word32 where toExp = toExp . toInteger
-instance ToExp Word64 where toExp = toExp . toInteger
-
 -- | Types supported by C
 class (Show a, Eq a, Typeable a) => CType a
   where
