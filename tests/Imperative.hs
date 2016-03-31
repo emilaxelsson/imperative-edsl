@@ -282,6 +282,18 @@ testCallFun = do
     a <- callFun "sin" [valArg (i2n i :: CExp Double)]
     printf "%.3f\n" (a :: CExp Double)
 
+multiModule :: Prog ()
+multiModule = do
+    addInclude "<stdlib.h>"
+    addExternProc "func_in_other" []
+    inModule "other" $ do
+      addDefinition [cedecl|
+        void func_in_other(void) {
+          puts("Hello from the other module!");
+        } |]
+      addInclude "<stdio.h>"
+    callProc "func_in_other" []
+
 
 
 ----------------------------------------
@@ -315,6 +327,7 @@ testAll = do
     tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
     tag "testExternArgs" >> compileAndCheck  testExternArgs
     tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
+    tag "multiModule" >> icompileAll multiModule
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'
