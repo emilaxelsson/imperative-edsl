@@ -392,13 +392,6 @@ newNamedObject :: (C_CMD :<: instr)
     -> ProgramT instr (Param2 exp pred) m Object
 newNamedObject base t p = singleInj $ NewObject base t p
 
--- | Generate code into another translation unit
-inModule :: (C_CMD :<: instr)
-    => String
-    -> ProgramT instr (Param2 exp pred) m ()
-    -> ProgramT instr (Param2 exp pred) m ()
-inModule mod prog = singleInj $ InModule mod prog
-
 -- | Add an @#include@ statement to the generated code
 addInclude :: (C_CMD :<: instr) => String -> ProgramT instr (Param2 exp pred) m ()
 addInclude = singleInj . AddInclude
@@ -485,6 +478,13 @@ externProc :: (C_CMD :<: instr, Monad m)
 externProc proc args = do
     addExternProc proc args
     callProc proc args
+
+-- | Generate code into another translation unit
+inModule :: (C_CMD :<: instr)
+    => String
+    -> ProgramT instr (Param2 exp pred) m ()
+    -> ProgramT instr (Param2 exp pred) m ()
+inModule mod prog = singleInj $ InModule mod prog
 
 -- | Get current time as number of seconds passed today
 getTime
