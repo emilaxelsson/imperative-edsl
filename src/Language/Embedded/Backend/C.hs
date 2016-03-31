@@ -64,8 +64,8 @@ arrayInit as = C.CompoundInitializer
 
 -- | Compile a program to C code represented as a string
 --
--- This function returns only the first (main) module.
--- To get every C translation units, use `compileAll`.
+-- This function returns only the first (main) module. To get all C translation
+-- unit, use 'compileAll'.
 --
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
@@ -76,14 +76,21 @@ compile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> String
 compile = snd . head . compileAll
 
+-- | Compile a program to C modules, each one represented as a pair of a name
+-- and the code represented as a string
+--
+-- For programs that make use of the primitives in
+-- "Language.Embedded.Concurrent", the resulting C code can be compiled as
+-- follows:
+--
+-- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> [(String, String)]
-compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMain . interpret
+compileAll
+    = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals
+    . wrapMain . interpret
 
 -- | Compile a program to C code and print it on the screen
---
--- This function returns only the first (main) module.
--- To get every C translation units, use `icompileAll`.
 --
 -- For programs that make use of the primitives in
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
@@ -92,11 +99,8 @@ compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMai
 -- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
-icompile = putStrLn . compile
-
-icompileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
-    Program instr (Param2 exp pred) a -> IO ()
-icompileAll = mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
+icompile =
+    mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
 
 removeFileIfPossible :: FilePath -> IO ()
 removeFileIfPossible file =
