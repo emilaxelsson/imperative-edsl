@@ -116,7 +116,11 @@ test-suite Tests
 
   build-depends:
     base,
+    directory,
+    filepath,
     imperative-edsl,
+    process,
+    random,
     syntactic,
     tasty-quickcheck,
     tasty-th

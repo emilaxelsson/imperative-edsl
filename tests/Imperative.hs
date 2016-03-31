@@ -10,6 +10,10 @@ module Imperative where
 
 import Data.Int
 import Data.Word
+import System.Directory
+import System.FilePath
+import System.Process
+import System.Random
 
 import Language.Embedded.Imperative
 import Language.Embedded.Backend.C
@@ -294,6 +298,26 @@ multiModule = do
       addInclude "<stdio.h>"
     callProc "func_in_other" []
 
+testMultiModule :: IO ()
+testMultiModule = do
+    tmp <- getTemporaryDirectory
+    rand <- randomRIO (1, maxBound :: Int)
+    let temp = tmp </> "imperative-edsl_" ++ show rand
+    exists <- doesDirectoryExist temp
+    when exists $ removeDirectoryRecursive temp
+    createDirectory temp
+    let ms    = compileAll multiModule
+        files = [temp </> "imperative-edsl_" ++ m ++ ".c" | (m,_) <- ms]
+        exe   = temp </> "imperative-edsl"
+        cmd   = unwords $ ("gcc -o" : exe : files)
+    zipWithM_ writeFile files (map snd ms)
+    putStrLn cmd
+    system cmd
+    putStrLn exe
+    system exe
+    exists <- doesDirectoryExist temp
+    when exists $ removeDirectoryRecursive temp
+
 
 
 ----------------------------------------
@@ -327,7 +351,7 @@ testAll = do
     tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
     tag "testExternArgs" >> compileAndCheck  testExternArgs
     tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
-    tag "multiModule" >> icompileAll multiModule
+    tag "multiModule" >> testMultiModule
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'
