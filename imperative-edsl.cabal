@@ -90,7 +90,7 @@ library
     directory,
     exception-transformers,
     ghc-prim,
-    language-c-quote >= 0.11 && < 0.12,
+    language-c-quote >= 0.11.5 && < 0.12,
     mainland-pretty >= 0.4 && < 0.5,
     microlens >= 0.3.0.0,
     microlens-mtl,
