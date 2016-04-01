@@ -1,4 +1,9 @@
 -- | Basic concurrency primitives.
+--
+-- To compile the C code resulting from 'Language.Embedded.Backend.C.compile'
+-- for programs with concurrency primitives, use something like
+--
+-- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 module Language.Embedded.Concurrent (
     ThreadId (..),
     ChanBound, Chan (..),

@@ -62,41 +62,32 @@ arrayInit as = C.CompoundInitializer
 -- * Code generation user interface
 --------------------------------------------------------------------------------
 
--- | Compile a program to C code represented as a string
+-- | Compile a program to C code represented as a string. To compile the
+-- resulting C code, use something like
+--
+-- > gcc -std=c99 YOURPROGRAM.c
 --
 -- This function returns only the first (main) module. To get all C translation
 -- unit, use 'compileAll'.
---
--- For programs that make use of the primitives in
--- "Language.Embedded.Concurrent", the resulting C code can be compiled as
--- follows:
---
--- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> String
 compile = snd . head . compileAll
 
 -- | Compile a program to C modules, each one represented as a pair of a name
--- and the code represented as a string
+-- and the code represented as a string. To compile the resulting C code, use
+-- something like
 --
--- For programs that make use of the primitives in
--- "Language.Embedded.Concurrent", the resulting C code can be compiled as
--- follows:
---
--- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+-- > gcc -std=c99 YOURPROGRAM.c
 compileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> [(String, String)]
 compileAll
     = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals
     . wrapMain . interpret
 
--- | Compile a program to C code and print it on the screen
+-- | Compile a program to C code and print it on the screen. To compile the
+-- resulting C code, use something like
 --
--- For programs that make use of the primitives in
--- "Language.Embedded.Concurrent", the resulting C code can be compiled as
--- follows:
---
--- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+-- > gcc -std=c99 YOURPROGRAM.c
 icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 icompile =
