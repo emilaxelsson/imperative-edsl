@@ -133,8 +133,6 @@ maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
 maybePutStrLn _ _ = return ()
 
--- TODO: it would be nice to have a version that compiles all modules of a program,
--- as it currently compiles only the first (main) module.
 -- | Generate C code and use GCC to compile it
 compileC :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
