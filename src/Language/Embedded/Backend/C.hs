@@ -71,7 +71,7 @@ arrayInit as = C.CompoundInitializer
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
 -- follows:
 --
--- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+-- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> String
 compile = snd . head . compileAll
@@ -83,7 +83,7 @@ compile = snd . head . compileAll
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
 -- follows:
 --
--- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+-- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 compileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> [(String, String)]
 compileAll
@@ -96,7 +96,7 @@ compileAll
 -- "Language.Embedded.Concurrent", the resulting C code can be compiled as
 -- follows:
 --
--- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
+-- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 icompile =
