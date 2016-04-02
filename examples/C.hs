@@ -33,3 +33,42 @@ multiModule = do
 
 testAll = do
     icompileAll multiModule
+
+--------------------------------------------------------------------------------
+
+memmap
+  :: String -- Address
+  -> [Ptr a]
+  -> Program L ()
+memmap addr ptrs =
+  do output <- newPtr :: Program L (Ptr Int8)
+     offset <- newPtr :: Program L (Ptr Int8)
+     addExternProc "mem_map" [strArg addr, ptrArg output, ptrArg offset]
+     inModule "mem" $ do
+       addDefinition [cedecl|
+         int mem_map(unsigned addr, void **ptr, unsigned *offset) {
+           unsigned page_size = sysconf(_SC_PAGESIZE);
+           int mem_fd = open("/dev/mem", O_RDWR);
+           if (mem_fd < 1) {
+             return -1;
+           }
+           unsigned page_addr = (addr & (~(page_size-1)));
+           *offset = addr - page_addr;
+           *ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, mem_fd, page_addr);
+           if (*ptr == MAP_FAILED || !*ptr) {
+             return -2;
+           }
+           return 0;
+         } |]
+
+co :: Program L ()
+co = do
+  
+  memmap "0x83C00000" []
+
+----------------------------------------
+
+testMem = do
+    icompileAll co
+
+----------------------------------------
