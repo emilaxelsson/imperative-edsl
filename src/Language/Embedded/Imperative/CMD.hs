@@ -485,7 +485,7 @@ data FunArg exp pred
     DerefArg :: FunArg exp pred -> FunArg exp pred
     FunArg   :: Arg arg pred => arg pred -> FunArg exp pred
 
-instance CompExp exp => Arg (FunArg exp) CType
+instance (CompExp exp, CompTypeClass ct) => Arg (FunArg exp) ct
   where
     mkArg (ValArg a) = compExp a
     mkArg (AddrArg arg) = do
@@ -497,7 +497,7 @@ instance CompExp exp => Arg (FunArg exp) CType
     mkArg (FunArg a) = mkArg a
 
     mkParam (ValArg (a :: exp a)) = do
-        t <- cType (Proxy :: Proxy a)
+        t <- compType (Proxy :: Proxy ct) (Proxy :: Proxy a)
         return [cparam| $ty:t |]
     mkParam (AddrArg arg) = do
       p <- mkParam arg

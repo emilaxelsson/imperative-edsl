@@ -127,7 +127,11 @@ data Sym sig
     -- Unsafe array indexing
     ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
     -- Attach extra code to an expression
-    WithCode :: (forall m . MonadC m => m ()) -> Sym (a :-> Full a)
+    WithCode :: SupportCode -> Sym (a :-> Full a)
+
+type SupportCode = forall m . MonadC m => m ()
+  -- Only needed because GHC 7.8 can't represent tuple constraints (like
+  -- `MonadC`) in Template Haskell.
 
 data T sig
   where

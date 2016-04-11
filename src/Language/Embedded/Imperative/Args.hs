@@ -16,40 +16,40 @@ import Language.Embedded.Backend.C
 data RefArg pred where
   RefArg :: pred a => Ref a -> RefArg pred
 
-instance Arg RefArg CType where
+instance CompTypeClass ct => Arg RefArg ct where
   mkArg   (RefArg r) = touchVar r >> return [cexp| &$id:r |]
   mkParam (RefArg (r :: Ref a)) = do
-    t <- cType (Proxy :: Proxy a)
+    t <- compType (Proxy :: Proxy ct) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
 -- | Mutable array argument
 data ArrArg pred where
   ArrArg :: pred a => Arr i a -> ArrArg pred
 
-instance Arg ArrArg CType where
+instance CompTypeClass ct => Arg ArrArg ct where
   mkArg   (ArrArg a) = touchVar a >> return [cexp| $id:a |]
   mkParam (ArrArg (_ :: Arr i a)) = do
-    t <- cType (Proxy :: Proxy a)
+    t <- compType (Proxy :: Proxy ct) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
 -- | Immutable array argument
 data IArrArg pred where
   IArrArg :: pred a => IArr i a -> IArrArg pred
 
-instance Arg IArrArg CType where
+instance CompTypeClass ct => Arg IArrArg ct where
   mkArg   (IArrArg a) = touchVar a >> return [cexp| $id:a |]
   mkParam (IArrArg (_ :: IArr i a)) = do
-    t <- cType (Proxy :: Proxy a)
+    t <- compType (Proxy :: Proxy ct) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
 -- | Pointer argument
 data PtrArg pred where
   PtrArg :: pred a => Ptr a -> PtrArg pred
 
-instance Arg PtrArg CType where
+instance CompTypeClass ct => Arg PtrArg ct where
   mkArg   (PtrArg p) = touchVar p >> return [cexp| $id:p |]
   mkParam (PtrArg (_ :: Ptr a)) = do
-    t <- cType (Proxy :: Proxy a)
+    t <- compType (Proxy :: Proxy ct) (Proxy :: Proxy a)
     return [cparam| $ty:t* |]
 
 -- | Abstract object argument

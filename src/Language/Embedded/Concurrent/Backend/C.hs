@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Embedded.Concurrent.Backend.C where
 
@@ -50,37 +51,37 @@ compThreadCMD (Wait tid) = do
   addStm [cstm| pthread_join($id:tid, NULL); |]
 
 -- | Compile `ChanCMD`.
-compChanCMD :: CompExp exp
-            => ChanCMD (Param3 CGen exp CType) a
+compChanCMD :: (CompExp exp, CompTypeClass ct, ct Bool)
+            => ChanCMD (Param3 CGen exp ct) a
             -> CGen a
 compChanCMD cmd@(NewChan sz) = do
   addLocalInclude "chan.h"
-  t <- cType (proxyArg cmd)
+  t <- compType (proxyPred cmd) (proxyArg cmd)
   sz' <- compExp sz
   c <- ChanComp <$> gensym "chan"
   addGlobal [cedecl| typename chan_t $id:c; |]
   addStm [cstm| $id:c = chan_new(sizeof($ty:t), $sz'); |]
   return c
-compChanCMD (WriteChan c (x :: exp a)) = do
+compChanCMD cmd@(WriteChan c (x :: exp a)) = do
   x'         <- compExp x
-  v :: Val a <- freshVar
-  ok         <- freshVar
+  v :: Val a <- freshVar (proxyPred cmd)
+  ok         <- freshVar (proxyPred cmd)
   addStm [cstm| $id:v = $x'; |]
   addStm [cstm| $id:ok = chan_write($id:c, &$id:v); |]
   return ok
-compChanCMD (ReadChan c) = do
-  var <- freshVar
+compChanCMD cmd@(ReadChan c) = do
+  var <- freshVar (proxyPred cmd)
   addStm [cstm| chan_read($id:c, &$id:var); |]
   return var
 compChanCMD (CloseChan c) = do
   addStm [cstm| chan_close($id:c); |]
-compChanCMD (ReadOK c) = do
-  var <- freshVar
+compChanCMD cmd@(ReadOK c) = do
+  var <- freshVar (proxyPred cmd)
   addStm [cstm| $id:var = chan_last_read_ok($id:c); |]
   return var
 
 instance Interp ThreadCMD CGen (Param2 exp pred) where
   interp = compThreadCMD
-instance CompExp exp => Interp ChanCMD CGen (Param2 exp CType) where
+instance (CompExp exp, CompTypeClass ct, ct Bool) => Interp ChanCMD CGen (Param2 exp ct) where
   interp = compChanCMD
 

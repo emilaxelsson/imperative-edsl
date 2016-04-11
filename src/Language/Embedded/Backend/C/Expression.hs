@@ -19,6 +19,8 @@ import Language.C.Quote.C
 import Language.C.Syntax (Exp,Type)
 import qualified Language.C.Syntax as C
 
+import Control.Monad.Operational.Higher
+
 import Language.Embedded.Expression
 
 
@@ -65,12 +67,28 @@ instance CType Double where cType _ = return [cty| double |]
 proxyArg :: proxy1 (proxy2 a) -> Proxy a
 proxyArg _ = Proxy
 
+-- | Classes that support reification to C types
+class CompTypeClass ct
+  where
+    compType :: (ct a, MonadC m) => proxy1 ct -> proxy2 a -> m Type
+    compLit  :: (ct a, MonadC m) => proxy ct -> a -> m Exp
+
+instance CompTypeClass CType
+  where
+    compType _ = cType
+    compLit _  = cLit
+
+-- | Get the type predicate from an instruction type
+proxyPred :: cmd (Param3 p e pred) a -> Proxy pred
+proxyPred _ = Proxy
+
 -- | Create and declare a fresh variable
-freshVar :: forall m a . (MonadC m, CType a) => m (Val a)
-freshVar = do
+freshVar :: forall m ct proxy a . (MonadC m, CompTypeClass ct, ct a) =>
+    proxy ct -> m (Val a)
+freshVar ct = do
     v <- gensym "v"
     touchVar v
-    t <- cType (Proxy :: Proxy a)
+    t <- compType ct (Proxy :: Proxy a)
     case t of
       C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:v = NULL; |]
       _                  -> addLocal [cdecl| $ty:t $id:v; |]
