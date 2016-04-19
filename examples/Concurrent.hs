@@ -14,14 +14,16 @@ import Language.Embedded.Concurrent
 import Language.Embedded.Backend.C
 import Language.Embedded.CExp
 
-type L =
+type CMD =
   ThreadCMD :+:
-  ChanCMD CExp :+:
-  ControlCMD CExp :+:
-  FileCMD CExp
+  ChanCMD :+:
+  ControlCMD :+:
+  FileCMD
+
+type Prog = Program CMD (Param2 CExp CType)
 
 -- | Deadlocks due to channel becoming full.
-deadlock :: Program L ()
+deadlock :: Prog ()
 deadlock = do
   c <- newChan 1
   t <- fork $ readChan c >>= printf "%d\n"
@@ -32,7 +34,7 @@ deadlock = do
 
 -- | Map a function over a file, then print the results. Mapping and printing
 --   happen in separate threads.
-mapFile :: (CExp Float -> CExp Float) -> FilePath -> Program L ()
+mapFile :: (CExp Float -> CExp Float) -> FilePath -> Prog ()
 mapFile f i = do
   c1 <- newCloseableChan 5
   c2 <- newCloseableChan 5
@@ -58,14 +60,14 @@ mapFile f i = do
   waitThread t2
 
 -- | Waiting for thread completion.
-waiting :: Program L ()
+waiting :: Prog ()
 waiting = do
   t <- fork $ printf "Forked thread printing %d\n" (0 :: CExp Int32)
   waitThread t
   printf "Main thread printing %d\n" (1 :: CExp Int32)
 
 -- | A thread kills itself using its own thread ID.
-suicide :: Program L ()
+suicide :: Prog ()
 suicide = do
   tid <- forkWithId $ \tid -> do
     printf "This is printed. %d\n" (0 :: CExp Int32)
@@ -79,8 +81,8 @@ suicide = do
 ----------------------------------------
 
 testAll = do
-    tag "waiting" >> compareCompiled' opts waiting (interpret waiting) ""
-    tag "suicide" >> compareCompiled' opts suicide (interpret suicide) ""
+    tag "waiting" >> compareCompiled' opts waiting (runIO waiting) ""
+    tag "suicide" >> compareCompiled' opts suicide (runIO suicide) ""
   where
     tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"
     opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}

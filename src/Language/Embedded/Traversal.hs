@@ -19,13 +19,13 @@ class DryInterp instr
   where
     -- | Dry interpretation of an instruction. This function is like 'interp'
     -- except that it interprets in any monad that can supply fresh variables.
-    dryInterp :: MonadSupply m => instr m a -> m a
+    dryInterp :: MonadSupply m => instr '(m,fs) a -> m a
 
 -- | Interpretation of a program as a combination of dry interpretation and
 -- effectful observation
 observe_ :: (DryInterp instr, HFunctor instr, MonadSupply m)
-    => (forall a . instr m a -> a -> m ())  -- ^ Function for observing instructions
-    -> Program instr a
+    => (forall a . instr '(m,fs) a -> a -> m ())  -- ^ Function for observing instructions
+    -> Program instr fs a
     -> m a
 observe_ obs = interpretWithMonad $ \i -> do
     a <- dryInterp i
@@ -35,8 +35,8 @@ observe_ obs = interpretWithMonad $ \i -> do
 -- | Interpretation of a program as a combination of dry interpretation and
 -- effectful observation
 observe :: (DryInterp instr, HFunctor instr, MonadSupply m)
-    => (forall a . instr m a -> a -> m a)  -- ^ Function for observing instructions
-    -> Program instr a
+    => (forall a . instr '(m,fs) a -> a -> m a)  -- ^ Function for observing instructions
+    -> Program instr fs a
     -> m a
 observe obs = interpretWithMonad $ \i -> do
     a <- dryInterp i
