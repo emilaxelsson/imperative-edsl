@@ -169,13 +169,14 @@ compileAndCheck = compileAndCheck' mempty
 -- | Generate C code, use GCC to compile it, and run the resulting executable
 runCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     ExternalCompilerOpts -> Program instr (Param2 exp pred) a -> IO ()
-runCompiled' opts@(ExternalCompilerOpts {..}) prog = do
-    exe <- compileC opts prog
-    maybePutStrLn externalSilent ""
-    maybePutStrLn externalSilent "#### Running:"
-    system exe
-    removeFileIfPossible exe
-    return ()
+runCompiled' opts@(ExternalCompilerOpts {..}) prog = bracket
+    (compileC opts prog)
+    removeFileIfPossible
+    ( \exe -> do
+        maybePutStrLn externalSilent ""
+        maybePutStrLn externalSilent "#### Running:"
+        system exe >> return ()
+    )
 
 -- | Generate C code, use GCC to compile it, and run the resulting executable
 runCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
@@ -189,11 +190,10 @@ captureCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     -> Program instr (Param2 exp pred) a  -- ^ Program to run
     -> String                             -- ^ Input to send to @stdin@
     -> IO String                          -- ^ Result from @stdout@
-captureCompiled' opts prog inp = do
-    exe <- compileC opts prog
-    out <- fakeIO (system exe) inp
-    removeFileIfPossible exe
-    return out
+captureCompiled' opts prog inp = bracket
+    (compileC opts prog)
+    removeFileIfPossible
+    (\exe -> fakeIO (system exe) inp)
 
 -- | Like 'runCompiled' but with explicit input/output connected to
 -- @stdin@/@stdout@
