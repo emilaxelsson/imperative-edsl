@@ -90,8 +90,9 @@ compileAll
 -- > gcc -std=c99 YOURPROGRAM.c
 icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
-icompile =
-    mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
+icompile prog = case compileAll prog of
+    [m] -> putStrLn $ snd m
+    ms  -> mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) ms
 
 removeFileIfPossible :: FilePath -> IO ()
 removeFileIfPossible file =
