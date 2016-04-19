@@ -69,6 +69,15 @@ data StrArg pred where
   StrArg :: String -> StrArg pred
 
 instance Arg StrArg pred where
-  mkArg   (StrArg s) = return [cexp| $string:s |]
+  mkArg   (StrArg s) = return [cexp| $s |]
   mkParam (StrArg s) = return [cparam| const char* |]
+
+data ConstArg pred where
+  ConstArg :: { constArgType :: String, constArg :: String } -> ConstArg pred
+
+instance Arg ConstArg pred where
+  mkArg   (ConstArg _ n) = return [cexp| $id:n |]
+  mkParam (ConstArg t _) = return [cparam| $ty:t' |]
+    where
+      t' = namedType t
 

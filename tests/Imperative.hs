@@ -217,6 +217,7 @@ testPtr = do
 testArgs :: Prog ()
 testArgs = do
     addInclude "<stdio.h>"
+    addInclude "<stdbool.h>"
     addDefinition setPtr_def
     addDefinition ret_def
     let v = 55 :: CExp Int32
@@ -230,7 +231,7 @@ testArgs = do
     callProcAssign o "ret" [valArg v]
     callProcAssign op "setPtr" [refArg r]
     callProc "printf"
-        [ strArg "%d %d %d %d %d %d %d\n"
+        [ strArg "%d %d %d %d %d %d %d %d\n"
         , valArg v
         , deref (refArg r)
         , deref (arrArg a)
@@ -238,6 +239,7 @@ testArgs = do
         , deref (ptrArg p)
         , objArg o
         , deref (objArg op)
+        , constArg "bool" "true"
         ]
   where
     setPtr_def = [cedecl|
@@ -253,6 +255,7 @@ testArgs = do
 
 testExternArgs :: Prog ()
 testExternArgs = do
+    addInclude "<stdbool.h>"
     let v = 55 :: CExp Int32
     externProc "val_proc" [valArg v]
     _ :: CExp Int32 <- externFun "val_fun" [valArg v]
@@ -275,8 +278,9 @@ testExternArgs = do
     externProc "obj_proc4" [addr $ objArg op]
     externProc "obj_proc5" [deref $ objArg op]
     let s = "apa"
-    externProc "str_proc1"  [strArg s]
-    externProc "str_proc2"  [deref $ strArg s]
+    externProc "str_proc1" [strArg s]
+    externProc "str_proc2" [deref $ strArg s]
+    externProc "const_proc" [constArg "bool" "true"]
     return ()
 
 testCallFun :: Prog ()
@@ -348,7 +352,7 @@ testAll = do
     tag "testFor3"   >> compareCompiled  testFor3   (runIO testFor3)                       ""
     tag "testAssert" >> compareCompiled  testAssert (runIO testAssert)                     "45"
     tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
+    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66 1")  ""
     tag "testExternArgs" >> compileAndCheck  testExternArgs
     tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
     tag "multiModule" >> testMultiModule

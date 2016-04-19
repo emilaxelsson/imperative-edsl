@@ -537,6 +537,13 @@ objArg = FunArg . ObjArg
 strArg :: String -> FunArg exp pred
 strArg = FunArg . StrArg
 
+-- | Named constant argument
+constArg
+    :: String  -- ^ Type
+    -> String  -- ^ Named constant
+    -> FunArg exp pred
+constArg t n = FunArg $ ConstArg t n
+
 -- | Modifier that takes the address of another argument
 addr :: FunArg exp pred -> FunArg exp pred
 addr = AddrArg
