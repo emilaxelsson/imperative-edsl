@@ -49,12 +49,20 @@ mapFile f i = do
         (closeChan c2 >> break)
 
   t2 <- fork $ do
-    while (lastChanReadOK c2) $ do
-      readChan c2 >>= printf "%f\n"
+    while (return true) $ do
+      x <- readChan c2
+      readOK <- lastChanReadOK c2
+      iff readOK
+        (printf "%f\n" x)
+        (break)
 
   t3 <- fork $ do
     while (not_ <$> feof fi) $ do
-      fget fi >>= void . writeChan c1
+      x <- fget fi
+      eof <- feof fi
+      iff eof
+        (break)
+        (void $ writeChan c1 x)
     fclose fi
     closeChan c1
   waitThread t2
