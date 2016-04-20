@@ -22,7 +22,7 @@ import Language.Embedded.Expression
 import qualified Control.Concurrent as CC
 import qualified Control.Concurrent.BoundedChan as Bounded
 import Data.Word (Word16)
-
+import Language.Embedded.Imperative.CMD
 
 
 -- | Maximum number of elements in some bounded channel.
@@ -79,11 +79,16 @@ data ThreadCMD fs a where
 
 data ChanCMD fs a where
   NewChan   :: pred a => exp ChanBound -> ChanCMD (Param3 prog exp pred) (Chan t a)
-  ReadChan  :: pred a => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
-  WriteChan :: pred a
-            => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
   CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
   ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+
+  ReadOne   :: pred a => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
+  WriteOne  :: pred a
+            => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+
+  ReadChan  :: pred a => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+  WriteChan :: pred a
+            => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
 instance HFunctor ThreadCMD where
   hfmap f (ForkWithId p) = ForkWithId $ f . p
@@ -102,23 +107,27 @@ instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr where
   reexpressInstrEnv reexp (Wait tid) = lift $ singleInj $ Wait tid
 
 instance HFunctor ChanCMD where
-  hfmap _ (NewChan sz)    = NewChan sz
-  hfmap _ (ReadChan c)    = ReadChan c
-  hfmap _ (WriteChan c x) = WriteChan c x
-  hfmap _ (CloseChan c)   = CloseChan c
-  hfmap _ (ReadOK c)      = ReadOK c
+  hfmap _ (NewChan sz)        = NewChan sz
+  hfmap _ (ReadOne c)         = ReadOne c
+  hfmap _ (ReadChan c t f a)  = ReadChan c t f a
+  hfmap _ (WriteOne c x)      = WriteOne c x
+  hfmap _ (WriteChan c f t a) = WriteChan c f t a
+  hfmap _ (CloseChan c)       = CloseChan c
+  hfmap _ (ReadOK c)          = ReadOK c
 
 instance HBifunctor ChanCMD where
-  hbimap _ f (NewChan sz)    = NewChan (f sz)
-  hbimap _ _ (ReadChan c)    = ReadChan c
-  hbimap _ f (WriteChan c x) = WriteChan c (f x)
-  hbimap _ _ (CloseChan c)   = CloseChan c
-  hbimap _ _ (ReadOK c)      = ReadOK c
+  hbimap _ f (NewChan sz)         = NewChan (f sz)
+  hbimap _ _ (ReadOne c)          = ReadOne c
+  hbimap _ f (ReadChan c n n' a)  = ReadChan c (f n) (f n') a
+  hbimap _ f (WriteOne c x)       = WriteOne c (f x)
+  hbimap _ f (WriteChan c n n' a) = WriteChan c (f n) (f n') a
+  hbimap _ _ (CloseChan c    )    = CloseChan c
+  hbimap _ _ (ReadOK c)           = ReadOK c
 
 instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
   reexpressInstrEnv reexp (NewChan sz)    = lift . singleInj . NewChan =<< reexp sz
-  reexpressInstrEnv reexp (ReadChan c)    = lift $ singleInj $ ReadChan c
-  reexpressInstrEnv reexp (WriteChan c x) = lift . singleInj . WriteChan c =<< reexp x
+  reexpressInstrEnv reexp (ReadOne c)     = lift $ singleInj $ ReadOne c
+  reexpressInstrEnv reexp (WriteOne c x)  = lift . singleInj . WriteOne c =<< reexp x
   reexpressInstrEnv reexp (CloseChan c)   = lift $ singleInj $ CloseChan c
   reexpressInstrEnv reexp (ReadOK c)      = lift $ singleInj $ ReadOK c
 
@@ -144,7 +153,7 @@ runChanCMD (NewChan sz) = do
   ChanRun <$> Bounded.newBoundedChan (fromIntegral sz')
           <*> newIORef False
           <*> newIORef True
-runChanCMD (ReadChan (ChanRun c closedref lastread)) = do
+runChanCMD (ReadOne (ChanRun c closedref lastread)) = do
   closed <- readIORef closedref
   mval <- Bounded.tryReadChan c
   case mval of
@@ -156,7 +165,7 @@ runChanCMD (ReadChan (ChanRun c closedref lastread)) = do
         return undefined
       | otherwise -> do
         ValRun <$> Bounded.readChan c
-runChanCMD (WriteChan (ChanRun c closedref _) x) = do
+runChanCMD (WriteOne (ChanRun c closedref _) x) = do
   closed <- readIORef closedref
   x' <- x
   if closed

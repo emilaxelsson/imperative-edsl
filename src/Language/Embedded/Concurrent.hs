@@ -71,7 +71,7 @@ newCloseableChan = singleInj . NewChan
 readChan :: (pred a, FreeExp exp, FreePred exp a, ChanCMD :<: instr, Monad m)
          => Chan t a
          -> ProgramT instr (Param2 exp pred) m (exp a)
-readChan = fmap valToExp . singleInj . ReadChan
+readChan = fmap valToExp . singleInj . ReadOne
 
 -- | Write a data element to a channel.
 --   If 'closeChan' has been called on the channel, all calls to @writeChan@
@@ -85,7 +85,7 @@ writeChan :: (pred a,
         => Chan t a
         -> exp a
         -> ProgramT instr (Param2 exp pred) m (exp Bool)
-writeChan c = fmap valToExp . singleInj . WriteChan c
+writeChan c = fmap valToExp . singleInj . WriteOne c
 
 -- | When 'readChan' was last called on the given channel, did the read
 --   succeed?

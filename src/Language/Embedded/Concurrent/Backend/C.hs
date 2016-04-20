@@ -12,6 +12,7 @@ import Control.Applicative
 import Control.Monad.Operational.Higher
 import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
+import Language.Embedded.Imperative.CMD
 import Language.Embedded.Backend.C.Expression
 import Language.C.Quote.C
 import Language.C.Monad
@@ -62,17 +63,30 @@ compChanCMD cmd@(NewChan sz) = do
   addGlobal [cedecl| typename chan_t $id:c; |]
   addStm [cstm| $id:c = chan_new($sz'*sizeof($ty:t)); |]
   return c
-compChanCMD cmd@(WriteChan c (x :: exp a)) = do
+compChanCMD cmd@(WriteOne c (x :: exp a)) = do
   x'         <- compExp x
   v :: Val a <- freshVar (proxyPred cmd)
   ok         <- freshVar (proxyPred cmd)
   addStm [cstm| $id:v = $x'; |]
   addStm [cstm| $id:ok = chan_write($id:c, sizeof($id:v), &$id:v); |]
   return ok
-compChanCMD cmd@(ReadChan c) = do
+compChanCMD cmd@(WriteChan c from to (ArrComp arr)) = do
+  from' <- compExp from
+  to' <- compExp to
+  ok <- freshVar (proxyPred cmd)
+  addStm [cstm| $id:ok = chan_write($id:c, sizeof(*$id:arr)*(($to')-($from')), &$id:arr[$from']); |]
+  return ok
+compChanCMD cmd@(ReadOne c) = do
   v <- freshVar (proxyPred cmd)
   addStm [cstm| chan_read($id:c, sizeof($id:v), &$id:v); |]
   return v
+compChanCMD cmd@(ReadChan c from to (ArrComp arr)) = do
+  ok <- freshVar (proxyPred cmd)
+  from' <- compExp from
+  to' <- compExp to
+  addStm [cstm| chan_read($id:c, sizeof(*$id:arr)*(($to')-($from')), &$id:arr[$from']); |]
+  addStm [cstm| $id:ok = chan_last_read_ok($id:c); |]
+  return ok
 compChanCMD (CloseChan c) = do
   addStm [cstm| chan_close($id:c); |]
 compChanCMD cmd@(ReadOK c) = do
