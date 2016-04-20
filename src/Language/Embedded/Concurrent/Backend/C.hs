@@ -60,19 +60,19 @@ compChanCMD cmd@(NewChan sz) = do
   sz' <- compExp sz
   c <- ChanComp <$> gensym "chan"
   addGlobal [cedecl| typename chan_t $id:c; |]
-  addStm [cstm| $id:c = chan_new(sizeof($ty:t), $sz'); |]
+  addStm [cstm| $id:c = chan_new($sz'*sizeof($ty:t)); |]
   return c
 compChanCMD cmd@(WriteChan c (x :: exp a)) = do
   x'         <- compExp x
   v :: Val a <- freshVar (proxyPred cmd)
   ok         <- freshVar (proxyPred cmd)
   addStm [cstm| $id:v = $x'; |]
-  addStm [cstm| $id:ok = chan_write($id:c, &$id:v); |]
+  addStm [cstm| $id:ok = chan_write($id:c, sizeof($id:v), &$id:v); |]
   return ok
 compChanCMD cmd@(ReadChan c) = do
-  var <- freshVar (proxyPred cmd)
-  addStm [cstm| chan_read($id:c, &$id:var); |]
-  return var
+  v <- freshVar (proxyPred cmd)
+  addStm [cstm| chan_read($id:c, sizeof($id:v), &$id:v); |]
+  return v
 compChanCMD (CloseChan c) = do
   addStm [cstm| chan_close($id:c); |]
 compChanCMD cmd@(ReadOK c) = do
