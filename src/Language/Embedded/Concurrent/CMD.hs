@@ -165,12 +165,16 @@ runChanCMD (ReadOne (ChanRun c closedref lastread)) = do
         return undefined
       | otherwise -> do
         ValRun <$> Bounded.readChan c
+runChanCMD (ReadChan _ _ _ _) = do
+  error "TODO: array reads on channels"
 runChanCMD (WriteOne (ChanRun c closedref _) x) = do
   closed <- readIORef closedref
   x' <- x
   if closed
     then return (ValRun False)
     else Bounded.writeChan c x' >> return (ValRun True)
+runChanCMD (WriteChan _ _ _ _) = do
+  error "TODO: array writes on channels"
 runChanCMD (CloseChan (ChanRun _ closedref _)) = do
   writeIORef closedref True
 runChanCMD (ReadOK (ChanRun _ _ lastread)) = do
