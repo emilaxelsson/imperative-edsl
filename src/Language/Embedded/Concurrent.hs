@@ -11,13 +11,14 @@ module Language.Embedded.Concurrent (
     ChanCMD,
     Closeable, Uncloseable,
     fork, forkWithId, asyncKillThread, killThread, waitThread,
-    newChan, newCloseableChan, readChan, writeChan,
+    newChan, newCloseableChan, readChan, writeChan, readChanBuf, writeChanBuf,
     closeChan, lastChanReadOK,
   ) where
 
 import Control.Monad.Operational.Higher
 import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
+import Language.Embedded.Imperative.CMD (Arr)
 import Language.Embedded.Concurrent.Backend.C ()
 
 -- | Fork off a computation as a new thread.
@@ -73,9 +74,23 @@ readChan :: (pred a, FreeExp exp, FreePred exp a, ChanCMD :<: instr, Monad m)
          -> ProgramT instr (Param2 exp pred) m (exp a)
 readChan = fmap valToExp . singleInj . ReadOne
 
+-- | Read an arbitrary number of elements from a channel into an array.
+--   The semantics are the same as for 'readChan', where "channel is empty"
+--   is defined as "channel contains less data than requested".
+--   Returns @False@ without reading any data if the channel is closed.
+readChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
+         => Chan t a
+         -> exp Int -- ^ Offset in array to start writing
+         -> exp Int -- ^ Elements to read
+         -> Arr i a
+         -> ProgramT instr (Param2 exp pred) m (exp Bool)
+readChanBuf ch off sz arr = fmap valToExp . singleInj $ ReadChan ch off sz arr
+
 -- | Write a data element to a channel.
 --   If 'closeChan' has been called on the channel, all calls to @writeChan@
 --   become non-blocking no-ops and return @False@, otherwise returns @True@.
+--   If the channel is full, this function blocks until there's space in the
+--   queue.
 writeChan :: (pred a,
               FreeExp exp,
               FreePred exp Bool,
@@ -86,6 +101,18 @@ writeChan :: (pred a,
         -> exp a
         -> ProgramT instr (Param2 exp pred) m (exp Bool)
 writeChan c = fmap valToExp . singleInj . WriteOne c
+
+-- | Write an arbitrary number of elements from an array into an channel.
+--   The semantics are the same as for 'writeChan', where "channel is full"
+--   is defined as "channel has insufficient free space to store all written
+--   data".
+writeChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
+         => Chan t a
+         -> exp Int -- ^ Offset in array to start reading
+         -> exp Int -- ^ Elements to write
+         -> Arr i a
+         -> ProgramT instr (Param2 exp pred) m (exp Bool)
+writeChanBuf ch off sz arr = fmap valToExp . singleInj $ WriteChan ch off sz arr
 
 -- | When 'readChan' was last called on the given channel, did the read
 --   succeed?
