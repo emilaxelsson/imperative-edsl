@@ -5,29 +5,25 @@
 #include <stdio.h>
 
 typedef struct chan {
-  int elem_size;
-  int max_elems;
-  int cur_elems;
-  int nbytes;
+  int cur_bytes;
+  int max_bytes;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
-  void *elems;
-  int readoff;
-  int writeoff;
+  void *buf;
+  size_t readoff;
+  size_t writeoff;
   chan_state_t state;
   int last_read_ok;
 } *chan_t;
 
-chan_t chan_new(int elem_size, int max_elems) {
+chan_t chan_new(size_t nbytes) {
   chan_t c = malloc(sizeof(struct chan));
-  if(max_elems <= 0) {
-    max_elems = 1;
+  if(nbytes <= 0) {
+    nbytes = 1;
   }
-  c->elem_size = elem_size;
-  c->max_elems = max_elems;
-  c->cur_elems = 0;
-  c->nbytes = elem_size * max_elems;
-  c->elems = malloc(c->nbytes);
+  c->cur_bytes = 0;
+  c->max_bytes = nbytes;
+  c->buf = malloc(nbytes);
   c->readoff = c->writeoff = 0;
   c->state = CHAN_OPEN;
   c->last_read_ok = 1;
@@ -36,33 +32,33 @@ chan_t chan_new(int elem_size, int max_elems) {
   return c;
 }
 
-void chan_read(chan_t c, void *buf) {
+void chan_read(chan_t c, size_t nbytes, void *buf) {
   pthread_mutex_lock(&c->mutex);
-  while(c->cur_elems == 0 && c->state == CHAN_OPEN) {
+  while(c->cur_bytes < nbytes && c->state == CHAN_OPEN) {
     pthread_cond_wait(&c->cond, &c->mutex);
   }
-  if(c->state == CHAN_CLOSED && c->cur_elems == 0) {
+  if(c->state == CHAN_CLOSED && c->cur_bytes < nbytes) {
     c->last_read_ok = 0;
   } else {
-    memcpy(buf, c->elems+c->readoff, c->elem_size);
-    c->readoff = (c->readoff + c->elem_size) % c->nbytes;
-    --c->cur_elems;
+    memcpy(buf, c->buf+c->readoff, nbytes);
+    c->readoff = (c->readoff + nbytes) % c->max_bytes;
+    c->cur_bytes -= nbytes;
     pthread_cond_signal(&c->cond);
   }
   pthread_mutex_unlock(&c->mutex);
 }
 
-int chan_write(chan_t c, void *buf) {
+int chan_write(chan_t c, size_t nbytes, void *buf) {
   if(c->state == CHAN_CLOSED) {
     return 0;
   } else {
     pthread_mutex_lock(&c->mutex);
-    while(c->cur_elems == c->max_elems) {
+    while(c->cur_bytes+nbytes > c->max_bytes) {
       pthread_cond_wait(&c->cond, &c->mutex);
     }
-    memcpy(c->elems+c->writeoff, buf, c->elem_size);
-    c->writeoff = (c->writeoff + c->elem_size) % c->nbytes;
-    ++c->cur_elems;
+    memcpy(c->buf+c->writeoff, buf, nbytes);
+    c->writeoff = (c->writeoff + nbytes) % c->max_bytes;
+    c->cur_bytes += nbytes;
     pthread_cond_signal(&c->cond);
     pthread_mutex_unlock(&c->mutex);
     return 1;

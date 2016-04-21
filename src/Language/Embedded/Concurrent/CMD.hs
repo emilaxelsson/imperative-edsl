@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
@@ -13,15 +14,15 @@ module Language.Embedded.Concurrent.CMD (
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
 #endif
-import Control.Monad
 import Control.Monad.Operational.Higher
+import Control.Monad.Reader
 import Data.IORef
 import Data.Typeable
 import Language.Embedded.Expression
 import qualified Control.Concurrent as CC
 import qualified Control.Concurrent.BoundedChan as Bounded
 import Data.Word (Word16)
-
+import Language.Embedded.Imperative.CMD
 
 
 -- | Maximum number of elements in some bounded channel.
@@ -55,99 +56,132 @@ waitFlag :: Flag a -> IO a
 waitFlag (Flag _ var) = CC.withMVar var return
 
 data ThreadId
-  = TIDEval CC.ThreadId (Flag ())
+  = TIDRun CC.ThreadId (Flag ())
   | TIDComp TID
     deriving (Typeable)
 
 instance Show ThreadId where
-  show (TIDEval tid _) = show tid
-  show (TIDComp tid)   = tid
+  show (TIDRun tid _) = show tid
+  show (TIDComp tid)  = tid
 
 data Closeable
 data Uncloseable
 
 -- | A bounded channel.
 data Chan t a
-  = ChanEval (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
+  = ChanRun (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
   | ChanComp CID
 
-data ThreadCMD (prog :: * -> *) a where
-  ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD prog ThreadId
-  Kill       :: ThreadId -> ThreadCMD prog ()
-  Wait       :: ThreadId -> ThreadCMD prog ()
+data ThreadCMD fs a where
+  ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD (Param3 prog exp pred) ThreadId
+  Kill       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
+  Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
 
-data ChanCMD exp (prog :: * -> *) a where
-  NewChan   :: VarPred exp a => exp ChanBound -> ChanCMD exp prog (Chan t a)
-  ReadChan  :: VarPred exp a => Chan t a -> ChanCMD exp prog (exp a)
-  WriteChan :: (VarPred exp a, VarPred exp Bool)
-            => Chan t a -> exp a -> ChanCMD exp prog (exp Bool)
-  CloseChan :: Chan Closeable a -> ChanCMD exp prog ()
-  ReadOK    :: VarPred exp Bool
-            => Chan Closeable a -> ChanCMD exp prog (exp Bool)
+data ChanCMD fs a where
+  NewChan   :: pred a => exp ChanBound -> ChanCMD (Param3 prog exp pred) (Chan t a)
+  CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
+  ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+
+  ReadOne   :: pred a => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
+  WriteOne  :: pred a
+            => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+
+  ReadChan  :: pred a => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+  WriteChan :: pred a
+            => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
 instance HFunctor ThreadCMD where
   hfmap f (ForkWithId p) = ForkWithId $ f . p
   hfmap _ (Kill tid)     = Kill tid
   hfmap _ (Wait tid)     = Wait tid
 
-instance HFunctor (ChanCMD exp) where
-  hfmap _ (NewChan sz)    = NewChan sz
-  hfmap _ (ReadChan c)    = ReadChan c
-  hfmap _ (WriteChan c x) = WriteChan c x
-  hfmap _ (CloseChan c)   = CloseChan c
-  hfmap _ (ReadOK c)      = ReadOK c
+instance HBifunctor ThreadCMD where
+  hbimap f _ (ForkWithId p) = ForkWithId $ f . p
+  hbimap _ _ (Kill tid)     = Kill tid
+  hbimap _ _ (Wait tid)     = Wait tid
 
-type instance IExp (ThreadCMD :+: i) = IExp i
+instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr where
+  reexpressInstrEnv reexp (ForkWithId p) = ReaderT $ \env ->
+      singleInj $ ForkWithId (flip runReaderT env . p)
+  reexpressInstrEnv reexp (Kill tid) = lift $ singleInj $ Kill tid
+  reexpressInstrEnv reexp (Wait tid) = lift $ singleInj $ Wait tid
 
-type instance IExp (ChanCMD e)       = e
-type instance IExp (ChanCMD e :+: i) = e
+instance HFunctor ChanCMD where
+  hfmap _ (NewChan sz)        = NewChan sz
+  hfmap _ (ReadOne c)         = ReadOne c
+  hfmap _ (ReadChan c t f a)  = ReadChan c t f a
+  hfmap _ (WriteOne c x)      = WriteOne c x
+  hfmap _ (WriteChan c f t a) = WriteChan c f t a
+  hfmap _ (CloseChan c)       = CloseChan c
+  hfmap _ (ReadOK c)          = ReadOK c
 
-runThreadCMD :: ThreadCMD IO a
+instance HBifunctor ChanCMD where
+  hbimap _ f (NewChan sz)         = NewChan (f sz)
+  hbimap _ _ (ReadOne c)          = ReadOne c
+  hbimap _ f (ReadChan c n n' a)  = ReadChan c (f n) (f n') a
+  hbimap _ f (WriteOne c x)       = WriteOne c (f x)
+  hbimap _ f (WriteChan c n n' a) = WriteChan c (f n) (f n') a
+  hbimap _ _ (CloseChan c    )    = CloseChan c
+  hbimap _ _ (ReadOK c)           = ReadOK c
+
+instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
+  reexpressInstrEnv reexp (NewChan sz)    = lift . singleInj . NewChan =<< reexp sz
+  reexpressInstrEnv reexp (ReadOne c)     = lift $ singleInj $ ReadOne c
+  reexpressInstrEnv reexp (WriteOne c x)  = lift . singleInj . WriteOne c =<< reexp x
+  reexpressInstrEnv reexp (CloseChan c)   = lift $ singleInj $ CloseChan c
+  reexpressInstrEnv reexp (ReadOK c)      = lift $ singleInj $ ReadOK c
+
+runThreadCMD :: ThreadCMD (Param3 IO exp pred) a
              -> IO a
 runThreadCMD (ForkWithId p) = do
   f <- newFlag
   tidvar <- CC.newEmptyMVar
   cctid <- CC.forkIO . void $ CC.takeMVar tidvar >>= p >> setFlag f ()
-  let tid = TIDEval cctid f
+  let tid = TIDRun cctid f
   CC.putMVar tidvar tid
   return tid
-runThreadCMD (Kill (TIDEval t f)) = do
+runThreadCMD (Kill (TIDRun t f)) = do
   setFlag f ()
   CC.killThread t
   return ()
-runThreadCMD (Wait (TIDEval _ f)) = do
+runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
-runChanCMD :: forall exp a. EvalExp exp
-           => ChanCMD exp IO a -> IO a
-runChanCMD (NewChan sz) =
-  ChanEval <$> Bounded.newBoundedChan (fromIntegral $ evalExp sz)
-           <*> newIORef False
-           <*> newIORef True
-runChanCMD (ReadChan (ChanEval c closedref lastread)) = do
+runChanCMD :: ChanCMD (Param3 IO IO pred) a -> IO a
+runChanCMD (NewChan sz) = do
+  sz' <- sz
+  ChanRun <$> Bounded.newBoundedChan (fromIntegral sz')
+          <*> newIORef False
+          <*> newIORef True
+runChanCMD (ReadOne (ChanRun c closedref lastread)) = do
   closed <- readIORef closedref
   mval <- Bounded.tryReadChan c
   case mval of
     Just x -> do
-        return $ valExp x
+        return $ ValRun x
     Nothing
       | closed -> do
         writeIORef lastread False
         return undefined
       | otherwise -> do
-        valExp <$> Bounded.readChan c
-runChanCMD (WriteChan (ChanEval c closedref _) x) = do
+        ValRun <$> Bounded.readChan c
+runChanCMD (ReadChan _ _ _ _) = do
+  error "TODO: array reads on channels"
+runChanCMD (WriteOne (ChanRun c closedref _) x) = do
   closed <- readIORef closedref
+  x' <- x
   if closed
-    then return (valExp False)
-    else Bounded.writeChan c (evalExp x) >> return (valExp True)
-runChanCMD (CloseChan (ChanEval _ closedref _)) = do
+    then return (ValRun False)
+    else Bounded.writeChan c x' >> return (ValRun True)
+runChanCMD (WriteChan _ _ _ _) = do
+  error "TODO: array writes on channels"
+runChanCMD (CloseChan (ChanRun _ closedref _)) = do
   writeIORef closedref True
-runChanCMD (ReadOK (ChanEval _ _ lastread)) = do
-  valExp <$> readIORef lastread
+runChanCMD (ReadOK (ChanRun _ _ lastread)) = do
+  ValRun <$> readIORef lastread
 
-instance Interp ThreadCMD IO where
-  interp = runThreadCMD
-instance EvalExp exp => Interp (ChanCMD exp) IO where
-  interp = runChanCMD
+instance InterpBi ThreadCMD IO (Param1 pred) where
+  interpBi = runThreadCMD
+instance InterpBi ChanCMD IO (Param1 pred) where
+  interpBi = runChanCMD
 

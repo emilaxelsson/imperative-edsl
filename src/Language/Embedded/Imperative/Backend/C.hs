@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | C code generation for imperative commands
 
@@ -22,42 +23,43 @@ import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative.Frontend.General
 import Language.Embedded.Backend.C
-import Language.Embedded.Backend.C.Expression
+
+
 
 -- | Compile `RefCMD`
-compRefCMD :: CompExp exp => RefCMD exp prog a -> CGen a
+compRefCMD :: (CompExp exp, CompTypeClass ct) =>
+    RefCMD (Param3 prog exp ct) a -> CGen a
 compRefCMD cmd@(NewRef base) = do
-    t <- compTypeFromCMD cmd (proxyArg cmd)
+    t <- compType (proxyPred cmd) (proxyArg cmd)
     r <- RefComp <$> gensym base
-    case t of
-      C.Type _ C.Ptr{} _ -> addLocal [cdecl| $ty:t $id:r = NULL; |]
-      _                  -> addLocal [cdecl| $ty:t $id:r; |]
+    addLocal $ case t of
+      C.Type _ C.Ptr{} _ -> [cdecl| $ty:t $id:r = NULL; |]
+      _                  -> [cdecl| $ty:t $id:r; |]
     return r
-compRefCMD (InitRef base (exp :: exp a)) = do
-    t <- compType (Proxy :: Proxy exp) (Proxy :: Proxy a)
+compRefCMD cmd@(InitRef base exp) = do
+    t <- compType (proxyPred cmd) exp
     r <- RefComp <$> gensym base
-    v <- compExp exp
+    e <- compExp exp
     addLocal [cdecl| $ty:t $id:r; |]
-    addStm   [cstm| $id:r = $v; |]
+    addStm   [cstm| $id:r = $e; |]
     return r
-compRefCMD (GetRef ref) = do
-    (v,_) <- freshVar
-    e <- compExp v
+compRefCMD cmd@(GetRef ref) = do
+    v <- freshVar (proxyPred cmd)
     touchVar ref
-    addStm [cstm| $e = $id:ref; |]
+    addStm [cstm| $id:v = $id:ref; |]
     return v
 compRefCMD (SetRef ref exp) = do
     v <- compExp exp
     touchVar ref
     addStm [cstm| $id:ref = $v; |]
-compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
+compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ ValComp v
 
 -- The `IsPointer` instance for `Arr` demands that arrays are represented as
 -- pointers in C (because `IsPointer` enables use of `SwapPtr`). As explained
 -- [here](http://stackoverflow.com/questions/3393518/swap-arrays-by-using-pointers-in-c),
 -- arrays in C are *not* pointers in the sense that they can be redirected. Here
 -- "arrays" means variables declared as e.g. `int arr[10];`. This is why we
--- declare an additional pointer for such arrays; e.g:
+-- declare a supplementary pointer for such arrays; e.g:
 --
 --     int _a[] = {0,1,2,3,4,5,6,7,8,9};
 --     int * a = _a;
@@ -70,14 +72,20 @@ compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ varExp v
 -- To ensure the correctness of the resulting program the underlying arrays must also
 -- be lifted, hence the extra `touchVar` application on their symbols.
 
+-- | Generates the symbol name as an identifier for a given array.
+newtype BaseArrOf i a = BaseArrOf (Arr i a)
+
+instance ToIdent (BaseArrOf i a)
+  where toIdent (BaseArrOf (ArrComp sym)) = toIdent $ '_':sym
+
 -- | Compile `ArrCMD`
-compArrCMD :: forall exp prog a. (CompExp exp, EvalExp exp)
-           => ArrCMD exp prog a -> CGen a
+compArrCMD :: (CompExp exp, CompTypeClass ct) =>
+    ArrCMD (Param3 prog exp ct) a -> CGen a
 compArrCMD cmd@(NewArr base size) = do
     sym <- gensym base
     let sym' = '_':sym
     n <- compExp size
-    t <- compTypeFromCMD cmd (proxyArg cmd)
+    t <- compType (proxyPred cmd) (proxyArg cmd)
     case n of
       C.Const _ _ -> do
         addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
@@ -90,17 +98,17 @@ compArrCMD cmd@(NewArr base size) = do
 compArrCMD cmd@(InitArr base as) = do
     sym <- gensym base
     let sym' = '_':sym
-    t   <- compTypeFromCMD cmd (proxyArg cmd)
-    as' <- sequence [compExp (valExp a :: exp a') | (a :: a') <- as]
+    t   <- compType (proxyPred cmd) (proxyArg cmd)
+    as' <- mapM (compLit (proxyPred cmd)) as
     addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
     addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
-compArrCMD (GetArr expi arr) = do
-    (v,n) <- freshVar
-    i     <- compExp expi
+compArrCMD cmd@(GetArr expi arr) = do
+    v <- freshVar (proxyPred cmd)
+    i <- compExp expi
     touchVar $ BaseArrOf arr  -- explanation above
     touchVar arr
-    addStm [cstm| $id:n = $id:arr[ $i ]; |]
+    addStm [cstm| $id:v = $id:arr[ $i ]; |]
     return v
 compArrCMD (SetArr expi expv arr) = do
     v <- compExp expv
@@ -113,19 +121,15 @@ compArrCMD cmd@(CopyArr arr1 arr2 expl) = do
     mapM_ touchVar [BaseArrOf arr1,BaseArrOf arr2]  -- explanation above
     mapM_ touchVar [arr1,arr2]
     l <- compExp expl
-    t <- compTypeFromCMD cmd arr1
+    t <- compType (proxyPred cmd) arr1
     addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
 compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
 compArrCMD (UnsafeThawArr (IArrComp arr))  = return $ ArrComp arr
 
--- | Generates the symbol name as an identifier for a given array.
-newtype BaseArrOf i a = BaseArrOf (Arr i a)
-instance ToIdent (BaseArrOf i a)
-    where toIdent (BaseArrOf (ArrComp sym)) = toIdent $ '_':sym
-
 
 -- | Compile `ControlCMD`
-compControlCMD :: CompExp exp => ControlCMD exp CGen a -> CGen a
+compControlCMD :: (CompExp exp, CompTypeClass ct) =>
+    ControlCMD (Param3 CGen exp ct) a -> CGen a
 compControlCMD (If c t f) = do
     cc <- compExp c
     ct <- inNewBlock_ t
@@ -154,31 +158,31 @@ compControlCMD (While cont body) = do
               _      -> addStm [cstm| if (! $contc) {break;} |]
         body
     when (not noop) $ addStm [cstm| while (1) {$items:bodyc} |]
-compControlCMD (For (lo,step,hi) body) = do
-    loe   <- compExp lo
-    hie   <- compExp $ borderVal hi
-    (i,n) <- freshVar
+compControlCMD cmd@(For (lo,step,hi) body) = do
+    loe <- compExp lo
+    hie <- compExp $ borderVal hi
+    i   <- freshVar (proxyPred cmd)
     bodyc <- inNewBlock_ (body i)
     let incl = borderIncl hi
     let conte
-          | incl && (step>=0) = [cexp| $id:n<=$hie |]
-          | incl && (step<0)  = [cexp| $id:n>=$hie |]
-          | step >= 0         = [cexp| $id:n< $hie |]
-          | step < 0          = [cexp| $id:n> $hie |]
+          | incl && (step>=0) = [cexp| $id:i<=$hie |]
+          | incl && (step<0)  = [cexp| $id:i>=$hie |]
+          | step >= 0         = [cexp| $id:i< $hie |]
+          | step < 0          = [cexp| $id:i> $hie |]
     let stepe
-          | step == 1    = [cexp| $id:n++ |]
-          | step == (-1) = [cexp| $id:n-- |]
+          | step == 1    = [cexp| $id:i++ |]
+          | step == (-1) = [cexp| $id:i-- |]
           | step == 0    = [cexp| 0 |]
-          | step >  0    = [cexp| $id:n = $id:n + $step |]
-          | step <  0    = [cexp| $id:n = $id:n - $(negate step) |]
-    addStm [cstm| for ($id:n=$loe; $conte; $stepe) {$items:bodyc} |]
+          | step >  0    = [cexp| $id:i = $id:i + $step |]
+          | step <  0    = [cexp| $id:i = $id:i - $(negate step) |]
+    addStm [cstm| for ($id:i=$loe; $conte; $stepe) {$items:bodyc} |]
 compControlCMD Break = addStm [cstm| break; |]
 compControlCMD (Assert cond msg) = do
     addInclude "<assert.h>"
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
 
-compPtrCMD :: PtrCMD prog a -> CGen a
+compPtrCMD :: PtrCMD (Param3 prog exp pred) a -> CGen a
 compPtrCMD (SwapPtr a b) = do
     sym <- gensym "tmp"
     addLocal [cdecl| void * $id:sym; |]
@@ -193,7 +197,8 @@ compIOMode AppendMode    = "a"
 compIOMode ReadWriteMode = "r+"
 
 -- | Compile `FileCMD`
-compFileCMD :: CompExp exp => FileCMD exp CGen a -> CGen a
+compFileCMD :: (CompExp exp, CompTypeClass ct, ct Bool) =>
+    FileCMD (Param3 prog exp ct) a -> CGen a
 compFileCMD (FOpen path mode) = do
     addInclude "<stdio.h>"
     addInclude "<stdlib.h>"
@@ -218,48 +223,49 @@ compFileCMD (FPrintf h form as) = do
     addStm [cstm| fprintf($args:as'); |]
 compFileCMD cmd@(FGet h) = do
     addInclude "<stdio.h>"
-    (v,n) <- freshVar
+    v <- freshVar (proxyPred cmd)
     touchVar h
-    let mkProxy = (\_ -> Proxy) :: FileCMD exp prog (exp a) -> Proxy a
+    let mkProxy = (\_ -> Proxy) :: FileCMD (Param3 prog exp pred) (Val a) -> Proxy a
         form    = formatSpecifier (mkProxy cmd)
-    addStm [cstm| fscanf($id:h, $string:form, &$id:n); |]
+    addStm [cstm| fscanf($id:h, $string:form, &$id:v); |]
     return v
-compFileCMD (FEof h) = do
+compFileCMD cmd@(FEof h) = do
     addInclude "<stdbool.h>"
     addInclude "<stdio.h>"
-    (v,n) <- freshVar
+    v <- freshVar (proxyPred cmd)
     touchVar h
-    addStm [cstm| $id:n = feof($id:h); |]
+    addStm [cstm| $id:v = feof($id:h); |]
     return v
 
-compC_CMD :: forall exp a . CompExp exp => C_CMD exp CGen a -> CGen a
+compC_CMD :: (CompExp exp, CompTypeClass ct) =>
+    C_CMD (Param3 CGen exp ct) a -> CGen a
 compC_CMD cmd@(NewPtr base) = do
     addInclude "<stddef.h>"
-    sym <- gensym base
-    t   <- compTypeFromCMD cmd (proxyArg cmd)
-    addLocal [cdecl| $ty:t * $id:sym = NULL; |]
-    return $ PtrComp sym
+    p <- PtrComp <$> gensym base
+    t <- compType (proxyPred cmd) (proxyArg cmd)
+    addLocal [cdecl| $ty:t * $id:p = NULL; |]
+    return p
 compC_CMD (PtrToArr (PtrComp p)) = return $ ArrComp p
 compC_CMD (NewObject base t pointed) = do
-    sym <- gensym base
+    o <- Object pointed t <$> gensym base
     let t' = namedType t
     if pointed
-      then addLocal [cdecl| $ty:t' * $id:sym; |]
-      else addLocal [cdecl| $ty:t' $id:sym; |]
-    return $ Object pointed t sym
+      then addLocal [cdecl| $ty:t' * $id:o; |]
+      else addLocal [cdecl| $ty:t' $id:o; |]
+    return o
 compC_CMD (AddInclude inc)    = addInclude inc
 compC_CMD (AddDefinition def) = addGlobal def
-compC_CMD (AddExternFun fun (res :: proxy (exp res)) args) = do
-    tres  <- compType (Proxy :: Proxy exp) (Proxy :: Proxy res)
+compC_CMD cmd@(AddExternFun fun res args) = do
+    tres  <- compType (proxyPred cmd) res
     targs <- mapM mkParam args
     addGlobal [cedecl| extern $ty:tres $id:fun($params:targs); |]
 compC_CMD (AddExternProc proc args) = do
     targs <- mapM mkParam args
     addGlobal [cedecl| extern void $id:proc($params:targs); |]
-compC_CMD (CallFun fun as) = do
-    as'   <- mapM mkArg as
-    (v,n) <- freshVar
-    addStm [cstm| $id:n = $id:fun($args:as'); |]
+compC_CMD cmd@(CallFun fun as) = do
+    as' <- mapM mkArg as
+    v   <- freshVar (proxyPred cmd)
+    addStm [cstm| $id:v = $id:fun($args:as'); |]
     return v
 compC_CMD (CallProc obj fun as) = do
     as' <- mapM mkArg as
@@ -268,10 +274,10 @@ compC_CMD (CallProc obj fun as) = do
       Just o  -> addStm [cstm| $id:o = $id:fun($args:as'); |]
 compC_CMD (InModule mod prog) = inModule mod prog
 
-instance CompExp exp => Interp (RefCMD exp)     CGen where interp = compRefCMD
-instance CompExp exp => Interp (ControlCMD exp) CGen where interp = compControlCMD
-instance                Interp PtrCMD           CGen where interp = compPtrCMD
-instance CompExp exp => Interp (FileCMD exp)    CGen where interp = compFileCMD
-instance CompExp exp => Interp (C_CMD exp)      CGen where interp = compC_CMD
-instance (CompExp exp, EvalExp exp) => Interp (ArrCMD exp) CGen where interp = compArrCMD
+instance (CompExp exp, CompTypeClass ct)          => Interp RefCMD     CGen (Param2 exp ct) where interp = compRefCMD
+instance (CompExp exp, CompTypeClass ct)          => Interp ArrCMD     CGen (Param2 exp ct) where interp = compArrCMD
+instance (CompExp exp, CompTypeClass ct)          => Interp ControlCMD CGen (Param2 exp ct) where interp = compControlCMD
+instance                                             Interp PtrCMD     CGen (Param2 exp ct) where interp = compPtrCMD
+instance (CompExp exp, CompTypeClass ct, ct Bool) => Interp FileCMD    CGen (Param2 exp ct) where interp = compFileCMD
+instance (CompExp exp, CompTypeClass ct)          => Interp C_CMD      CGen (Param2 exp ct) where interp = compC_CMD
 

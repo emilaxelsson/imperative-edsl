@@ -10,6 +10,10 @@ module Imperative where
 
 import Data.Int
 import Data.Word
+import System.Directory
+import System.FilePath
+import System.Process
+import System.Random
 
 import Language.Embedded.Imperative
 import Language.Embedded.Backend.C
@@ -18,14 +22,21 @@ import Language.Embedded.CExp
 
 
 type CMD
-    =   RefCMD     CExp
-    :+: ArrCMD     CExp
-    :+: ControlCMD CExp
+    =   RefCMD
+    :+: ArrCMD
+    :+: ControlCMD
     :+: PtrCMD
-    :+: FileCMD    CExp
-    :+: C_CMD      CExp
+    :+: FileCMD
+    :+: C_CMD
 
-type Prog = Program CMD
+type Prog = Program CMD (Param2 CExp CType)
+
+prog :: Prog ()
+prog = do
+    r <- initRef (10 :: CExp Int32)
+    a <- getRef r
+    modifyRef r (*a)
+    printf "%d\n" a
 
 
 
@@ -52,8 +63,7 @@ testCExp :: Prog ()
 testCExp = do
     a :: CExp Int32 <- fget stdin
     let b = a#==10 ? a*3 $ a-5+8
-    let c = sin (i2n a) :: CExp Double
-    let d = c/23
+    let c = i2n a/23 :: CExp Double
     printf "%d " b
     printf "%d " (not_ (a#==10) ? a*3 $ a-5+8)
     printf "%d " (a `quot_` b)
@@ -61,12 +71,7 @@ testCExp = do
     printf "%d " (cond (i2b a) a b)
     printf "%d " (b2i (not_ (a#==10)) * a)
     printf "%.3f " c
-    printf "%.3f " d
     printf "%.3f " (i2n a :: CExp Float)
-    printf "%ld "  (round_ (c*1000)              :: CExp Int32)
-    printf "%d "   (round_ (11.5 :: CExp Float)  :: CExp Int32)
-    printf "%d "   (round_ (-11.5 :: CExp Float) :: CExp Int32)
-    printf "%.3f " (c**d)
 
 testRef :: Prog ()
 testRef = do
@@ -212,6 +217,7 @@ testPtr = do
 testArgs :: Prog ()
 testArgs = do
     addInclude "<stdio.h>"
+    addInclude "<stdbool.h>"
     addDefinition setPtr_def
     addDefinition ret_def
     let v = 55 :: CExp Int32
@@ -225,7 +231,7 @@ testArgs = do
     callProcAssign o "ret" [valArg v]
     callProcAssign op "setPtr" [refArg r]
     callProc "printf"
-        [ strArg "%d %d %d %d %d %d %d\n"
+        [ strArg "%d %d %d %d %d %d %d %d\n"
         , valArg v
         , deref (refArg r)
         , deref (arrArg a)
@@ -233,6 +239,7 @@ testArgs = do
         , deref (ptrArg p)
         , objArg o
         , deref (objArg op)
+        , constArg "bool" "true"
         ]
   where
     setPtr_def = [cedecl|
@@ -248,8 +255,10 @@ testArgs = do
 
 testExternArgs :: Prog ()
 testExternArgs = do
+    addInclude "<stdbool.h>"
     let v = 55 :: CExp Int32
     externProc "val_proc" [valArg v]
+    _ :: CExp Int32 <- externFun "val_fun" [valArg v]
     r <- initRef v
     externProc "ref_proc1" [refArg r]
     externProc "ref_proc2" [deref $ refArg r]  -- TODO Simplify
@@ -269,9 +278,49 @@ testExternArgs = do
     externProc "obj_proc4" [addr $ objArg op]
     externProc "obj_proc5" [deref $ objArg op]
     let s = "apa"
-    externProc "str_proc1"  [strArg s]
-    externProc "str_proc2"  [deref $ strArg s]
+    externProc "str_proc1" [strArg s]
+    externProc "str_proc2" [deref $ strArg s]
+    externProc "const_proc" [constArg "bool" "true"]
     return ()
+
+testCallFun :: Prog ()
+testCallFun = do
+    addInclude "<math.h>"
+    i :: CExp Int32 <- fget stdin
+    a <- callFun "sin" [valArg (i2n i :: CExp Double)]
+    printf "%.3f\n" (a :: CExp Double)
+
+multiModule :: Prog ()
+multiModule = do
+    addInclude "<stdlib.h>"
+    addExternProc "func_in_other" []
+    inModule "other" $ do
+      addDefinition [cedecl|
+        void func_in_other(void) {
+          puts("Hello from the other module!");
+        } |]
+      addInclude "<stdio.h>"
+    callProc "func_in_other" []
+
+testMultiModule :: IO ()
+testMultiModule = do
+    tmp <- getTemporaryDirectory
+    rand <- randomRIO (1, maxBound :: Int)
+    let temp = tmp </> "imperative-edsl_" ++ show rand
+    exists <- doesDirectoryExist temp
+    when exists $ removeDirectoryRecursive temp
+    createDirectory temp
+    let ms    = compileAll multiModule
+        files = [temp </> "imperative-edsl_" ++ m ++ ".c" | (m,_) <- ms]
+        exe   = temp </> "imperative-edsl"
+        cmd   = unwords $ ("gcc -o" : exe : files)
+    zipWithM_ writeFile files (map snd ms)
+    putStrLn cmd
+    system cmd
+    putStrLn exe
+    system exe
+    exists <- doesDirectoryExist temp
+    when exists $ removeDirectoryRecursive temp
 
 
 
@@ -283,28 +332,30 @@ testExternArgs = do
 -- secondly, the tests would always fail when running a second time.
 
 testAll = do
-    tag "testTypes"  >> compareCompiled  testTypes  (interpret testTypes)                  "0\n"
-    tag "testRef"    >> compareCompiled  testRef    (interpret testRef)                    ""
-    tag "testCExp"   >> compareCompiledM testCExp   (interpret testCExp)                   "44\n"
-    tag "testArr1"   >> compareCompiled  testArr1   (interpret testArr1)                   ""
-    tag "testArr2"   >> compareCompiled  testArr2   (interpret testArr2)                   "20\n"
-    tag "testArr3"   >> compareCompiled  testArr3   (interpret testArr3)                   ""
-    tag "testArr4"   >> compareCompiled  testArr4   (interpret testArr4)                   ""
-    tag "testArr5"   >> compareCompiled  testArr5   (interpret testArr5)                   ""
+    tag "testTypes"  >> compareCompiled  testTypes  (runIO testTypes)                      "0\n"
+    tag "testCExp"   >> compareCompiledM testCExp   (runIO testCExp)                       "44\n"
+    tag "testRef"    >> compareCompiled  testRef    (runIO testRef)                        ""
+    tag "testArr1"   >> compareCompiled  testArr1   (runIO testArr1)                       ""
+    tag "testArr2"   >> compareCompiled  testArr2   (runIO testArr2)                       "20\n"
+    tag "testArr3"   >> compareCompiled  testArr3   (runIO testArr3)                       ""
+    tag "testArr4"   >> compareCompiled  testArr4   (runIO testArr4)                       ""
+    tag "testArr5"   >> compareCompiled  testArr5   (runIO testArr5)                       ""
     tag "testArr6"   >> compareCompiled  testArr6   (runIO testArr6)                       ""
     tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr6)                       ""
     tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr7)                       ""
-    tag "testSwap1"  >> compareCompiled  testSwap1  (interpret testSwap1)                  ""
-    tag "testSwap2"  >> compareCompiled  testSwap2  (interpret testSwap2)                  "45\n"
-    tag "testIf1"    >> compareCompiled  testIf1    (interpret testIf1)                    "12\n"
-    tag "testIf2"    >> compareCompiled  testIf2    (interpret testIf2)                    "12\n"
-    tag "testFor1"   >> compareCompiled  testFor1   (interpret testFor1)                   ""
-    tag "testFor2"   >> compareCompiled  testFor2   (interpret testFor2)                   ""
-    tag "testFor3"   >> compareCompiled  testFor3   (interpret testFor3)                   ""
-    tag "testAssert" >> compareCompiled  testAssert (interpret testAssert)                 "45"
+    tag "testSwap1"  >> compareCompiled  testSwap1  (runIO testSwap1)                      ""
+    tag "testSwap2"  >> compareCompiled  testSwap2  (runIO testSwap2)                      "45\n"
+    tag "testIf1"    >> compareCompiled  testIf1    (runIO testIf1)                        "12\n"
+    tag "testIf2"    >> compareCompiled  testIf2    (runIO testIf2)                        "12\n"
+    tag "testFor1"   >> compareCompiled  testFor1   (runIO testFor1)                       ""
+    tag "testFor2"   >> compareCompiled  testFor2   (runIO testFor2)                       ""
+    tag "testFor3"   >> compareCompiled  testFor3   (runIO testFor3)                       ""
+    tag "testAssert" >> compareCompiled  testAssert (runIO testAssert)                     "45"
     tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66")    ""
+    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66 1")  ""
     tag "testExternArgs" >> compileAndCheck  testExternArgs
+    tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
+    tag "multiModule" >> testMultiModule
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'

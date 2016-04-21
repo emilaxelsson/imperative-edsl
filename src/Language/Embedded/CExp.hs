@@ -15,29 +15,15 @@ module Language.Embedded.CExp where
 
 
 import Data.Array
-import Data.Int
 import Data.Maybe
-import Data.Word
 #if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
 #endif
 import Data.Typeable
 
-#if MIN_VERSION_syntactic(3,0,0)
 import Language.Syntactic
 import Language.Syntactic.Functional (Denotation)
 import Language.Syntactic.TH
-#else
-import Language.Syntactic
-#endif
-
-#if MIN_VERSION_syntactic(3,0,0)
-import Data.TypeRep hiding (Typeable, gcast)
-import Data.TypeRep.TH
-import Data.TypeRep.Types.Basic
-import Data.TypeRep.Types.Tuple
-import Data.TypeRep.Types.IntWord
-#endif
 
 import Language.C.Quote.C
 import Language.C.Syntax (Type, UnOp (..), BinOp (..), Exp (UnOp, BinOp))
@@ -45,80 +31,8 @@ import qualified Language.C.Syntax as C
 
 import Language.C.Monad
 import Language.Embedded.Expression
-import Language.Embedded.Backend.C.Expression
+import Language.Embedded.Backend.C
 import Language.Embedded.Imperative.CMD (IArr (..))
-
-
-
---------------------------------------------------------------------------------
--- * Types
---------------------------------------------------------------------------------
-
--- | Types supported by C
-class (Show a, Eq a, Typeable a) => CType a
-  where
-    cType :: MonadC m => proxy a -> m Type
-
-    cLit         :: MonadC m => a -> m Exp
-    default cLit :: (ToExp a, MonadC m) => a -> m Exp
-    cLit = return . flip toExp mempty
-
-instance CType Bool
-  where
-    cType _ = do
-        addSystemInclude "stdbool.h"
-        return [cty| typename bool |]
-    cLit b = do
-        addSystemInclude "stdbool.h"
-        return $ if b then [cexp| true |] else [cexp| false |]
-
-instance CType Int8   where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int8_t   |]
-instance CType Int16  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int16_t  |]
-instance CType Int32  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int32_t  |]
-instance CType Int64  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename int64_t  |]
-instance CType Word8  where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint8_t  |]
-instance CType Word16 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint16_t |]
-instance CType Word32 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint32_t |]
-instance CType Word64 where cType _ = addSystemInclude "stdint.h"  >> return [cty| typename uint64_t |]
-
-instance CType Float  where cType _ = return [cty| float |]
-instance CType Double where cType _ = return [cty| double |]
-
-#if MIN_VERSION_syntactic(3,0,0)
-instance ShowClass CType where showClass _ = "CType"
-
-pCType :: Proxy CType
-pCType = Proxy
-
-deriveWitness ''CType ''BoolType
-deriveWitness ''CType ''FloatType
-deriveWitness ''CType ''DoubleType
-deriveWitness ''CType ''IntWordType
-
-derivePWitness ''CType ''BoolType
-derivePWitness ''CType ''FloatType
-derivePWitness ''CType ''DoubleType
-derivePWitness ''CType ''IntWordType
-
-instance PWitness CType CharType t
-instance PWitness CType ListType t
-instance PWitness CType TupleType t
-instance PWitness CType FunType t
-#endif
-
--- | Return whether the type of the expression is a floating-point numeric type
-isFloat :: forall a . CType a => CExp a -> Bool
-isFloat a = t == typeOf (undefined :: Float) || t == typeOf (undefined :: Double)
-  where
-    t = typeOf (undefined :: a)
-
--- | Return whether the type of the expression is a non-floating-point type
-isExact :: CType a => CExp a -> Bool
-isExact = not . isFloat
-
--- | Return whether the type of the expression is a non-floating-point type
-isExact' :: CType a => ASTF T a -> Bool
-isExact' = isExact . CExp
 
 
 
@@ -188,21 +102,18 @@ binaryOp BiGt   = Gt
 binaryOp BiLe   = Le
 binaryOp BiGe   = Ge
 
-type SupportCode = forall m . MonadC m => m ()
-
 -- | Syntactic symbols for C
 data Sym sig
   where
     -- Literal
     Lit   :: String -> a -> Sym (Full a)
     -- Predefined constant
-    Const :: SupportCode -> String -> a -> Sym (Full a)
+    Const :: String -> a -> Sym (Full a)
+      -- The difference between `Lit` and `Const` is that the latter gets turned
+      -- into a variable in the C code. It is like `Var`, except that it can
+      -- also be evaluated.
     -- Function call
-    Fun   ::
-#if MIN_VERSION_syntactic(3,0,0)
-             Signature sig =>
-#endif
-             SupportCode -> String -> Denotation sig -> Sym sig
+    Fun   :: Signature sig => String -> Denotation sig -> Sym sig
     -- Unary operator
     UOp   :: Unary (a -> b) -> Sym (a :-> Full b)
     -- Binary operator
@@ -215,6 +126,12 @@ data Sym sig
     Var   :: VarId -> Sym (Full a)
     -- Unsafe array indexing
     ArrIx :: (Integral i, Ix i) => IArr i a -> Sym (i :-> Full a)
+    -- Attach extra code to an expression
+    WithCode :: SupportCode -> Sym (a :-> Full a)
+
+type SupportCode = forall m . MonadC m => m ()
+  -- Only needed because GHC 7.8 can't represent tuple constraints (like
+  -- `MonadC`) in Template Haskell.
 
 data T sig
   where
@@ -231,14 +148,14 @@ instance Syntactic (CExp a)
     sugar   = CExp
 
 evalSym :: Sym sig -> Denotation sig
-evalSym (Lit _ a)     = a
-evalSym (Const _ _ a) = a
-evalSym (Fun _ _ f)   = f
-evalSym (UOp uop)     = evalUnary uop
-evalSym (Op bop)      = evalBinary bop
-evalSym (Cast f)      = f
-evalSym Cond          = \c t f -> if c then t else f
-evalSym (ArrIx (IArrEval arr)) = \i ->
+evalSym (Lit _ a)   = a
+evalSym (Const _ a) = a
+evalSym (Fun _ f)   = f
+evalSym (UOp uop)   = evalUnary uop
+evalSym (Op bop)    = evalBinary bop
+evalSym (Cast f)    = f
+evalSym Cond        = \c t f -> if c then t else f
+evalSym (ArrIx (IArrRun arr)) = \i ->
     if i<l || i>h
       then error $ "index "
                 ++ show (toInteger i)
@@ -247,6 +164,7 @@ evalSym (ArrIx (IArrEval arr)) = \i ->
       else arr!i
   where
     (l,h) = bounds arr
+evalSym (WithCode _) = id
 evalSym (Var v) = error $ "evalCExp: cannot evaluate variable " ++ v
 
 -- | Evaluate an expression
@@ -259,8 +177,8 @@ evalCExp (CExp e) = go e
 
 instance FreeExp CExp
   where
-    type VarPred CExp = CType
-    valExp a = CExp $ Sym $ T $ Lit (show a) a
+    type FreePred CExp = CType
+    constExp a = CExp $ Sym $ T $ Lit (show a) a
     varExp = CExp . Sym . T . Var
 
 instance EvalExp CExp where evalExp = evalCExp
@@ -279,12 +197,10 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
     go :: CType (DenResult sig) => Sym sig -> Args (AST T) sig -> m Exp
     go (Var v) Nil   = touchVar v >> return [cexp| $id:v |]
     go (Lit _ a) Nil = cLit a
-    go (Const code const _) Nil = do
-      code
+    go (Const const _) Nil = do
       touchVar const
       return [cexp| $id:const |]
-    go (Fun code fun _) args = do
-      code
+    go (Fun fun _) args = do
       as <- sequence $ listArgs compCExp' args
       return [cexp| $id:fun($args:as) |]
     go (UOp uop) (a :* Nil) = do
@@ -315,11 +231,9 @@ compCExp = simpleMatch (\(T s) -> go s) . unCExp
       i' <- compCExp' i
       touchVar arr
       return [cexp| $id:arr[$i'] |]
+    go (WithCode code) (a :* Nil) = code >> compCExp' a
 
-instance CompExp CExp
-  where
-    compExp  = compCExp
-    compType _ p = cType p
+instance CompExp CExp where compExp = compCExp
 
 -- | One-level constant folding: if all immediate sub-expressions are literals,
 -- the expression is reduced to a single literal
@@ -357,6 +271,20 @@ pattern OpP' op a b <- Sym (T (Op op)) :$ a :$ b
 pattern UOpP op a   <- CExp (Sym (T (UOp op)) :$ a)
 pattern UOpP' op a  <- Sym (T (UOp op)) :$ a
 
+-- | Return whether the type of the expression is a floating-point numeric type
+isFloat :: forall a . CType a => CExp a -> Bool
+isFloat a = t == typeOf (undefined :: Float) || t == typeOf (undefined :: Double)
+  where
+    t = typeOf (undefined :: a)
+
+-- | Return whether the type of the expression is a non-floating-point type
+isExact :: CType a => CExp a -> Bool
+isExact = not . isFloat
+
+-- | Return whether the type of the expression is a non-floating-point type
+isExact' :: CType a => ASTF T a -> Bool
+isExact' = isExact . CExp
+
 
 
 --------------------------------------------------------------------------------
@@ -369,19 +297,21 @@ value a = CExp $ Sym $ T $ Lit (show a) a
 
 -- | Predefined constant
 constant :: CType a
-    => SupportCode  -- ^ Supporting C code
-    -> String       -- ^ Name of constant
-    -> a            -- ^ Value of constant
+    => String  -- ^ Name of constant
+    -> a       -- ^ Value of constant
     -> CExp a
-constant code const val = CExp $ Sym $ T $ Const code const val
+constant const val = CExp $ Sym $ T $ Const const val
 
 -- | Create a named variable
 variable :: CType a => VarId -> CExp a
 variable = CExp . Sym . T . Var
 
+withCode :: CType a => (forall m . MonadC m => m ()) -> CExp a -> CExp a
+withCode code = CExp . smartSym' (T $ WithCode code) . unCExp
+
 true, false :: CExp Bool
-true  = constant (addInclude "<stdbool.h>") "true" True
-false = constant (addInclude "<stdbool.h>") "false" False
+true  = withCode (addInclude "<stdbool.h>") $ constant "true" True
+false = withCode (addInclude "<stdbool.h>") $ constant "false" False
 
 instance (Num a, Ord a, CType a) => Num (CExp a)
   where
@@ -429,17 +359,6 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
 
     recip = error "recip not implemented for CExp"
 
-instance (Floating a, Ord a, CType a) => Floating (CExp a)
-  where
-    pi = constant (addGlobal pi_def) "EDSL_PI" pi
-      where
-        pi_def = [cedecl|$esc:("#define EDSL_PI 3.141592653589793")|]
-          -- This is the value of `pi :: Double`.
-          -- Apparently there is no standard C99 definition of pi.
-    a ** b = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "pow" (**)) a b
-    sin a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "sin" sin) a
-    cos a  = constFold $ sugarSym (T $ Fun (addInclude "<math.h>") "cos" cos) a
-
 -- | Integer division truncated toward zero
 quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
 quot_ (LitP 0) b = 0
@@ -456,9 +375,6 @@ LitP 0 #% _          = 0
 _      #% LitP 1     = 0
 a      #% b | a == b = 0
 a      #% b          = constFold $ sugarSym (T $ Op BiRem) a b
-
-round_ :: (RealFrac a, Integral b, CType b) => CExp a -> CExp b
-round_ = constFold . sugarSym (T $ Fun (addInclude "<math.h>") "lround" round)
 
 -- | Integral type casting
 i2n :: (Integral a, Num b, CType b) => CExp a -> CExp b
@@ -570,23 +486,20 @@ arr #! i = sugarSym (T $ ArrIx arr) i
 -- Instances
 --------------------------------------------------------------------------------
 
-#if MIN_VERSION_syntactic(3,0,0)
 deriveSymbol ''Sym
-#endif
 
 instance Render Sym
   where
-    renderSym (Lit a _)      = a
-    renderSym (Const _ a _)  = a
-    renderSym (Fun _ name _) = name
-    renderSym (UOp op)       = show $ unaryOp op
-    renderSym (Op op)        = show $ binaryOp op
-    renderSym (Cast _)       = "cast"
-    renderSym (Var v)        = v
+    renderSym (Lit a _)    = a
+    renderSym (Const a _)  = a
+    renderSym (Fun name _) = name
+    renderSym (UOp op)     = show $ unaryOp op
+    renderSym (Op op)      = show $ binaryOp op
+    renderSym (Cast _)     = "cast"
+    renderSym (Var v)      = v
     renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
     renderSym (ArrIx _)              = "ArrIx ..."
-
-#if MIN_VERSION_syntactic(3,0,0)
+    renderSym (WithCode _) = "WithCode ..."
 
     renderArgs = renderArgsSmart
 
@@ -612,28 +525,6 @@ instance Equality T
 instance StringTree T
   where
     stringTreeSym as (T s) = stringTreeSym as s
-
-#else
-
-instance Semantic Sym
-  where
-    semantics s = Sem (renderSym s) (evalSym s)
-
-instance Equality Sym
-  where
-    equal    = equalDefault
-    exprHash = exprHashDefault
-
-instance Semantic T
-  where
-    semantics (T s) = semantics s
-
-instance Equality T
-  where
-    equal (T s) (T t) = equal s t
-    exprHash (T s)    = exprHash s
-
-#endif
 
 deriving instance Eq (CExp a)
   -- Must be placed here due to the sequential dependencies introduced by

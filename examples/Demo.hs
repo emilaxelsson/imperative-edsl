@@ -15,12 +15,12 @@ import Language.Embedded.CExp
 
 -- | Custom instruction type with: references, control structures and file I/O
 type CMD
-    =   RefCMD CExp
-    :+: ControlCMD CExp
-    :+: FileCMD CExp
+    =   RefCMD
+    :+: ControlCMD
+    :+: FileCMD
 
 -- | Program that asks the user for numbers and prints their sum
-sumInput :: Program CMD ()
+sumInput :: Program CMD (Param2 CExp CType) ()
 sumInput = do
     done <- initRef false
     sum  <- initRef (0 :: CExp Word32)
@@ -37,7 +37,7 @@ run_sumInput = runCompiled sumInput
 
 
 testAll = do
-    tag "sumInput" >> compareCompiled sumInput (interpret sumInput) (unlines $ map show $ reverse [0..20])
+    tag "sumInput" >> compareCompiled sumInput (runIO sumInput) (unlines $ map show $ reverse [0..20])
   where
     tag str = putStrLn $ "---------------- examples/Demo.hs/" ++ str ++ "\n"
 

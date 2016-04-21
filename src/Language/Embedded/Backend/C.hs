@@ -3,7 +3,10 @@
 
 -- | C code generation for 'Program'
 
-module Language.Embedded.Backend.C where
+module Language.Embedded.Backend.C
+  ( module Language.Embedded.Backend.C.Expression
+  , module Language.Embedded.Backend.C
+  ) where
 
 
 
@@ -25,6 +28,8 @@ import Text.PrettyPrint.Mainland (pretty)
 import Control.Monad.Operational.Higher
 import System.IO.Fake
 import Language.C.Monad
+
+import Language.Embedded.Backend.C.Expression
 
 
 
@@ -57,37 +62,37 @@ arrayInit as = C.CompoundInitializer
 -- * Code generation user interface
 --------------------------------------------------------------------------------
 
--- | Compile a program to C code represented as a string
+-- | Compile a program to C code represented as a string. To compile the
+-- resulting C code, use something like
 --
--- This function returns only the first (main) module.
--- To get every C translation units, use `compileAll`.
+-- > gcc -std=c99 YOURPROGRAM.c
 --
--- For programs that make use of the primitives in
--- "Language.Embedded.Concurrent", the resulting C code can be compiled as
--- follows:
---
--- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
-compile :: (Interp instr CGen, HFunctor instr) => Program instr a -> String
+-- This function returns only the first (main) module. To get all C translation
+-- unit, use 'compileAll'.
+compile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    Program instr (Param2 exp pred) a -> String
 compile = snd . head . compileAll
 
-compileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> [(String, String)]
-compileAll = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals . wrapMain . interpret
+-- | Compile a program to C modules, each one represented as a pair of a name
+-- and the code represented as a string. To compile the resulting C code, use
+-- something like
+--
+-- > gcc -std=c99 YOURPROGRAM.c
+compileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    Program instr (Param2 exp pred) a -> [(String, String)]
+compileAll
+    = map (("", pretty 80) <*>) . prettyCGen . liftSharedLocals
+    . wrapMain . interpret
 
--- | Compile a program to C code and print it on the screen
+-- | Compile a program to C code and print it on the screen. To compile the
+-- resulting C code, use something like
 --
--- This function returns only the first (main) module.
--- To get every C translation units, use `icompileAll`.
---
--- For programs that make use of the primitives in
--- "Language.Embedded.Concurrent", the resulting C code can be compiled as
--- follows:
---
--- > gcc -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
-icompile :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
-icompile = putStrLn . compile
-
-icompileAll :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
-icompileAll = mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) . compileAll
+-- > gcc -std=c99 YOURPROGRAM.c
+icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    Program instr (Param2 exp pred) a -> IO ()
+icompile prog = case compileAll prog of
+    [m] -> putStrLn $ snd m
+    ms  -> mapM_ (\(n, m) -> putStrLn ("// module " ++ n) >> putStrLn m) ms
 
 removeFileIfPossible :: FilePath -> IO ()
 removeFileIfPossible file =
@@ -111,20 +116,20 @@ defaultExtCompilerOpts = ExternalCompilerOpts
 instance Monoid ExternalCompilerOpts
   where
     mempty = defaultExtCompilerOpts
-    mappend (ExternalCompilerOpts keep1 pre1 post1 silent1) (ExternalCompilerOpts keep2 pre2 post2 silent2) =
-        ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2) silent2
+    mappend
+        (ExternalCompilerOpts keep1 pre1 post1 silent1)
+        (ExternalCompilerOpts keep2 pre2 post2 silent2) =
+            ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2) silent2
 
 maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
 maybePutStrLn _ _ = return ()
 
--- TODO: it would be nice to have a version that compiles all modules of a program,
--- as it currently compiles only the first (main) module.
 -- | Generate C code and use GCC to compile it
-compileC :: (Interp instr CGen, HFunctor instr)
+compileC :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
-    -> Program instr a  -- ^ Program to compile
-    -> IO FilePath      -- ^ Path to the generated executable
+    -> Program instr (Param2 exp pred) a  -- ^ Program to compile
+    -> IO FilePath                        -- ^ Path to the generated executable
 compileC (ExternalCompilerOpts {..}) prog = do
     tmp <- getTemporaryDirectory
     t   <- fmap (formatTime defaultTimeLocale format) getCurrentTime
@@ -150,61 +155,62 @@ compileC (ExternalCompilerOpts {..}) prog = do
     format = if externalKeepFiles then "%a-%H-%M-%S_" else ""
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
-compileAndCheck' :: (Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> IO ()
+compileAndCheck' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr (Param2 exp pred) a -> IO ()
 compileAndCheck' opts prog = do
     let opts' = opts {externalFlagsPre = "-c" : externalFlagsPre opts}
     exe <- compileC opts' prog
     removeFileIfPossible exe
 
 -- | Generate C code and use GCC to check that it compiles (no linking)
-compileAndCheck :: (Interp instr CGen, HFunctor instr) =>
-    Program instr a -> IO ()
+compileAndCheck :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    Program instr (Param2 exp pred) a -> IO ()
 compileAndCheck = compileAndCheck' mempty
 
 -- | Generate C code, use GCC to compile it, and run the resulting executable
-runCompiled' :: (Interp instr CGen, HFunctor instr) =>
-    ExternalCompilerOpts -> Program instr a -> IO ()
-runCompiled' opts@(ExternalCompilerOpts {..}) prog = do
-    exe <- compileC opts prog
-    maybePutStrLn externalSilent ""
-    maybePutStrLn externalSilent "#### Running:"
-    system exe
-    removeFileIfPossible exe
-    return ()
+runCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    ExternalCompilerOpts -> Program instr (Param2 exp pred) a -> IO ()
+runCompiled' opts@(ExternalCompilerOpts {..}) prog = bracket
+    (compileC opts prog)
+    removeFileIfPossible
+    ( \exe -> do
+        maybePutStrLn externalSilent ""
+        maybePutStrLn externalSilent "#### Running:"
+        system exe >> return ()
+    )
 
 -- | Generate C code, use GCC to compile it, and run the resulting executable
-runCompiled :: (Interp instr CGen, HFunctor instr) => Program instr a -> IO ()
+runCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
+    Program instr (Param2 exp pred) a -> IO ()
 runCompiled = runCompiled' mempty
 
 -- | Like 'runCompiled'' but with explicit input/output connected to
 -- @stdin@/@stdout@
-captureCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+captureCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
-    -> Program instr a  -- ^ Program to run
-    -> String           -- ^ Input to send to @stdin@
-    -> IO String        -- ^ Result from @stdout@
-captureCompiled' opts prog inp = do
-    exe <- compileC opts prog
-    out <- fakeIO (system exe) inp
-    removeFileIfPossible exe
-    return out
+    -> Program instr (Param2 exp pred) a  -- ^ Program to run
+    -> String                             -- ^ Input to send to @stdin@
+    -> IO String                          -- ^ Result from @stdout@
+captureCompiled' opts prog inp = bracket
+    (compileC opts prog)
+    removeFileIfPossible
+    (\exe -> fakeIO (system exe) inp)
 
 -- | Like 'runCompiled' but with explicit input/output connected to
 -- @stdin@/@stdout@
-captureCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
-    => Program instr a  -- ^ Program to run
-    -> String           -- ^ Input to send to @stdin@
-    -> IO String        -- ^ Result from @stdout@
+captureCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
+    => Program instr (Param2 exp pred) a  -- ^ Program to run
+    -> String                             -- ^ Input to send to @stdin@
+    -> IO String                          -- ^ Result from @stdout@
 captureCompiled = captureCompiled' defaultExtCompilerOpts
 
 -- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code
-compareCompiled' :: (Interp instr IO, Interp instr CGen, HFunctor instr)
+compareCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
-    -> Program instr a  -- ^ Program to run
-    -> IO a             -- ^ Reference program
-    -> String           -- ^ Input to send to @stdin@
+    -> Program instr (Param2 exp pred) a  -- ^ Program to run
+    -> IO a                               -- ^ Reference program
+    -> String                             -- ^ Input to send to @stdin@
     -> IO ()
 compareCompiled' opts@(ExternalCompilerOpts {..}) prog ref inp = do
     maybePutStrLn externalSilent "#### Reference program:"
@@ -220,10 +226,10 @@ compareCompiled' opts@(ExternalCompilerOpts {..}) prog ref inp = do
 
 -- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code
-compareCompiled :: (Interp instr IO, Interp instr CGen, HFunctor instr)
-    => Program instr a  -- ^ Program to run
-    -> IO a             -- ^ Reference program
-    -> String           -- ^ Input to send to @stdin@
+compareCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
+    => Program instr (Param2 exp pred) a  -- ^ Program to run
+    -> IO a                               -- ^ Reference program
+    -> String                             -- ^ Input to send to @stdin@
     -> IO ()
 compareCompiled = compareCompiled' defaultExtCompilerOpts
 
