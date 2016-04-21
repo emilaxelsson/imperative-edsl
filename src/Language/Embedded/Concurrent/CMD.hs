@@ -3,7 +3,7 @@
 
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
-    CID, ChanBound, Chan (..),
+    CID, ChanBound, ChanOffset, Chan (..),
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable
@@ -26,7 +26,8 @@ import Language.Embedded.Imperative.CMD
 
 
 -- | Maximum number of elements in some bounded channel.
-type ChanBound = Word16
+type ChanBound  = Word16
+type ChanOffset = Word16
 
 type TID = VarId
 type CID = VarId
@@ -86,9 +87,12 @@ data ChanCMD fs a where
   WriteOne  :: pred a
             => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: pred a => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+  ReadChan  :: pred a
+            => Chan t a -> exp ChanOffset -> exp ChanOffset
+            -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
   WriteChan :: pred a
-            => Chan t a -> exp Int -> exp Int -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+            => Chan t a -> exp ChanOffset -> exp ChanOffset
+            -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
 instance HFunctor ThreadCMD where
   hfmap f (ForkWithId p) = ForkWithId $ f . p
@@ -109,7 +113,7 @@ instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr where
 instance HFunctor ChanCMD where
   hfmap _ (NewChan sz)        = NewChan sz
   hfmap _ (ReadOne c)         = ReadOne c
-  hfmap _ (ReadChan c t f a)  = ReadChan c t f a
+  hfmap _ (ReadChan c f t a)  = ReadChan c f t a
   hfmap _ (WriteOne c x)      = WriteOne c x
   hfmap _ (WriteChan c f t a) = WriteChan c f t a
   hfmap _ (CloseChan c)       = CloseChan c
@@ -127,7 +131,15 @@ instance HBifunctor ChanCMD where
 instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
   reexpressInstrEnv reexp (NewChan sz)    = lift . singleInj . NewChan =<< reexp sz
   reexpressInstrEnv reexp (ReadOne c)     = lift $ singleInj $ ReadOne c
+  reexpressInstrEnv reexp (ReadChan c f t a) = do
+      rf <- reexp f
+      rt <- reexp t
+      lift $ singleInj $ ReadChan c rf rt a
   reexpressInstrEnv reexp (WriteOne c x)  = lift . singleInj . WriteOne c =<< reexp x
+  reexpressInstrEnv reexp (WriteChan c f t a) = do
+      rf <- reexp f
+      rt <- reexp t
+      lift $ singleInj $ WriteChan c rf rt a
   reexpressInstrEnv reexp (CloseChan c)   = lift $ singleInj $ CloseChan c
   reexpressInstrEnv reexp (ReadOK c)      = lift $ singleInj $ ReadOK c
 
