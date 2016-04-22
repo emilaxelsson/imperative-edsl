@@ -3,7 +3,7 @@
 
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
-    CID, ChanBound, ChanOffset, Chan (..),
+    CID, Chan (..),
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable
@@ -24,10 +24,6 @@ import qualified Control.Concurrent.BoundedChan as Bounded
 import Data.Word (Word16)
 import Language.Embedded.Imperative.CMD
 
-
--- | Maximum number of elements in some bounded channel.
-type ChanBound  = Word16
-type ChanOffset = Word16
 
 type TID = VarId
 type CID = VarId
@@ -79,7 +75,7 @@ data ThreadCMD fs a where
   Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
 
 data ChanCMD fs a where
-  NewChan   :: pred a => exp ChanBound -> ChanCMD (Param3 prog exp pred) (Chan t a)
+  NewChan   :: (pred a, Integral i) => exp i -> ChanCMD (Param3 prog exp pred) (Chan t a)
   CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
   ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
@@ -87,11 +83,11 @@ data ChanCMD fs a where
   WriteOne  :: pred a
             => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: pred a
-            => Chan t a -> exp ChanOffset -> exp ChanOffset
+  ReadChan  :: (pred a, Integral i)
+            => Chan t a -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
-  WriteChan :: pred a
-            => Chan t a -> exp ChanOffset -> exp ChanOffset
+  WriteChan :: (pred a, Integral i)
+            => Chan t a -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
 instance HFunctor ThreadCMD where

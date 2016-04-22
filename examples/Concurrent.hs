@@ -25,7 +25,7 @@ type Prog = Program CMD (Param2 CExp CType)
 -- | Deadlocks due to channel becoming full.
 deadlock :: Prog ()
 deadlock = do
-  c <- newChan 1
+  c <- newChan (1 :: CExp Word16)
   t <- fork $ readChan c >>= printf "%d\n"
   writeChan c (1 :: CExp Int32)
   writeChan c 2
@@ -36,8 +36,8 @@ deadlock = do
 --   happen in separate threads.
 mapFile :: (CExp Float -> CExp Float) -> FilePath -> Prog ()
 mapFile f i = do
-  c1 <- newCloseableChan 5
-  c2 <- newCloseableChan 5
+  c1 <- newCloseableChan (5 :: CExp Word16)
+  c2 <- newCloseableChan (5 :: CExp Word16)
   fi <- fopen i ReadMode
 
   t1 <- fork $ do

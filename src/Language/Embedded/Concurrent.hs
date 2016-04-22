@@ -6,7 +6,7 @@
 -- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 module Language.Embedded.Concurrent (
     ThreadId (..),
-    ChanBound, ChanOffset, Chan (..),
+    Chan (..),
     ThreadCMD,
     ChanCMD,
     Closeable, Uncloseable,
@@ -55,13 +55,13 @@ waitThread = singleton . inj . Wait
 --
 --   We'll likely want to change this, actually copying arrays and the like
 --   into the queue instead of sharing them across threads.
-newChan :: (pred a, ChanCMD :<: instr)
-        => exp ChanBound
+newChan :: (pred a, Integral i, ChanCMD :<: instr)
+        => exp i
         -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
 newChan = singleInj . NewChan
 
-newCloseableChan :: (pred a, ChanCMD :<: instr)
-        => exp ChanBound
+newCloseableChan :: (pred a, Integral i, ChanCMD :<: instr)
+        => exp i
         -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
 newCloseableChan = singleInj . NewChan
 
@@ -78,10 +78,16 @@ readChan = fmap valToExp . singleInj . ReadOne
 --   The semantics are the same as for 'readChan', where "channel is empty"
 --   is defined as "channel contains less data than requested".
 --   Returns @False@ without reading any data if the channel is closed.
-readChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
+readChanBuf :: ( Integral i
+               , pred a
+               , FreeExp exp
+               , FreePred exp Bool
+               , ChanCMD :<: instr
+               , Monad m
+               )
          => Chan t a
-         -> exp ChanOffset -- ^ Offset in array to start writing
-         -> exp ChanOffset -- ^ Elements to read
+         -> exp i -- ^ Offset in array to start writing
+         -> exp i -- ^ Elements to read
          -> Arr i a
          -> ProgramT instr (Param2 exp pred) m (exp Bool)
 readChanBuf ch off sz arr = fmap valToExp . singleInj $ ReadChan ch off sz arr
@@ -106,10 +112,16 @@ writeChan c = fmap valToExp . singleInj . WriteOne c
 --   The semantics are the same as for 'writeChan', where "channel is full"
 --   is defined as "channel has insufficient free space to store all written
 --   data".
-writeChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
+writeChanBuf :: ( pred a
+                , Integral i
+                , FreeExp exp
+                , FreePred exp Bool
+                , ChanCMD :<: instr
+                , Monad m
+                )
          => Chan t a
-         -> exp ChanOffset -- ^ Offset in array to start reading
-         -> exp ChanOffset -- ^ Elements to write
+         -> exp i -- ^ Offset in array to start reading
+         -> exp i -- ^ Elements to write
          -> Arr i a
          -> ProgramT instr (Param2 exp pred) m (exp Bool)
 writeChanBuf ch off sz arr = fmap valToExp . singleInj $ WriteChan ch off sz arr
