@@ -6,7 +6,7 @@
 -- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 module Language.Embedded.Concurrent (
     ThreadId (..),
-    ChanBound, Chan (..),
+    ChanBound, ChanOffset, Chan (..),
     ThreadCMD,
     ChanCMD,
     Closeable, Uncloseable,
@@ -80,8 +80,8 @@ readChan = fmap valToExp . singleInj . ReadOne
 --   Returns @False@ without reading any data if the channel is closed.
 readChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
          => Chan t a
-         -> exp Int -- ^ Offset in array to start writing
-         -> exp Int -- ^ Elements to read
+         -> exp ChanOffset -- ^ Offset in array to start writing
+         -> exp ChanOffset -- ^ Elements to read
          -> Arr i a
          -> ProgramT instr (Param2 exp pred) m (exp Bool)
 readChanBuf ch off sz arr = fmap valToExp . singleInj $ ReadChan ch off sz arr
@@ -108,8 +108,8 @@ writeChan c = fmap valToExp . singleInj . WriteOne c
 --   data".
 writeChanBuf :: (pred a, FreeExp exp, FreePred exp Bool, ChanCMD :<: instr, Monad m)
          => Chan t a
-         -> exp Int -- ^ Offset in array to start reading
-         -> exp Int -- ^ Elements to write
+         -> exp ChanOffset -- ^ Offset in array to start reading
+         -> exp ChanOffset -- ^ Elements to write
          -> Arr i a
          -> ProgramT instr (Param2 exp pred) m (exp Bool)
 writeChanBuf ch off sz arr = fmap valToExp . singleInj $ WriteChan ch off sz arr
