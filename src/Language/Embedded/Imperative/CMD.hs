@@ -409,7 +409,7 @@ instance Formattable Word16 where formatSpecifier _ = "%u"
 instance Formattable Word32 where formatSpecifier _ = "%u"
 instance Formattable Word64 where formatSpecifier _ = "%lu"
 instance Formattable Float  where formatSpecifier _ = "%f"
-instance Formattable Double where formatSpecifier _ = "%f"
+instance Formattable Double where formatSpecifier _ = "%lf"
 
 data FileCMD fs a
   where
