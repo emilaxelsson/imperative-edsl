@@ -17,6 +17,7 @@ import Control.Applicative
 #endif
 import Control.Monad.Operational.Higher
 import Control.Monad.Reader
+import Data.Dynamic
 import Data.IORef
 import Data.Typeable
 import qualified Control.Concurrent as CC
@@ -69,7 +70,7 @@ data Uncloseable
 
 -- | A bounded channel.
 data Chan t a
-  = ChanRun (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
+  = ChanRun (Bounded.BoundedChan Dynamic) (IORef Bool) (IORef Bool)
   | ChanComp CID
 
 -- | Describes an element type on a channel.
@@ -92,8 +93,9 @@ data ChanCMD fs a where
   CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
   ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadOne   :: pred a => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
-  WriteOne  :: pred a
+  ReadOne   :: (Typeable a, pred a)
+            => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
+  WriteOne  :: (Typeable a, pred a)
             => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
   ReadChan  :: (pred a, Integral i)
@@ -179,15 +181,17 @@ runChanCMD (NewChan (ChanSize sz)) = do
 runChanCMD (ReadOne (ChanRun c closedref lastread)) = do
   closed <- readIORef closedref
   mval <- Bounded.tryReadChan c
+  let convert d = case fromDynamic d of
+          Just v -> v
+          _      -> error "readChan: unknown element"
   case mval of
     Just x -> do
-        return $ ValRun x
+        return $ ValRun $ convert x
     Nothing
       | closed -> do
         writeIORef lastread False
         return undefined
-      | otherwise -> do
-        ValRun <$> Bounded.readChan c
+      | otherwise -> ValRun . convert <$> Bounded.readChan c
 runChanCMD (ReadChan _ _ _ _) = do
   error "TODO: array reads on channels"
 runChanCMD (WriteOne (ChanRun c closedref _) x) = do
@@ -195,7 +199,7 @@ runChanCMD (WriteOne (ChanRun c closedref _) x) = do
   x' <- x
   if closed
     then return (ValRun False)
-    else Bounded.writeChan c x' >> return (ValRun True)
+    else Bounded.writeChan c (toDyn x') >> return (ValRun True)
 runChanCMD (WriteChan _ _ _ _) = do
   error "TODO: array writes on channels"
 runChanCMD (CloseChan (ChanRun _ closedref _)) = do
@@ -207,4 +211,3 @@ instance InterpBi ThreadCMD IO (Param1 pred) where
   interpBi = runThreadCMD
 instance InterpBi ChanCMD IO (Param1 pred) where
   interpBi = runChanCMD
-

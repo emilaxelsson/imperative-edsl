@@ -75,7 +75,7 @@ fromSingleType p n = ChanSize [(ChanElemType p, n)]
 --   is an item available.
 --   If 'closeChan' has been called on the channel *and* if the channel is
 --   empty, @readChan@ returns an undefined value immediately.
-readChan :: (pred a, FreeExp exp, FreePred exp a, ChanCMD :<: instr, Monad m)
+readChan :: (Typeable a, pred a, FreeExp exp, FreePred exp a, ChanCMD :<: instr, Monad m)
          => Chan t a
          -> ProgramT instr (Param2 exp pred) m (exp a)
 readChan = fmap valToExp . singleInj . ReadOne
@@ -103,7 +103,7 @@ readChanBuf ch off sz arr = fmap valToExp . singleInj $ ReadChan ch off sz arr
 --   become non-blocking no-ops and return @False@, otherwise returns @True@.
 --   If the channel is full, this function blocks until there's space in the
 --   queue.
-writeChan :: (pred a,
+writeChan :: (Typeable a, pred a,
               FreeExp exp,
               FreePred exp Bool,
               ChanCMD :<: instr,
