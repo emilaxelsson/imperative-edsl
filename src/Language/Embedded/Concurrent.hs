@@ -16,6 +16,7 @@ module Language.Embedded.Concurrent (
   ) where
 
 import Control.Monad.Operational.Higher
+import Data.Typeable
 import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
 import Language.Embedded.Imperative.CMD (Arr)
@@ -55,15 +56,20 @@ waitThread = singleton . inj . Wait
 --
 --   We'll likely want to change this, actually copying arrays and the like
 --   into the queue instead of sharing them across threads.
-newChan :: (pred a, Integral i, ChanCMD :<: instr)
+newChan :: forall pred a i instr exp m
+        .  (pred a, Integral i, ChanCMD :<: instr)
         => exp i
         -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
-newChan = singleInj . NewChan
+newChan = singleInj . NewChan . fromSingleType (Proxy :: Proxy a)
 
-newCloseableChan :: (pred a, Integral i, ChanCMD :<: instr)
+newCloseableChan :: forall pred a i instr exp m
+        .  (pred a, Integral i, ChanCMD :<: instr)
         => exp i
         -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
-newCloseableChan = singleInj . NewChan
+newCloseableChan = singleInj . NewChan . fromSingleType (Proxy :: Proxy a)
+
+fromSingleType :: (pred a, Integral i) => Proxy a -> exp i -> ChanSize exp pred
+fromSingleType p n = ChanSize [(ChanElemType p, n)]
 
 -- | Read an element from a channel. If channel is empty, blocks until there
 --   is an item available.

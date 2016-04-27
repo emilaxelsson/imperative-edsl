@@ -10,6 +10,7 @@ module Language.Embedded.Concurrent.Backend.C where
 import Control.Applicative
 #endif
 import Control.Monad.Operational.Higher
+import Data.Typeable
 import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
 import Language.Embedded.Imperative.CMD
@@ -55,13 +56,16 @@ compThreadCMD (Wait tid) = do
 compChanCMD :: (CompExp exp, CompTypeClass ct, ct Bool)
             => ChanCMD (Param3 CGen exp ct) a
             -> CGen a
-compChanCMD cmd@(NewChan sz) = do
+compChanCMD cmd@(NewChan (ChanSize sz)) = do
   addLocalInclude "chan.h"
-  t <- compType (proxyPred cmd) (proxyArg cmd)
-  sz' <- compExp sz
+  sizes <- forM sz $ \(t,sz) -> do
+      t' <- compElemType t
+      sz' <- compExp sz
+      return [cexp| $sz'*sizeof($ty:t') |]
+  let totalSize = foldl1 (\a b -> [cexp| $a + $b |]) sizes
   c <- ChanComp <$> gensym "chan"
   addGlobal [cedecl| typename chan_t $id:c; |]
-  addStm [cstm| $id:c = chan_new($sz'*sizeof($ty:t)); |]
+  addStm [cstm| $id:c = chan_new($totalSize); |]
   return c
 compChanCMD cmd@(WriteOne c (x :: exp a)) = do
   x'         <- compExp x
@@ -94,8 +98,10 @@ compChanCMD cmd@(ReadOK c) = do
   addStm [cstm| $id:var = chan_last_read_ok($id:c); |]
   return var
 
+compElemType :: forall ct. CompTypeClass ct => ChanElemType ct -> CGen C.Type
+compElemType (ChanElemType p) = compType (Proxy :: Proxy ct) p
+
 instance Interp ThreadCMD CGen (Param2 exp pred) where
   interp = compThreadCMD
 instance (CompExp exp, CompTypeClass ct, ct Bool) => Interp ChanCMD CGen (Param2 exp ct) where
   interp = compChanCMD
-

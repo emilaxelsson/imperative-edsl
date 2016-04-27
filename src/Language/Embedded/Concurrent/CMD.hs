@@ -1,9 +1,10 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
-    CID, Chan (..),
+    CID, Chan (..), ChanElemType (..), ChanSize (..),
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable
@@ -18,11 +19,13 @@ import Control.Monad.Operational.Higher
 import Control.Monad.Reader
 import Data.IORef
 import Data.Typeable
-import Language.Embedded.Expression
 import qualified Control.Concurrent as CC
 import qualified Control.Concurrent.BoundedChan as Bounded
 import Data.Word (Word16)
+import Language.Embedded.Backend.C.Expression
+import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
+
 
 
 type TID = VarId
@@ -69,13 +72,23 @@ data Chan t a
   = ChanRun (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
   | ChanComp CID
 
+-- | Describes an element type on a channel.
+--   Used to represent types in 'ChanSize'.
+data ChanElemType pred = forall a. pred a => ChanElemType (Proxy a)
+
+-- | Channel size specification. For each possible element type, it shows how
+--   many elements of them could be stored in the given channel at once.
+data ChanSize exp pred where
+  ChanSize :: Integral i => [(ChanElemType pred, exp i)] -> ChanSize exp pred
+
 data ThreadCMD fs a where
   ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD (Param3 prog exp pred) ThreadId
   Kill       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
   Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
 
 data ChanCMD fs a where
-  NewChan   :: (pred a, Integral i) => exp i -> ChanCMD (Param3 prog exp pred) (Chan t a)
+  NewChan   :: pred a
+            => ChanSize exp pred -> ChanCMD (Param3 prog exp pred) (Chan t a)
   CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
   ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
@@ -116,17 +129,18 @@ instance HFunctor ChanCMD where
   hfmap _ (ReadOK c)          = ReadOK c
 
 instance HBifunctor ChanCMD where
-  hbimap _ f (NewChan sz)         = NewChan (f sz)
-  hbimap _ _ (ReadOne c)          = ReadOne c
-  hbimap _ f (ReadChan c n n' a)  = ReadChan c (f n) (f n') a
-  hbimap _ f (WriteOne c x)       = WriteOne c (f x)
-  hbimap _ f (WriteChan c n n' a) = WriteChan c (f n) (f n') a
-  hbimap _ _ (CloseChan c    )    = CloseChan c
-  hbimap _ _ (ReadOK c)           = ReadOK c
+  hbimap _ f (NewChan (ChanSize sz)) = NewChan (ChanSize $ map (f <$>) sz)
+  hbimap _ _ (ReadOne c)             = ReadOne c
+  hbimap _ f (ReadChan c n n' a)     = ReadChan c (f n) (f n') a
+  hbimap _ f (WriteOne c x)          = WriteOne c (f x)
+  hbimap _ f (WriteChan c n n' a)    = WriteChan c (f n) (f n') a
+  hbimap _ _ (CloseChan c    )       = CloseChan c
+  hbimap _ _ (ReadOK c)              = ReadOK c
 
 instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
-  reexpressInstrEnv reexp (NewChan sz)    = lift . singleInj . NewChan =<< reexp sz
-  reexpressInstrEnv reexp (ReadOne c)     = lift $ singleInj $ ReadOne c
+  reexpressInstrEnv reexp (NewChan (ChanSize sz)) =
+      lift . singleInj . NewChan . ChanSize =<< forM sz (mapM reexp)
+  reexpressInstrEnv reexp (ReadOne c) = lift $ singleInj $ ReadOne c
   reexpressInstrEnv reexp (ReadChan c f t a) = do
       rf <- reexp f
       rt <- reexp t
@@ -156,8 +170,9 @@ runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
 runChanCMD :: ChanCMD (Param3 IO IO pred) a -> IO a
-runChanCMD (NewChan sz) = do
-  sz' <- sz
+runChanCMD (NewChan (ChanSize sz)) = do
+  let sizes = map snd sz
+  sz' <- sum <$> sequence sizes
   ChanRun <$> Bounded.newBoundedChan (fromIntegral sz')
           <*> newIORef False
           <*> newIORef True

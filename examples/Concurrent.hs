@@ -84,6 +84,17 @@ suicide = do
   waitThread tid
   printf "The thread is dead, long live the thread! %d\n" (0 :: CExp Int32)
 
+-- | Primitive channel operations.
+chanOps :: Prog ()
+chanOps = do
+  c <- newCloseableChan (2 :: CExp Word16)
+  writeChan c (1337 :: CExp Int32)
+  writeChan c 42
+  a <- readChan c
+  b <- readChan c
+  printf "%d %d\n" a b
+  closeChan c
+
 
 
 ----------------------------------------
@@ -91,7 +102,10 @@ suicide = do
 testAll = do
     tag "waiting" >> compareCompiled' opts waiting (runIO waiting) ""
     tag "suicide" >> compareCompiled' opts suicide (runIO suicide) ""
+    tag "chanOps" >> compareCompiled' opts chanOps (runIO chanOps) ""
   where
     tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"
-    opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}
-
+    opts = defaultExtCompilerOpts
+         { externalFlagsPre  = ["-Iinclude", "csrc/chan.c"]
+         , externalFlagsPost = ["-lpthread"]
+         }
