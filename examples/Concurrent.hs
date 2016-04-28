@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Concurrent where
@@ -95,13 +96,18 @@ chanOps = do
   a <- readChan c
   b <- readChan c
   printf "%d %d\n" a b
-  sent <- initArr [ 12, 34 ]
-  writeChanBuf c (0 :: CExp Int32) 2 sent
-  received <- newArr (2 :: CExp Int32)
-  readChanBuf c 0 2 received
+
+  sent :: Arr Int8 Int32 <- initArr [ 12, 34 ]
+  writeChanBuf c (0 :: CExp Int8) 2 sent
+  received <- newArr (2 :: CExp Int8)
+  readChanBuf c (0 :: CExp Int8) 2 received
   a <- getArr 0 received
   b <- getArr 1 received
   printf "%d %d\n" a b
+
+  writeChan' c (67 :: CExp Word8)
+  r :: CExp Word8 <- readChan' c
+  printf "%d\n" r
   closeChan c
 
 

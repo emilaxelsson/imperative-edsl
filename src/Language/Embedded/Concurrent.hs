@@ -75,17 +75,17 @@ class Transferable exp pred a
     --   that is a map from primitive types to quantities. The byte size of the
     --   channel will be calculated as the sum of multiplying the byte size of
     --   each type with its quantity.
-    calcChanSize :: pred a => proxy a -> SizeSpec a -> ChanSize exp pred
+    calcChanSize :: proxy a -> SizeSpec a -> ChanSize exp pred
 
     -- | Create a new channel. Writing a reference type to a channel will copy
     --   contents into the channel, so modifying it post-write is completely
     --   safe.
-    newChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
+    newChan :: (ChanCMD :<: instr)
             => SizeSpec a
             -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
     newChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
 
-    newCloseableChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
+    newCloseableChan :: (ChanCMD :<: instr)
                      => SizeSpec a
                      -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
     newCloseableChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
@@ -94,64 +94,59 @@ class Transferable exp pred a
     --   is an item available.
     --   If 'closeChan' has been called on the channel *and* if the channel is
     --   empty, @readChan@ returns an undefined value immediately.
-    readChan :: ( pred a
-                , FreeExp exp, FreePred exp a
-                , ChanCMD :<: instr, Monad m )
+    readChan :: ( ChanCMD :<: instr, Monad m )
              => Chan t a
-             -> ProgramT instr (Param2 exp pred) m (exp a)
+             -> ProgramT instr (Param2 exp pred) m a
 
     -- | Write a data element to a channel.
     --   If 'closeChan' has been called on the channel, all calls to @writeChan@
     --   become non-blocking no-ops and return @False@, otherwise returns @True@.
     --   If the channel is full, this function blocks until there's space in the
     --   queue.
-    writeChan :: ( pred a
-                 , FreeExp exp, FreePred exp Bool
-                 , ChanCMD :<: instr, Monad m )
+    writeChan :: ( ChanCMD :<: instr, Monad m )
               => Chan t a
-              -> exp a
+              -> a
               -> ProgramT instr (Param2 exp pred) m (exp Bool)
 
-class Transferable exp pred a => BulkTransferable exp pred a
+instance CType a => Transferable CExp CType (CExp a)
   where
+    type SizeSpec (CExp a) = CExp Word32
+    calcChanSize _ sz = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
+    readChan  = readChan'
+    writeChan = writeChan'
+
+class BulkTransferable exp pred i a
+  where
+    type ChanType a :: *
     -- | Read an arbitrary number of elements from a channel into an array.
     --   The semantics are the same as for 'readChan', where "channel is empty"
     --   is defined as "channel contains less data than requested".
     --   Returns @False@ without reading any data if the channel is closed.
-    readChanBuf :: ( pred a
-                   , Ix i, Integral i
+    readChanBuf :: ( Ix i, Integral i
                    , FreeExp exp, FreePred exp Bool
                    , ChanCMD :<: instr, Monad m )
-                => Chan t a
+                => Chan t (ChanType a)
                 -> exp i -- ^ Offset in array to start writing
                 -> exp i -- ^ Elements to read
-                -> Arr i a
+                -> a
                 -> ProgramT instr (Param2 exp pred) m (exp Bool)
 
     -- | Write an arbitrary number of elements from an array into an channel.
     --   The semantics are the same as for 'writeChan', where "channel is full"
     --   is defined as "channel has insufficient free space to store all written
     --   data".
-    writeChanBuf :: ( Typeable a, pred a
-                    , Ix i, Integral i
+    writeChanBuf :: ( Ix i, Integral i
                     , FreeExp exp, FreePred exp Bool
                     , ChanCMD :<: instr, Monad m )
-                 => Chan t a
+                 => Chan t (ChanType a)
                  -> exp i -- ^ Offset in array to start reading
                  -> exp i -- ^ Elements to write
-                 -> Arr i a
+                 -> a
                  -> ProgramT instr (Param2 exp pred) m (exp Bool)
 
-
-instance Transferable CExp CType a
+instance CType a => BulkTransferable CExp CType i (Arr i a)
   where
-    type SizeSpec a = CExp Word32
-    calcChanSize _ sz = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
-    readChan  = readChan'
-    writeChan = writeChan'
-
-instance BulkTransferable CExp CType a
-  where
+    type ChanType (Arr i a) = CExp a
     readChanBuf  = readChanBuf'
     writeChanBuf = writeChanBuf'
 
