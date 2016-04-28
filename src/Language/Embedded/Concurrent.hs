@@ -16,6 +16,7 @@ module Language.Embedded.Concurrent (
   ) where
 
 import Control.Monad.Operational.Higher
+import Data.Ix
 import Data.Typeable
 import Data.Word
 
@@ -94,7 +95,8 @@ class Transferable exp pred a
 class Transferable exp pred a => BulkTransferable exp pred a
   where
     readChanBuf :: ( pred a
-                   , Integral i, FreeExp exp, FreePred exp Bool
+                   , Ix i, Integral i
+                   , FreeExp exp, FreePred exp Bool
                    , ChanCMD :<: instr, Monad m )
                 => Chan t a
                 -> exp i -- ^ Offset in array to start writing
@@ -103,7 +105,8 @@ class Transferable exp pred a => BulkTransferable exp pred a
                 -> ProgramT instr (Param2 exp pred) m (exp Bool)
 
     writeChanBuf :: ( Typeable a, pred a
-                    , Integral i, FreeExp exp, FreePred exp Bool
+                    , Ix i, Integral i
+                    , FreeExp exp, FreePred exp Bool
                     , ChanCMD :<: instr, Monad m )
                  => Chan t a
                  -> exp i -- ^ Offset in array to start reading
@@ -144,7 +147,8 @@ readChan' = fmap valToExp . singleInj . ReadOne
 --   is defined as "channel contains less data than requested".
 --   Returns @False@ without reading any data if the channel is closed.
 readChanBuf' :: ( Typeable a, pred a
-                , Integral i, FreeExp exp, FreePred exp Bool
+                , Ix i, Integral i
+                , FreeExp exp, FreePred exp Bool
                 , ChanCMD :<: instr, Monad m )
              => Chan t c
              -> exp i -- ^ Offset in array to start writing
@@ -159,8 +163,8 @@ readChanBuf' ch off sz arr = fmap valToExp . singleInj $ ReadChan ch off sz arr
 --   If the channel is full, this function blocks until there's space in the
 --   queue.
 writeChan' :: ( Typeable a, pred a
-             , FreeExp exp, FreePred exp Bool
-             , ChanCMD :<: instr, Monad m )
+              , FreeExp exp, FreePred exp Bool
+              , ChanCMD :<: instr, Monad m )
            => Chan t c
            -> exp a
            -> ProgramT instr (Param2 exp pred) m (exp Bool)
@@ -171,8 +175,9 @@ writeChan' c = fmap valToExp . singleInj . WriteOne c
 --   is defined as "channel has insufficient free space to store all written
 --   data".
 writeChanBuf' :: ( Typeable a, pred a
-                , Integral i, FreeExp exp, FreePred exp Bool
-                , ChanCMD :<: instr, Monad m )
+                 , Ix i, Integral i
+                 , FreeExp exp, FreePred exp Bool
+                 , ChanCMD :<: instr, Monad m )
               => Chan t c
               -> exp i -- ^ Offset in array to start reading
               -> exp i -- ^ Elements to write

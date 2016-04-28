@@ -21,12 +21,15 @@ import Control.Monad.Operational.Higher
 import Control.Monad.Reader
 import Data.Dynamic
 import Data.IORef
+import Data.Ix (Ix)
+import Data.Maybe (fromMaybe)
 import Data.Typeable
 import Data.Word (Word16)
 
 import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
+import Language.Embedded.Imperative (getArr, setArr)
 
 
 
@@ -98,10 +101,10 @@ data ChanCMD fs a where
   WriteOne  :: (Typeable a, pred a)
             => Chan t c -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: (Typeable a, pred a, Integral i)
+  ReadChan  :: (Typeable a, pred a, Ix i, Integral i)
             => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
-  WriteChan :: (Typeable a, pred a, Integral i)
+  WriteChan :: (Typeable a, pred a, Ix i, Integral i)
             => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
@@ -171,22 +174,29 @@ runThreadCMD (Kill (TIDRun t f)) = do
 runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
-runChanCMD :: ChanCMD (Param3 IO IO pred) a -> IO a
+runChanCMD :: forall pred a. ChanCMD (Param3 IO IO pred) a -> IO a
 runChanCMD (NewChan (ChanSize sz)) = do
   let sizes = map snd sz
   sz' <- sum <$> sequence sizes
   ChanRun <$> Chan.newChan (fromIntegral sz')
-runChanCMD (ReadOne (ChanRun c)) = do
-  let convert d = case fromDynamic d of
-          Just x -> ValRun x
-          _      -> error "readChan: unknown element"
-  convert . head <$> Chan.readChan c 1
-runChanCMD (ReadChan _ _ _ _) = do
-  error "TODO: array reads on channels"
-runChanCMD (WriteOne (ChanRun c) x) = do
+runChanCMD (ReadOne (ChanRun c)) =
+  ValRun . convertDynamic . head <$> Chan.readChan c 1
+runChanCMD (ReadChan (ChanRun c) off len arr) = do
+  off' <- off
+  len' <- len
+  xs <- Chan.readChan c $ fromIntegral (len' - off')
+  let xs' = map convertDynamic xs
+  interpretBi id $ forM_ (zip [off' .. ] xs') $ \(i, x) -> do
+    setArr (return i) (return x) arr :: Program ArrCMD (Param2 IO pred) ()
+  ValRun <$> Chan.lastReadOK c
+runChanCMD (WriteOne (ChanRun c) x) =
   ValRun <$> (Chan.writeChan c . return . toDyn =<< x)
-runChanCMD (WriteChan _ _ _ _) = do
-  error "TODO: array writes on channels"
+runChanCMD (WriteChan (ChanRun c) off len (arr :: Arr ix el)) = do
+  off' <- off
+  len' <- len
+  xs <- interpretBi id $ forM [off' .. off' + len' - 1] $ \i -> do
+    getArr (return i) arr :: Program ArrCMD (Param2 IO pred) (IO el)
+  ValRun <$> (Chan.writeChan c =<< map toDyn <$> sequence xs)
 runChanCMD (CloseChan (ChanRun c)) = Chan.closeChan c
 runChanCMD (ReadOK    (ChanRun c)) = ValRun <$> Chan.lastReadOK c
 
@@ -194,3 +204,12 @@ instance InterpBi ThreadCMD IO (Param1 pred) where
   interpBi = runThreadCMD
 instance InterpBi ChanCMD IO (Param1 pred) where
   interpBi = runChanCMD
+
+convertDynamic :: Typeable a => Dynamic -> a
+convertDynamic = fromMaybe (error "readChan: unknown element") . fromDynamic
+
+instance FreeExp IO
+  where
+    type FreePred IO = Typeable
+    constExp = return
+    varExp   = error "varExp: unimplemented over IO"
