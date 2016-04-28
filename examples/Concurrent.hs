@@ -21,7 +21,7 @@ type CMD =
   FileCMD
 
 type Prog = Program CMD (Param2 CExp CType)
-
+{-
 -- | Deadlocks due to channel becoming full.
 deadlock :: Prog ()
 deadlock = do
@@ -83,11 +83,12 @@ suicide = do
     printf "This is not. %d\n" (0 :: CExp Int32)
   waitThread tid
   printf "The thread is dead, long live the thread! %d\n" (0 :: CExp Int32)
+-}
 
 -- | Primitive channel operations.
 chanOps :: Prog ()
 chanOps = do
-  c <- newCloseableChan (2 :: CExp Word16)
+  c <- newCloseableChan (CSize (2 :: CExp Word32))
   writeChan c (1337 :: CExp Int32)
   writeChan c 42
   a <- readChan c
@@ -100,8 +101,8 @@ chanOps = do
 ----------------------------------------
 
 testAll = do
-    tag "waiting" >> compareCompiled' opts waiting (runIO waiting) ""
-    tag "suicide" >> compareCompiled' opts suicide (runIO suicide) ""
+--    tag "waiting" >> compareCompiled' opts waiting (runIO waiting) ""
+--    tag "suicide" >> compareCompiled' opts suicide (runIO suicide) ""
     tag "chanOps" >> compareCompiled' opts chanOps (runIO chanOps) ""
   where
     tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"

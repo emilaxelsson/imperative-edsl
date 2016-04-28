@@ -88,21 +88,20 @@ data ThreadCMD fs a where
   Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
 
 data ChanCMD fs a where
-  NewChan   :: pred a
-            => ChanSize exp pred -> ChanCMD (Param3 prog exp pred) (Chan t a)
-  CloseChan :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) ()
-  ReadOK    :: Chan Closeable a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+  NewChan   :: ChanSize exp pred -> ChanCMD (Param3 prog exp pred) (Chan t c)
+  CloseChan :: Chan Closeable c -> ChanCMD (Param3 prog exp pred) ()
+  ReadOK    :: Chan Closeable c -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
   ReadOne   :: (Typeable a, pred a)
-            => Chan t a -> ChanCMD (Param3 prog exp pred) (Val a)
+            => Chan t c -> ChanCMD (Param3 prog exp pred) (Val a)
   WriteOne  :: (Typeable a, pred a)
-            => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
+            => Chan t c -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: (pred a, Integral i)
-            => Chan t a -> exp i -> exp i
+  ReadChan  :: (Typeable a, pred a, Integral i)
+            => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
-  WriteChan :: (pred a, Integral i)
-            => Chan t a -> exp i -> exp i
+  WriteChan :: (Typeable a, pred a, Integral i)
+            => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
 instance HFunctor ThreadCMD where
