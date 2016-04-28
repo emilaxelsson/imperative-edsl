@@ -88,8 +88,8 @@ suicide = do
 -- | Primitive channel operations.
 chanOps :: Prog ()
 chanOps = do
-  c <- newCloseableChan (CSize (2 :: CExp Word32))
-  writeChan c (1337 :: CExp Int32)
+  c :: Chan Closeable Int32 <- newCloseableChan 2
+  writeChan c 1337
   writeChan c 42
   a <- readChan c
   b <- readChan c

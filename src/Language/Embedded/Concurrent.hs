@@ -64,8 +64,18 @@ waitThread = singleton . inj . Wait
 
 class Transferable exp pred a
   where
-    data SizeSpec a
-    calcChanSize :: pred a => SizeSpec a -> ChanSize exp pred
+    type SizeSpec exp pred a
+    calcChanSize :: proxy a -> SizeSpec exp pred a -> ChanSize exp pred
+
+    newChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
+            => SizeSpec exp pred a
+            -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
+    newChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
+
+    newCloseableChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
+                     => SizeSpec exp pred a
+                     -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
+    newCloseableChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
 
     readChan :: ( pred a
                 , FreeExp exp, FreePred exp a
@@ -102,8 +112,8 @@ class Transferable exp pred a => BulkTransferable exp pred a
 
 instance CType a => Transferable CExp CType a
   where
-    data SizeSpec a = CSize (CExp Word32)
-    calcChanSize (CSize sz) = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
+    type SizeSpec CExp CType a = CExp Word32
+    calcChanSize _ sz = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
     readChan = readChan'
     writeChan = writeChan'
 
@@ -111,17 +121,6 @@ instance CType a => Transferable CExp CType a
 --------------------------------------------------------------------------------
 -- Channel primitives
 --------------------------------------------------------------------------------
-
-newChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
-        => SizeSpec a
-        -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
-newChan = singleInj . NewChan . calcChanSize
-
-newCloseableChan :: (Transferable exp pred a, pred a, ChanCMD :<: instr)
-                 => SizeSpec a
-                 -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
-newCloseableChan = singleInj . NewChan . calcChanSize
-
 
 -- | Read an element from a channel. If channel is empty, blocks until there
 --   is an item available.
