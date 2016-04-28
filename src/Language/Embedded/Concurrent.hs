@@ -20,6 +20,7 @@ import Language.Embedded.Expression
 import Language.Embedded.Concurrent.CMD
 import Language.Embedded.Imperative.CMD (Arr)
 import Language.Embedded.Concurrent.Backend.C ()
+import GHC.Arr (Ix)
 
 -- | Fork off a computation as a new thread.
 fork :: (ThreadCMD :<: instr)
@@ -79,6 +80,7 @@ readChan = fmap valToExp . singleInj . ReadOne
 --   is defined as "channel contains less data than requested".
 --   Returns @False@ without reading any data if the channel is closed.
 readChanBuf :: ( Integral i
+               , Ix i
                , pred a
                , FreeExp exp
                , FreePred exp Bool

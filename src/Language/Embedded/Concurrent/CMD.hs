@@ -20,9 +20,11 @@ import Data.IORef
 import Data.Typeable
 import Language.Embedded.Expression
 import qualified Control.Concurrent as CC
-import qualified Control.Concurrent.BoundedChan as Bounded
+import qualified Control.Chan as Chan
 import Data.Word (Word16)
 import Language.Embedded.Imperative.CMD
+import Language.Embedded.Imperative (setArr, getArr)
+import GHC.Arr (Ix)
 
 
 type TID = VarId
@@ -66,7 +68,7 @@ data Uncloseable
 
 -- | A bounded channel.
 data Chan t a
-  = ChanRun (Bounded.BoundedChan a) (IORef Bool) (IORef Bool)
+  = ChanRun (Chan.Chan a)
   | ChanComp CID
 
 data ThreadCMD fs a where
@@ -83,10 +85,10 @@ data ChanCMD fs a where
   WriteOne  :: pred a
             => Chan t a -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: (pred a, Integral i)
+  ReadChan  :: (pred a, Ix i, Integral i)
             => Chan t a -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
-  WriteChan :: (pred a, Integral i)
+  WriteChan :: (pred a, Ix i, Integral i)
             => Chan t a -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
@@ -155,41 +157,32 @@ runThreadCMD (Kill (TIDRun t f)) = do
 runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
-runChanCMD :: ChanCMD (Param3 IO IO pred) a -> IO a
+runChanCMD :: forall pred a. ChanCMD (Param3 IO IO pred) a -> IO a
 runChanCMD (NewChan sz) = do
-  sz' <- sz
-  ChanRun <$> Bounded.newBoundedChan (fromIntegral sz')
-          <*> newIORef False
-          <*> newIORef True
-runChanCMD (ReadOne (ChanRun c closedref lastread)) = do
-  closed <- readIORef closedref
-  mval <- Bounded.tryReadChan c
-  case mval of
-    Just x -> do
-        return $ ValRun x
-    Nothing
-      | closed -> do
-        writeIORef lastread False
-        return undefined
-      | otherwise -> do
-        ValRun <$> Bounded.readChan c
-runChanCMD (ReadChan _ _ _ _) = do
-  error "TODO: array reads on channels"
-runChanCMD (WriteOne (ChanRun c closedref _) x) = do
-  closed <- readIORef closedref
-  x' <- x
-  if closed
-    then return (ValRun False)
-    else Bounded.writeChan c x' >> return (ValRun True)
-runChanCMD (WriteChan _ _ _ _) = do
-  error "TODO: array writes on channels"
-runChanCMD (CloseChan (ChanRun _ closedref _)) = do
-  writeIORef closedref True
-runChanCMD (ReadOK (ChanRun _ _ lastread)) = do
-  ValRun <$> readIORef lastread
+  ChanRun <$> (Chan.newChan . fromIntegral =<< sz)
+runChanCMD (ReadOne (ChanRun c)) = do
+  ValRun . head <$> Chan.readChan c 1
+runChanCMD (ReadChan (ChanRun c) off len arr) = do
+  off' <- off
+  len' <- len
+  xs <- Chan.readChan c $ fromIntegral (len' - off')
+  interpretBi id $ forM_ (zip [off' .. ] xs) $ \(i, x) -> do
+    setArr (return i) (return x) arr :: Program ArrCMD (Param2 IO pred) ()
+  ValRun <$> Chan.lastReadOK c
+runChanCMD (WriteOne (ChanRun c) x) = do
+  ValRun <$> (Chan.writeChan c . (:[]) =<< x)
+runChanCMD (WriteChan (ChanRun c) off len (arr :: Arr ix el)) = do
+  off' <- off
+  len' <- len
+  xs <- interpretBi id $ forM [off' .. ] $ \i -> do
+    getArr (return i) arr :: Program ArrCMD (Param2 IO pred) (IO el)
+  ValRun <$> (Chan.writeChan c =<< sequence xs)
+runChanCMD (CloseChan (ChanRun c)) = do
+  Chan.closeChan c
+runChanCMD (ReadOK (ChanRun c)) = do
+  ValRun <$> Chan.lastReadOK c
 
 instance InterpBi ThreadCMD IO (Param1 pred) where
   interpBi = runThreadCMD
 instance InterpBi ChanCMD IO (Param1 pred) where
   interpBi = runChanCMD
-
