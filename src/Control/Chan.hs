@@ -30,7 +30,7 @@ readChan (Chan chan) len = atomically $ do
   ch <- readTVar chan
   case chanState ch of
     Open -> do
-      check (chanBufLen ch < len)
+      check (chanBufLen ch >= len)
       readAndUpdate ch True
     Closed
       | chanBufLen ch < len -> do
