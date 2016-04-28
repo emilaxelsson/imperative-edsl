@@ -18,7 +18,8 @@ type CMD =
   ThreadCMD :+:
   ChanCMD :+:
   ControlCMD :+:
-  FileCMD
+  FileCMD :+:
+  ArrCMD
 
 type Prog = Program CMD (Param2 CExp CType)
 
@@ -93,6 +94,13 @@ chanOps = do
   writeChan c 42
   a <- readChan c
   b <- readChan c
+  printf "%d %d\n" a b
+  sent <- initArr [ 12, 34 ]
+  writeChanBuf c (0 :: CExp Int32) 2 sent
+  received <- newArr (2 :: CExp Int32)
+  readChanBuf c 0 2 received
+  a <- getArr 0 received
+  b <- getArr 1 received
   printf "%d %d\n" a b
   closeChan c
 

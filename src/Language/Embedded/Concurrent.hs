@@ -115,8 +115,13 @@ instance Transferable CExp CType a
   where
     type SizeSpec a = CExp Word32
     calcChanSize _ sz = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
-    readChan = readChan'
+    readChan  = readChan'
     writeChan = writeChan'
+
+instance BulkTransferable CExp CType a
+  where
+    readChanBuf  = readChanBuf'
+    writeChanBuf = writeChanBuf'
 
 
 --------------------------------------------------------------------------------
