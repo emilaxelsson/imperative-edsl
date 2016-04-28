@@ -6,14 +6,18 @@
 -- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 module Language.Embedded.Concurrent
   ( ThreadId (..)
-  , Chan (..), Transferable (..), BulkTransferable(..)
+  , Chan (..), ChanSize (..), ChanElemType (..)
   , ThreadCMD
   , ChanCMD
   , Closeable, Uncloseable
   , fork, forkWithId, asyncKillThread, killThread, waitThread
+  , newChan, newCloseableChan
+  , readChan, writeChan
+  , readChanBuf, writeChanBuf
+  , closeChan, lastChanReadOK
+  , newChan', newCloseableChan'
   , readChan', writeChan'
   , readChanBuf', writeChanBuf'
-  , closeChan, lastChanReadOK
   ) where
 
 import Control.Monad.Operational.Higher
@@ -61,95 +65,81 @@ waitThread = singleton . inj . Wait
 
 
 --------------------------------------------------------------------------------
--- Channel interface
+-- Channel frontend
 --------------------------------------------------------------------------------
 
-class Transferable exp pred a
-  where
-    -- | Size specification of a channel. In most of the cases, it is a natural
-    --   number representing how many elements could be stored at the same time
-    --   in the channel.
-    type SizeSpec a :: *
+-- | Create a new channel. Writing a reference type to a channel will copy
+--   contents into the channel, so modifying it post-write is completely
+--   safe.
+newChan :: forall a i exp pred instr m
+        .  (pred a, Integral i, ChanCMD :<: instr)
+        => exp i
+        -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
+newChan = newChan' . fromSingleType (Proxy :: Proxy a)
 
-    -- | Maps a size specification to an internal channel size representation,
-    --   that is a map from primitive types to quantities. The byte size of the
-    --   channel will be calculated as the sum of multiplying the byte size of
-    --   each type with its quantity.
-    calcChanSize :: proxy a -> SizeSpec a -> ChanSize exp pred
+newCloseableChan :: forall a i exp pred instr m
+                 .  (pred a, Integral i, ChanCMD :<: instr)
+                 => exp i
+                 -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
+newCloseableChan = newCloseableChan' . fromSingleType (Proxy :: Proxy a)
 
-    -- | Create a new channel. Writing a reference type to a channel will copy
-    --   contents into the channel, so modifying it post-write is completely
-    --   safe.
-    newChan :: (ChanCMD :<: instr)
-            => SizeSpec a
-            -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
-    newChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
+fromSingleType :: (pred a, Integral i) => Proxy a -> exp i -> ChanSize exp pred
+fromSingleType p n = ChanSize [(ChanElemType p, n)]
 
-    newCloseableChan :: (ChanCMD :<: instr)
-                     => SizeSpec a
-                     -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
-    newCloseableChan = singleInj . NewChan . calcChanSize (Proxy :: Proxy a)
 
-    -- | Read an element from a channel. If channel is empty, blocks until there
-    --   is an item available.
-    --   If 'closeChan' has been called on the channel *and* if the channel is
-    --   empty, @readChan@ returns an undefined value immediately.
-    readChan :: ( ChanCMD :<: instr, Monad m )
+-- | Read an element from a channel. If channel is empty, blocks until there
+--   is an item available.
+--   If 'closeChan' has been called on the channel *and* if the channel is
+--   empty, @readChan@ returns an undefined value immediately.
+readChan :: ( Typeable a, pred a
+            , FreeExp exp, FreePred exp a
+            , ChanCMD :<: instr, Monad m )
+         => Chan t a
+         -> ProgramT instr (Param2 exp pred) m (exp a)
+readChan = readChan'
+
+-- | Read an arbitrary number of elements from a channel into an array.
+--   The semantics are the same as for 'readChan', where "channel is empty"
+--   is defined as "channel contains less data than requested".
+--   Returns @False@ without reading any data if the channel is closed.
+readChanBuf :: ( Typeable a, pred a
+               , Ix i, Integral i
+               , FreeExp exp, FreePred exp Bool
+               , ChanCMD :<: instr, Monad m )
+            => Chan t a
+            -> exp i -- ^ Offset in array to start writing
+            -> exp i -- ^ Elements to read
+            -> Arr i a
+            -> ProgramT instr (Param2 exp pred) m (exp Bool)
+readChanBuf = readChanBuf'
+
+-- | Write a data element to a channel.
+--   If 'closeChan' has been called on the channel, all calls to @writeChan@
+--   become non-blocking no-ops and return @False@, otherwise returns @True@.
+--   If the channel is full, this function blocks until there's space in the
+--   queue.
+writeChan :: ( Typeable a, pred a
+             , FreeExp exp, FreePred exp Bool
+             , ChanCMD :<: instr, Monad m )
+          => Chan t a
+          -> exp a
+          -> ProgramT instr (Param2 exp pred) m (exp Bool)
+writeChan = writeChan'
+
+-- | Write an arbitrary number of elements from an array into an channel.
+--   The semantics are the same as for 'writeChan', where "channel is full"
+--   is defined as "channel has insufficient free space to store all written
+--   data".
+writeChanBuf :: ( Typeable a, pred a
+                , Ix i, Integral i
+                , FreeExp exp, FreePred exp Bool
+                , ChanCMD :<: instr, Monad m )
              => Chan t a
-             -> ProgramT instr (Param2 exp pred) m a
-
-    -- | Write a data element to a channel.
-    --   If 'closeChan' has been called on the channel, all calls to @writeChan@
-    --   become non-blocking no-ops and return @False@, otherwise returns @True@.
-    --   If the channel is full, this function blocks until there's space in the
-    --   queue.
-    writeChan :: ( ChanCMD :<: instr, Monad m )
-              => Chan t a
-              -> a
-              -> ProgramT instr (Param2 exp pred) m (exp Bool)
-
-instance CType a => Transferable CExp CType (CExp a)
-  where
-    type SizeSpec (CExp a) = CExp Word32
-    calcChanSize _ sz = ChanSize [(ChanElemType (Proxy :: Proxy a), sz)]
-    readChan  = readChan'
-    writeChan = writeChan'
-
-class BulkTransferable exp pred i a
-  where
-    type ChanType a :: *
-    -- | Read an arbitrary number of elements from a channel into an array.
-    --   The semantics are the same as for 'readChan', where "channel is empty"
-    --   is defined as "channel contains less data than requested".
-    --   Returns @False@ without reading any data if the channel is closed.
-    readChanBuf :: ( Ix i, Integral i
-                   , FreeExp exp, FreePred exp Bool
-                   , ChanCMD :<: instr, Monad m )
-                => Chan t (ChanType a)
-                -> exp i -- ^ Offset in array to start writing
-                -> exp i -- ^ Elements to read
-                -> a
-                -> ProgramT instr (Param2 exp pred) m (exp Bool)
-
-    -- | Write an arbitrary number of elements from an array into an channel.
-    --   The semantics are the same as for 'writeChan', where "channel is full"
-    --   is defined as "channel has insufficient free space to store all written
-    --   data".
-    writeChanBuf :: ( Ix i, Integral i
-                    , FreeExp exp, FreePred exp Bool
-                    , ChanCMD :<: instr, Monad m )
-                 => Chan t (ChanType a)
-                 -> exp i -- ^ Offset in array to start reading
-                 -> exp i -- ^ Elements to write
-                 -> a
-                 -> ProgramT instr (Param2 exp pred) m (exp Bool)
-
-instance CType a => BulkTransferable CExp CType i (Arr i a)
-  where
-    type ChanType (Arr i a) = CExp a
-    readChanBuf  = readChanBuf'
-    writeChanBuf = writeChanBuf'
-
+             -> exp i -- ^ Offset in array to start reading
+             -> exp i -- ^ Elements to write
+             -> Arr i a
+             -> ProgramT instr (Param2 exp pred) m (exp Bool)
+writeChanBuf = writeChanBuf'
 
 -- | When 'readChan' was last called on the given channel, did the read
 --   succeed?
@@ -170,8 +160,18 @@ closeChan = singleInj . CloseChan
 
 
 --------------------------------------------------------------------------------
--- Channel primitives
+-- Unsafe channel primitives
 --------------------------------------------------------------------------------
+
+newChan' :: (ChanCMD :<: instr)
+         => ChanSize exp pred
+         -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
+newChan' = singleInj . NewChan
+
+newCloseableChan' :: (ChanCMD :<: instr)
+                  => ChanSize exp pred
+                  -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
+newCloseableChan' = singleInj . NewChan
 
 readChan' :: ( Typeable a, pred a
              , FreeExp exp, FreePred exp a
