@@ -4,15 +4,16 @@
 -- for programs with concurrency primitives, use something like
 --
 -- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
-module Language.Embedded.Concurrent (
-    ThreadId (..),
-    Chan (..), SizeSpec (..),
-    ThreadCMD,
-    ChanCMD,
-    Closeable, Uncloseable,
-    fork, forkWithId, asyncKillThread, killThread, waitThread,
-    newChan, newCloseableChan, readChan, writeChan, readChanBuf, writeChanBuf,
-    closeChan, lastChanReadOK,
+module Language.Embedded.Concurrent
+  ( ThreadId (..)
+  , Chan (..), Transferable (..), BulkTransferable(..)
+  , ThreadCMD
+  , ChanCMD
+  , Closeable, Uncloseable
+  , fork, forkWithId, asyncKillThread, killThread, waitThread
+  , readChan', writeChan'
+  , readChanBuf', writeChanBuf'
+  , closeChan, lastChanReadOK
   ) where
 
 import Control.Monad.Operational.Higher
