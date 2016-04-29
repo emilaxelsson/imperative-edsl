@@ -6,11 +6,13 @@
 -- > gcc -std=c99 -Iinclude csrc/chan.c -lpthread YOURPROGRAM.c
 module Language.Embedded.Concurrent
   ( ThreadId (..)
-  , Chan (..), ChanSize (..), ChanElemType (..)
+  , Chan (..)
+  , ChanSize (..), ChanElemType (..)
   , ThreadCMD
   , ChanCMD
   , Closeable, Uncloseable
   , fork, forkWithId, asyncKillThread, killThread, waitThread
+  , timesSizeOf, timesSize, plusSize
   , newChan, newCloseableChan
   , readChan, writeChan
   , readChanBuf, writeChanBuf
@@ -75,16 +77,13 @@ newChan :: forall a i exp pred instr m
         .  (pred a, Integral i, ChanCMD :<: instr)
         => exp i
         -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
-newChan = newChan' . fromSingleType (Proxy :: Proxy a)
+newChan n = newChan' $ n `timesSizeOf` (Proxy :: Proxy a)
 
 newCloseableChan :: forall a i exp pred instr m
                  .  (pred a, Integral i, ChanCMD :<: instr)
                  => exp i
                  -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
-newCloseableChan = newCloseableChan' . fromSingleType (Proxy :: Proxy a)
-
-fromSingleType :: (pred a, Integral i) => Proxy a -> exp i -> ChanSize exp pred
-fromSingleType p n = ChanSize [(ChanElemType p, n)]
+newCloseableChan n = newCloseableChan' $ n `timesSizeOf` (Proxy :: Proxy a)
 
 
 -- | Read an element from a channel. If channel is empty, blocks until there
@@ -163,13 +162,13 @@ closeChan = singleInj . CloseChan
 -- Unsafe channel primitives
 --------------------------------------------------------------------------------
 
-newChan' :: (ChanCMD :<: instr)
-         => ChanSize exp pred
+newChan' :: (Integral i, ChanCMD :<: instr)
+         => ChanSize exp pred i
          -> ProgramT instr (Param2 exp pred) m (Chan Uncloseable a)
 newChan' = singleInj . NewChan
 
-newCloseableChan' :: (ChanCMD :<: instr)
-                  => ChanSize exp pred
+newCloseableChan' :: (Integral i, ChanCMD :<: instr)
+                  => ChanSize exp pred i
                   -> ProgramT instr (Param2 exp pred) m (Chan Closeable a)
 newCloseableChan' = singleInj . NewChan
 

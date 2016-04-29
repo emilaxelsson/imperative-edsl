@@ -56,16 +56,12 @@ compThreadCMD (Wait tid) = do
 compChanCMD :: (CompExp exp, CompTypeClass ct, ct Bool)
             => ChanCMD (Param3 CGen exp ct) a
             -> CGen a
-compChanCMD cmd@(NewChan (ChanSize sz)) = do
+compChanCMD cmd@(NewChan sz) = do
   addLocalInclude "chan.h"
-  sizes <- forM sz $ \(t,sz) -> do
-      t' <- compElemType t
-      sz' <- compExp sz
-      return [cexp| $sz'*sizeof($ty:t') |]
-  let totalSize = foldl1 (\a b -> [cexp| $a + $b |]) sizes
+  sz' <-compChanSize sz
   c <- ChanComp <$> gensym "chan"
   addGlobal [cedecl| typename chan_t $id:c; |]
-  addStm [cstm| $id:c = chan_new($totalSize); |]
+  addStm [cstm| $id:c = chan_new($sz'); |]
   return c
 compChanCMD cmd@(WriteOne c (x :: exp a)) = do
   x'         <- compExp x
@@ -97,6 +93,20 @@ compChanCMD cmd@(ReadOK c) = do
   var <- freshVar (proxyPred cmd)
   addStm [cstm| $id:var = chan_last_read_ok($id:c); |]
   return var
+
+compChanSize :: (CompExp exp, CompTypeClass ct) => ChanSize exp ct i -> CGen C.Exp
+compChanSize (OneSize t sz) = do
+  t' <- compElemType t
+  sz' <- compExp sz
+  return [cexp| $sz' * sizeof($ty:t') |]
+compChanSize (TimesSize n sz) = do
+  n' <- compExp n
+  sz' <- compChanSize sz
+  return [cexp| $n' * $sz' |]
+compChanSize (PlusSize a b) = do
+  a' <- compChanSize a
+  b' <- compChanSize b
+  return [cexp| $a' + $b' |]
 
 compElemType :: forall ct. CompTypeClass ct => ChanElemType ct -> CGen C.Type
 compElemType (ChanElemType p) = compType (Proxy :: Proxy ct) p

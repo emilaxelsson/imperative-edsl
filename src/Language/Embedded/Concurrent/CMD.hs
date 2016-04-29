@@ -4,7 +4,9 @@
 
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
-    CID, Chan (..), ChanElemType (..), ChanSize (..),
+    CID, Chan (..),
+    ChanElemType (..), ChanSize (..),
+    timesSizeOf, timesSize, plusSize,
     ThreadCMD (..),
     ChanCMD (..),
     Closeable, Uncloseable
@@ -83,8 +85,38 @@ data ChanElemType pred = forall a. pred a => ChanElemType (Proxy a)
 
 -- | Channel size specification. For each possible element type, it shows how
 --   many elements of them could be stored in the given channel at once.
-data ChanSize exp pred where
-  ChanSize :: Integral i => [(ChanElemType pred, exp i)] -> ChanSize exp pred
+data ChanSize exp pred i where
+  OneSize   :: Integral i => ChanElemType pred -> exp i -> ChanSize exp pred i
+  TimesSize :: Integral i => exp i -> ChanSize exp pred i -> ChanSize exp pred i
+  PlusSize  :: Integral i => ChanSize exp pred i -> ChanSize exp pred i -> ChanSize exp pred i
+
+mapSizeExp :: (exp i -> exp' i) -> ChanSize exp pred i -> ChanSize exp' pred i
+mapSizeExp f (OneSize t sz) = OneSize t (f sz)
+mapSizeExp f (TimesSize n sz) = TimesSize (f n) (mapSizeExp f sz)
+mapSizeExp f (PlusSize a b) = PlusSize (mapSizeExp f a) (mapSizeExp f b)
+
+mapSizeExpA :: Monad m => (exp i -> m (exp' i)) -> ChanSize exp pred i -> m (ChanSize exp' pred i)
+mapSizeExpA f (OneSize t sz) = OneSize t <$> f sz
+mapSizeExpA f (TimesSize n sz) = do
+  n' <- f n
+  sz' <- mapSizeExpA f sz
+  return $ TimesSize n' sz'
+mapSizeExpA f (PlusSize a b) = do
+  a' <- mapSizeExpA f a
+  b' <- mapSizeExpA f b
+  return $ PlusSize a' b'
+
+-- | Takes 'n' times the size of type refered by proxy 'p'.
+timesSizeOf :: (pred a, Integral i) => exp i -> Proxy a -> ChanSize exp pred i
+n `timesSizeOf` p = OneSize (ChanElemType p) n
+
+-- | Multiplies a channel size specification with a scalar.
+timesSize :: Integral i => exp i -> ChanSize exp pred i -> ChanSize exp pred i
+n `timesSize` sz = n `TimesSize` sz
+
+-- | Adds two channel size specifications together.
+plusSize :: Integral i => ChanSize exp pred i -> ChanSize exp pred i -> ChanSize exp pred i
+a `plusSize` b = a `PlusSize` b
 
 data ThreadCMD fs a where
   ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD (Param3 prog exp pred) ThreadId
@@ -92,7 +124,7 @@ data ThreadCMD fs a where
   Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
 
 data ChanCMD fs a where
-  NewChan   :: ChanSize exp pred -> ChanCMD (Param3 prog exp pred) (Chan t c)
+  NewChan   :: ChanSize exp pred i -> ChanCMD (Param3 prog exp pred) (Chan t c)
   CloseChan :: Chan Closeable c -> ChanCMD (Param3 prog exp pred) ()
   ReadOK    :: Chan Closeable c -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
@@ -134,17 +166,17 @@ instance HFunctor ChanCMD where
   hfmap _ (ReadOK c)          = ReadOK c
 
 instance HBifunctor ChanCMD where
-  hbimap _ f (NewChan (ChanSize sz)) = NewChan (ChanSize $ map (f <$>) sz)
-  hbimap _ _ (ReadOne c)             = ReadOne c
-  hbimap _ f (ReadChan c n n' a)     = ReadChan c (f n) (f n') a
-  hbimap _ f (WriteOne c x)          = WriteOne c (f x)
-  hbimap _ f (WriteChan c n n' a)    = WriteChan c (f n) (f n') a
-  hbimap _ _ (CloseChan c    )       = CloseChan c
-  hbimap _ _ (ReadOK c)              = ReadOK c
+  hbimap _ f (NewChan sz)         = NewChan (mapSizeExp f sz)
+  hbimap _ _ (ReadOne c)          = ReadOne c
+  hbimap _ f (ReadChan c n n' a)  = ReadChan c (f n) (f n') a
+  hbimap _ f (WriteOne c x)       = WriteOne c (f x)
+  hbimap _ f (WriteChan c n n' a) = WriteChan c (f n) (f n') a
+  hbimap _ _ (CloseChan c    )    = CloseChan c
+  hbimap _ _ (ReadOK c)           = ReadOK c
 
 instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
-  reexpressInstrEnv reexp (NewChan (ChanSize sz)) =
-      lift . singleInj . NewChan . ChanSize =<< forM sz (mapM reexp)
+  reexpressInstrEnv reexp (NewChan sz) =
+      lift . singleInj . NewChan =<< mapSizeExpA reexp sz
   reexpressInstrEnv reexp (ReadOne c) = lift $ singleInj $ ReadOne c
   reexpressInstrEnv reexp (ReadChan c f t a) = do
       rf <- reexp f
@@ -175,10 +207,9 @@ runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
 
 runChanCMD :: forall pred a. ChanCMD (Param3 IO IO pred) a -> IO a
-runChanCMD (NewChan (ChanSize sz)) = do
-  let sizes = map snd sz
-  sz' <- sum <$> sequence sizes
-  ChanRun <$> Chan.newChan (fromIntegral sz')
+runChanCMD (NewChan sz) = do
+  sz' <- evalChanSize sz
+  ChanRun <$> Chan.newChan sz'
 runChanCMD (ReadOne (ChanRun c)) =
   ValRun . convertDynamic . head <$> Chan.readChan c 1
 runChanCMD (ReadChan (ChanRun c) off len arr) = do
@@ -204,6 +235,19 @@ instance InterpBi ThreadCMD IO (Param1 pred) where
   interpBi = runThreadCMD
 instance InterpBi ChanCMD IO (Param1 pred) where
   interpBi = runChanCMD
+
+evalChanSize :: ChanSize IO pred i -> IO Int
+evalChanSize (OneSize _ sz) = do
+  sz' <- sz
+  return $ fromIntegral sz'
+evalChanSize (TimesSize n sz) = do
+  n' <- n
+  sz' <- evalChanSize sz
+  return $ fromIntegral n' * sz'
+evalChanSize (PlusSize a b) = do
+  a' <- evalChanSize a
+  b' <- evalChanSize b
+  return $ a' + b'
 
 convertDynamic :: Typeable a => Dynamic -> a
 convertDynamic = fromMaybe (error "readChan: unknown element") . fromDynamic
