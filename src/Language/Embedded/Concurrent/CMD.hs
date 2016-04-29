@@ -95,7 +95,10 @@ mapSizeExp f (OneSize t sz) = OneSize t (f sz)
 mapSizeExp f (TimesSize n sz) = TimesSize (f n) (mapSizeExp f sz)
 mapSizeExp f (PlusSize a b) = PlusSize (mapSizeExp f a) (mapSizeExp f b)
 
-mapSizeExpA :: Monad m => (exp i -> m (exp' i)) -> ChanSize exp pred i -> m (ChanSize exp' pred i)
+mapSizeExpA :: (Functor m, Monad m)
+            => (exp i -> m (exp' i))
+            -> ChanSize exp pred i
+            -> m (ChanSize exp' pred i)
 mapSizeExpA f (OneSize t sz) = OneSize t <$> f sz
 mapSizeExpA f (TimesSize n sz) = do
   n' <- f n
