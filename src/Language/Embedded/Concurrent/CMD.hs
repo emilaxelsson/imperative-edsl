@@ -190,8 +190,7 @@ instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
   reexpressInstrEnv reexp (CloseChan c)   = lift $ singleInj $ CloseChan c
   reexpressInstrEnv reexp (ReadOK c)      = lift $ singleInj $ ReadOK c
 
-runThreadCMD :: ThreadCMD (Param3 IO exp pred) a
-             -> IO a
+runThreadCMD :: ThreadCMD (Param3 IO exp pred) a -> IO a
 runThreadCMD (ForkWithId p) = do
   f <- newFlag
   tidvar <- CC.newEmptyMVar
