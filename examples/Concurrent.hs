@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Concurrent where
@@ -18,14 +19,15 @@ type CMD =
   ThreadCMD :+:
   ChanCMD :+:
   ControlCMD :+:
-  FileCMD
+  FileCMD :+:
+  ArrCMD
 
 type Prog = Program CMD (Param2 CExp CType)
 
 -- | Deadlocks due to channel becoming full.
 deadlock :: Prog ()
 deadlock = do
-  c <- newChan (1 :: CExp Word16)
+  c <- newChan (1 :: CExp Word32)
   t <- fork $ readChan c >>= printf "%d\n"
   writeChan c (1 :: CExp Int32)
   writeChan c 2
@@ -36,8 +38,8 @@ deadlock = do
 --   happen in separate threads.
 mapFile :: (CExp Float -> CExp Float) -> FilePath -> Prog ()
 mapFile f i = do
-  c1 <- newCloseableChan (5 :: CExp Word16)
-  c2 <- newCloseableChan (5 :: CExp Word16)
+  c1 <- newCloseableChan (5 :: CExp Word32)
+  c2 <- newCloseableChan (5 :: CExp Word32)
   fi <- fopen i ReadMode
 
   t1 <- fork $ do
@@ -85,13 +87,40 @@ suicide = do
   printf "The thread is dead, long live the thread! %d\n" (0 :: CExp Int32)
 
 
+-- | Primitive channel operations.
+chanOps :: Prog ()
+chanOps = do
+  c <- newCloseableChan (2 :: CExp Word32)
+  writeChan c (1337 :: CExp Int32)
+  writeChan c 42
+  a <- readChan c
+  b <- readChan c
+  printf "%d %d\n" a b
+
+  sent :: Arr Int8 Int32 <- initArr [ 12, 34 ]
+  writeChanBuf c (0 :: CExp Int8) 2 sent
+  received <- newArr (2 :: CExp Int8)
+  readChanBuf c (0 :: CExp Int8) 2 received
+  a <- getArr 0 received
+  b <- getArr 1 received
+  printf "%d %d\n" a b
+
+  writeChan' c (67 :: CExp Word8)
+  r :: CExp Word8 <- readChan' c
+  printf "%d\n" r
+  closeChan c
+
+
 
 ----------------------------------------
 
 testAll = do
     tag "waiting" >> compareCompiled' opts waiting (runIO waiting) ""
     tag "suicide" >> compareCompiled' opts suicide (runIO suicide) ""
+    tag "chanOps" >> compareCompiled' opts chanOps (runIO chanOps) ""
   where
     tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"
-    opts = defaultExtCompilerOpts {externalFlagsPost = ["-lpthread"]}
-
+    opts = defaultExtCompilerOpts
+         { externalFlagsPre  = ["-Iinclude", "csrc/chan.c"]
+         , externalFlagsPost = ["-lpthread"]
+         }
