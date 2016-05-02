@@ -65,7 +65,7 @@ arrayInit as = C.CompoundInitializer
 -- | Compile a program to C code represented as a string. To compile the
 -- resulting C code, use something like
 --
--- > gcc -std=c99 YOURPROGRAM.c
+-- > cc -std=c99 YOURPROGRAM.c
 --
 -- This function returns only the first (main) module. To get all C translation
 -- unit, use 'compileAll'.
@@ -77,7 +77,7 @@ compile = snd . head . compileAll
 -- and the code represented as a string. To compile the resulting C code, use
 -- something like
 --
--- > gcc -std=c99 YOURPROGRAM.c
+-- > cc -std=c99 YOURPROGRAM.c
 compileAll :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> [(String, String)]
 compileAll
@@ -87,7 +87,7 @@ compileAll
 -- | Compile a program to C code and print it on the screen. To compile the
 -- resulting C code, use something like
 --
--- > gcc -std=c99 YOURPROGRAM.c
+-- > cc -std=c99 YOURPROGRAM.c
 icompile :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 icompile prog = case compileAll prog of
@@ -125,7 +125,7 @@ maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
 maybePutStrLn _ _ = return ()
 
--- | Generate C code and use GCC to compile it
+-- | Generate C code and use CC to compile it
 compileC :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
     -> Program instr (Param2 exp pred) a  -- ^ Program to compile
@@ -140,7 +140,7 @@ compileC (ExternalCompilerOpts {..}) prog = do
     when externalKeepFiles $ maybePutStrLn externalSilent $
         "Created temporary file: " ++ cFile
     let compileCMD = unwords
-          $  ["gcc", "-std=c99"]
+          $  ["cc", "-std=c99"]
           ++ externalFlagsPre
           ++ [cFile, "-o", exeFile]
           ++ externalFlagsPost
@@ -154,7 +154,7 @@ compileC (ExternalCompilerOpts {..}) prog = do
   where
     format = if externalKeepFiles then "%a-%H-%M-%S_" else ""
 
--- | Generate C code and use GCC to check that it compiles (no linking)
+-- | Generate C code and use CC to check that it compiles (no linking)
 compileAndCheck' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     ExternalCompilerOpts -> Program instr (Param2 exp pred) a -> IO ()
 compileAndCheck' opts prog = do
@@ -162,12 +162,12 @@ compileAndCheck' opts prog = do
     exe <- compileC opts' prog
     removeFileIfPossible exe
 
--- | Generate C code and use GCC to check that it compiles (no linking)
+-- | Generate C code and use CC to check that it compiles (no linking)
 compileAndCheck :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 compileAndCheck = compileAndCheck' mempty
 
--- | Generate C code, use GCC to compile it, and run the resulting executable
+-- | Generate C code, use CC to compile it, and run the resulting executable
 runCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     ExternalCompilerOpts -> Program instr (Param2 exp pred) a -> IO ()
 runCompiled' opts@(ExternalCompilerOpts {..}) prog = bracket
@@ -179,7 +179,7 @@ runCompiled' opts@(ExternalCompilerOpts {..}) prog = bracket
         system exe >> return ()
     )
 
--- | Generate C code, use GCC to compile it, and run the resulting executable
+-- | Generate C code, use CC to compile it, and run the resulting executable
 runCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 runCompiled = runCompiled' mempty

@@ -313,7 +313,7 @@ testMultiModule = do
     let ms    = compileAll multiModule
         files = [temp </> "imperative-edsl_" ++ m ++ ".c" | (m,_) <- ms]
         exe   = temp </> "imperative-edsl"
-        cmd   = unwords $ ("gcc -o" : exe : files)
+        cmd   = unwords $ ("cc -o" : exe : files)
     zipWithM_ writeFile files (map snd ms)
     putStrLn cmd
     system cmd
