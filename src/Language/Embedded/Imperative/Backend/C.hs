@@ -64,9 +64,10 @@ compRefCMD (UnsafeFreezeRef (RefComp v)) = return $ ValComp v
 --     int _a[] = {0,1,2,3,4,5,6,7,8,9};
 --     int * a = _a;
 --
--- This extra pointer is not needed when using `alloca` since then the array is
--- a pointer anyway. One option might be to use `alloca` for all arrays, but
--- that doesn't permit defining constant arrays using a literal as above.
+-- The declaration of a variable-sized array could only be done where its size
+-- expression can be evaluated. This is why the declaration of variable-sized
+-- arrays is done with `addItem` insted of `addLocal`: it preserves the position
+-- of the declaration in the block, as it would be a statement.
 --
 -- Pointers that are used between multiple functions will be lifted to shared globals.
 -- To ensure the correctness of the resulting program the underlying arrays must also
@@ -91,9 +92,8 @@ compArrCMD cmd@(NewArr base size) = do
         addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
         addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
       _ -> do
-        addInclude "<alloca.h>"
-        addLocal [cdecl| $ty:t * $id:sym; |]
-        addStm [cstm| $id:sym = alloca($n * sizeof($ty:t)); |]
+        addItem [citem| $ty:t $id:sym'[ $n ]; |]
+        addItem [citem| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
 compArrCMD cmd@(InitArr base as) = do
     sym <- gensym base
