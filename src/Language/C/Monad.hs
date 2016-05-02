@@ -130,8 +130,8 @@ data CEnv = CEnv
     , _params      :: [C.Param]
     , _args        :: [C.Exp]
     , _locals      :: [C.InitGroup]
-    , _stms        :: [C.Stm]
-    , _finalStms   :: [C.Stm]
+    , _items       :: [C.BlockItem]
+    , _finalItems  :: [C.BlockItem]
 
     , _usedVars    :: Set.Set C.Id
     , _funUsedVars :: Map.Map String (Set.Set C.Id)
@@ -169,8 +169,8 @@ defaultCEnv fl = CEnv
     , _params      = mempty
     , _args        = mempty
     , _locals      = mempty
-    , _stms        = mempty
-    , _finalStms   = mempty
+    , _items       = mempty
+    , _finalItems  = mempty
     , _usedVars    = mempty
     , _funUsedVars = mempty
     }
@@ -295,21 +295,29 @@ addLocal def = do
     C.InitGroup _ _ is _ -> forM_ is $ \(C.Init id _ _ _ _ _) -> touchVar id
     _                    -> return ()
 
+-- | Add an item (a declaration or a statement) to the current block
+--   This functionality is necessary to declare C99 variable-length arrays
+--   in the middle of a block, as other local delcarations are lifted to the
+--   beginning of the block, and that makes the evaluation of the length
+--   expression impossible.
+addItem :: MonadC m => C.BlockItem -> m ()
+addItem item = items %= (item:)
+
 -- | Add multiple local declarations
 addLocals :: MonadC m => [C.InitGroup] -> m ()
 addLocals defs = mapM_ addLocal defs -- locals %= (reverse defs++)
 
 -- | Add a statement to the current block
 addStm :: MonadC m => C.Stm -> m ()
-addStm stm = stms %= (stm:)
+addStm stm = items %= ((C.BlockStm stm):)
 
 -- | Add a sequence of statements to the current block
 addStms :: MonadC m => [C.Stm] -> m ()
-addStms ss = stms %= (reverse ss++)
+addStms ss = items %= (reverse (map C.BlockStm ss)++)
 
 -- | Add a statement to the end of the current block
 addFinalStm :: MonadC m => C.Stm -> m ()
-addFinalStm stm = finalStms %= (stm:)
+addFinalStm stm = finalItems %= ((C.BlockStm stm):)
 
 -- | Run an action in a new block
 inBlock :: MonadC m => m a -> m a
@@ -322,16 +330,16 @@ inBlock ma = do
 -- Does not place the items in an actual C block.
 inNewBlock :: MonadC m => m a -> m (a, [C.BlockItem])
 inNewBlock ma = do
-    oldLocals    <- locals    <<.= mempty
-    oldStms      <- stms      <<.= mempty
-    oldFinalStms <- finalStms <<.= mempty
+    oldLocals     <- locals     <<.= mempty
+    oldItems      <- items      <<.= mempty
+    oldFinalItems <- finalItems <<.= mempty
     x <- ma
-    ls  <- reverse <$> (locals    <<.= oldLocals)
-    ss  <- reverse <$> (stms      <<.= oldStms)
-    fss <- reverse <$> (finalStms <<.= oldFinalStms)
+    ls  <- reverse <$> (locals     <<.= oldLocals)
+    ss  <- reverse <$> (items      <<.= oldItems)
+    fss <- reverse <$> (finalItems <<.= oldFinalItems)
     return (x, map C.BlockDecl ls  ++
-               map C.BlockStm  ss  ++
-               map C.BlockStm  fss
+               ss  ++
+               fss
            )
 
 -- | Run an action as a block and capture the items.
