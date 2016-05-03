@@ -25,10 +25,7 @@ module Language.Embedded.Concurrent
 import Control.Monad.Operational.Higher
 import Data.Ix
 import Data.Typeable
-import Data.Word
 
-import Language.Embedded.Backend.C (CType)
-import Language.Embedded.CExp (CExp)
 import Language.Embedded.Concurrent.Backend.C ()
 import Language.Embedded.Concurrent.CMD
 import Language.Embedded.Expression

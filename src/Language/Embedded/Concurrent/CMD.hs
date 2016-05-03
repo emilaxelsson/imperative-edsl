@@ -16,6 +16,7 @@ module Language.Embedded.Concurrent.CMD (
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+import Data.Typeable
 #endif
 import qualified Control.Chan as Chan
 import qualified Control.Concurrent as CC
@@ -25,10 +26,7 @@ import Data.Dynamic
 import Data.IORef
 import Data.Ix (Ix)
 import Data.Maybe (fromMaybe)
-import Data.Typeable
-import Data.Word (Word16)
 
-import Language.Embedded.Backend.C.Expression
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative (getArr, setArr)
