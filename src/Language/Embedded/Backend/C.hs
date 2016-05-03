@@ -19,7 +19,7 @@ import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (ExitCode (..))
 import System.IO
-import System.Process (system)
+import System.Process (system, readProcess)
 
 import Data.Loc (noLoc)
 import qualified Language.C.Syntax as C
@@ -194,7 +194,7 @@ captureCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
 captureCompiled' opts prog inp = bracket
     (compileC opts prog)
     removeFileIfPossible
-    (\exe -> fakeIO (system exe) inp)
+    (\exe -> readProcess exe [] inp)
 
 -- | Like 'runCompiled' but with explicit input/output connected to
 -- @stdin@/@stdout@
