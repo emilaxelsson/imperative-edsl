@@ -184,20 +184,47 @@ runCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
 runCompiled = runCompiled' mempty
 
+-- | Compile a program and make it available as an 'IO' function from 'String'
+-- to 'String' (connected to @stdin@/@stdout@. respectively). Note that
+-- compilation only happens once, even if the 'IO' function is used many times
+-- in the body.
+withCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
+    => ExternalCompilerOpts
+    -> Program instr (Param2 exp pred) a  -- ^ Program to compile
+    -> ((String -> IO String) -> IO b)
+         -- ^ Function that has access to the compiled executable as a function
+    -> IO b
+withCompiled' opts prog body = bracket
+    (compileC opts prog)
+    removeFileIfPossible
+    (\exe -> body $ readProcess exe [])
+
+-- | Compile a program and make it available as an 'IO' function from 'String'
+-- to 'String' (connected to @stdin@/@stdout@. respectively). Note that
+-- compilation only happens once, even if the 'IO' function is used many times
+-- in the body.
+withCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
+    => Program instr (Param2 exp pred) a  -- ^ Program to compile
+    -> ((String -> IO String) -> IO b)
+         -- ^ Function that has access to the compiled executable as a function
+    -> IO b
+withCompiled = withCompiled' defaultExtCompilerOpts {externalSilent = True}
+
 -- | Like 'runCompiled'' but with explicit input/output connected to
--- @stdin@/@stdout@
+-- @stdin@/@stdout@. Note that the program will be compiled every time the
+-- function is applied to a string. In order to compile once and run many times,
+-- use the function 'withCompiled''.
 captureCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => ExternalCompilerOpts
     -> Program instr (Param2 exp pred) a  -- ^ Program to run
     -> String                             -- ^ Input to send to @stdin@
     -> IO String                          -- ^ Result from @stdout@
-captureCompiled' opts prog inp = bracket
-    (compileC opts prog)
-    removeFileIfPossible
-    (\exe -> readProcess exe [] inp)
+captureCompiled' opts prog inp = withCompiled' opts prog ($ inp)
 
 -- | Like 'runCompiled' but with explicit input/output connected to
--- @stdin@/@stdout@
+-- @stdin@/@stdout@. Note that the program will be compiled every time the
+-- function is applied to a string. In order to compile once and run many times,
+-- use the function 'withCompiled'.
 captureCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => Program instr (Param2 exp pred) a  -- ^ Program to run
     -> String                             -- ^ Input to send to @stdin@
