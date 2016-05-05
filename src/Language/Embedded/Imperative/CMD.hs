@@ -399,13 +399,13 @@ class (Typeable a, Read a, Printf.PrintfArg a) => Formattable a
     formatSpecifier :: Proxy a -> String
 
 instance Formattable Int    where formatSpecifier _ = "%d"
-instance Formattable Int8   where formatSpecifier _ = "%d"
-instance Formattable Int16  where formatSpecifier _ = "%d"
+instance Formattable Int8   where formatSpecifier _ = "%hhd"
+instance Formattable Int16  where formatSpecifier _ = "%hd"
 instance Formattable Int32  where formatSpecifier _ = "%d"
 instance Formattable Int64  where formatSpecifier _ = "%ld"
 instance Formattable Word   where formatSpecifier _ = "%u"
-instance Formattable Word8  where formatSpecifier _ = "%u"
-instance Formattable Word16 where formatSpecifier _ = "%u"
+instance Formattable Word8  where formatSpecifier _ = "%hhu"
+instance Formattable Word16 where formatSpecifier _ = "%hu"
 instance Formattable Word32 where formatSpecifier _ = "%u"
 instance Formattable Word64 where formatSpecifier _ = "%lu"
 instance Formattable Float  where formatSpecifier _ = "%f"

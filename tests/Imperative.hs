@@ -200,6 +200,12 @@ testAssert = do
     assert (inp #> 0) "input too small"
     printf "past assertion\n"
 
+-- This tests that `formatSpecifier` works as it should for different types
+testPrintScan :: (Formattable a, CType a) => CExp a -> Prog ()
+testPrintScan a = do
+    i <- fget stdin
+    fput stdout "" (i `asTypeOf` a) ""
+
 testPtr :: Prog ()
 testPtr = do
     addInclude "<stdlib.h>"
@@ -353,11 +359,36 @@ testAll = do
     tag "testAssert" >> compareCompiled  testAssert (runIO testAssert)                     "45"
     tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
     tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66 1")  ""
-    tag "testExternArgs" >> compileAndCheck  testExternArgs
+
+    tag "testPrintScan_Int8"   >> compareCompiled (testPrintScan int8)   (runIO (testPrintScan int8))   "45"
+    tag "testPrintScan_Int16"  >> compareCompiled (testPrintScan int16)  (runIO (testPrintScan int16))  "45"
+    tag "testPrintScan_Int32"  >> compareCompiled (testPrintScan int32)  (runIO (testPrintScan int32))  "45"
+    tag "testPrintScan_Int64"  >> compareCompiled (testPrintScan int64)  (runIO (testPrintScan int64))  "45"
+    tag "testPrintScan_Word8"  >> compareCompiled (testPrintScan word8)  (runIO (testPrintScan word8))  "45"
+    tag "testPrintScan_Word16" >> compareCompiled (testPrintScan word16) (runIO (testPrintScan word16)) "45"
+    tag "testPrintScan_Word32" >> compareCompiled (testPrintScan word32) (runIO (testPrintScan word32)) "45"
+    tag "testPrintScan_Word64" >> compareCompiled (testPrintScan word64) (runIO (testPrintScan word64)) "45"
+    tag "testPrintScan_Float"  >> captureCompiled (testPrintScan float)  "45"
+    tag "testPrintScan_Double" >> captureCompiled (testPrintScan double) "45"
+      -- `testPrintScan` for floating point types can't be compared to `runIO`,
+      -- becuase different number of digits are printed
+
+    tag "testExternArgs" >> compileAndCheck testExternArgs
     tag "testCallFun" >> compareCompiledM testCallFun (putStrLn "-0.757") "4"
     tag "multiModule" >> testMultiModule
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
     compareCompiledM = compareCompiled'
         defaultExtCompilerOpts {externalFlagsPost = ["-lm"]}
+
+    int8   = 0 :: CExp Int8
+    int16  = 0 :: CExp Int16
+    int32  = 0 :: CExp Int32
+    int64  = 0 :: CExp Int64
+    word8  = 0 :: CExp Word8
+    word16 = 0 :: CExp Word16
+    word32 = 0 :: CExp Word32
+    word64 = 0 :: CExp Word64
+    float  = 0 :: CExp Float
+    double = 0 :: CExp Double
 
