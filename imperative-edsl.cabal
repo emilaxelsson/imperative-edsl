@@ -13,7 +13,9 @@ license:             BSD3
 license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson
 maintainer:          emax@chalmers.se
-copyright:           Copyright (c) 2015-2016, Anders Persson, Emil Axelsson, Markus Aronsson
+copyright:           Copyright (c) 2016 Anton Ekblad, Emil Axelsson, Máté Karácsony
+                     Copyright (c) 2015 Anders Persson, Anton Ekblad, Emil Axelsson,
+                                        Markus Aronsson, Josef Svenningsson
 homepage:            https://github.com/emilaxelsson/imperative-edsl
 bug-reports:         https://github.com/emilaxelsson/imperative-edsl/issues
 category:            Language
