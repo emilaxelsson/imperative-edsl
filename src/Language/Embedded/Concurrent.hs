@@ -11,7 +11,7 @@ module Language.Embedded.Concurrent
   , ThreadCMD
   , ChanCMD
   , Closeable, Uncloseable
-  , fork, forkWithId, asyncKillThread, killThread, waitThread
+  , fork, forkWithId, asyncKillThread, killThread, waitThread, delayThread
   , timesSizeOf, timesSize, plusSize
   , newChan, newCloseableChan
   , readChan, writeChan
@@ -61,6 +61,11 @@ killThread t = do
 waitThread :: (ThreadCMD :<: instr)
            => ThreadId -> ProgramT instr (Param2 exp pred) m ()
 waitThread = singleton . inj . Wait
+
+-- | Sleep for a given amount of microseconds.
+delayThread :: (Integral i, ThreadCMD :<: instr)
+           => exp i -> ProgramT instr (Param2 exp pred) m ()
+delayThread = singleton . inj . Sleep
 
 
 --------------------------------------------------------------------------------
