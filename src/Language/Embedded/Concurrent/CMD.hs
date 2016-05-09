@@ -123,6 +123,7 @@ data ThreadCMD fs a where
   ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD (Param3 prog exp pred) ThreadId
   Kill       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
   Wait       :: ThreadId -> ThreadCMD (Param3 prog exp pred) ()
+  Sleep      :: Integral i => exp i -> ThreadCMD (Param3 prog exp pred) ()
 
 data ChanCMD fs a where
   NewChan   :: ChanSize exp pred i -> ChanCMD (Param3 prog exp pred) (Chan t c)
@@ -145,17 +146,20 @@ instance HFunctor ThreadCMD where
   hfmap f (ForkWithId p) = ForkWithId $ f . p
   hfmap _ (Kill tid)     = Kill tid
   hfmap _ (Wait tid)     = Wait tid
+  hfmap _ (Sleep tid)    = Sleep tid
 
 instance HBifunctor ThreadCMD where
   hbimap f _ (ForkWithId p) = ForkWithId $ f . p
   hbimap _ _ (Kill tid)     = Kill tid
   hbimap _ _ (Wait tid)     = Wait tid
+  hbimap _ g (Sleep us)     = Sleep $ g us
 
 instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr where
   reexpressInstrEnv reexp (ForkWithId p) = ReaderT $ \env ->
       singleInj $ ForkWithId (flip runReaderT env . p)
   reexpressInstrEnv reexp (Kill tid) = lift $ singleInj $ Kill tid
   reexpressInstrEnv reexp (Wait tid) = lift $ singleInj $ Wait tid
+  reexpressInstrEnv reexp (Sleep us) = (lift . singleInj . Sleep) =<< reexp us
 
 instance HFunctor ChanCMD where
   hfmap _ (NewChan sz)        = NewChan sz
@@ -191,7 +195,7 @@ instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
   reexpressInstrEnv reexp (CloseChan c)   = lift $ singleInj $ CloseChan c
   reexpressInstrEnv reexp (ReadOK c)      = lift $ singleInj $ ReadOK c
 
-runThreadCMD :: ThreadCMD (Param3 IO exp pred) a -> IO a
+runThreadCMD :: ThreadCMD (Param3 IO IO pred) a -> IO a
 runThreadCMD (ForkWithId p) = do
   f <- newFlag
   tidvar <- CC.newEmptyMVar
@@ -205,6 +209,9 @@ runThreadCMD (Kill (TIDRun t f)) = do
   return ()
 runThreadCMD (Wait (TIDRun _ f)) = do
   waitFlag f
+runThreadCMD (Sleep us) = do
+  us' <- us
+  CC.threadDelay $ fromIntegral us'
 
 runChanCMD :: forall pred a. ChanCMD (Param3 IO IO pred) a -> IO a
 runChanCMD (NewChan sz) = do

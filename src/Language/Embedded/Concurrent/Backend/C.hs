@@ -32,7 +32,7 @@ threadFun tid = "thread_" ++ show tid
 
 -- | Compile `ThreadCMD`.
 --   TODO: sharing for threads with the same body
-compThreadCMD :: ThreadCMD (Param3 CGen exp pred) a -> CGen a
+compThreadCMD :: CompExp exp => ThreadCMD (Param3 CGen exp pred) a -> CGen a
 compThreadCMD (ForkWithId body) = do
   tid <- TIDComp <$> gensym "t"
   let funName = threadFun tid
@@ -51,6 +51,10 @@ compThreadCMD (Kill tid) = do
 compThreadCMD (Wait tid) = do
   touchVar tid
   addStm [cstm| pthread_join($id:tid, NULL); |]
+compThreadCMD (Sleep us) = do
+  us' <- compExp us
+  addSystemInclude "unistd.h"
+  addStm [cstm| usleep($us'); |]
 
 -- | Compile `ChanCMD`.
 compChanCMD :: (CompExp exp, CompTypeClass ct, ct Bool)
@@ -111,7 +115,7 @@ compChanSize (PlusSize a b) = do
 compElemType :: forall ct. CompTypeClass ct => ChanElemType ct -> CGen C.Type
 compElemType (ChanElemType p) = compType (Proxy :: Proxy ct) p
 
-instance Interp ThreadCMD CGen (Param2 exp pred) where
+instance CompExp exp => Interp ThreadCMD CGen (Param2 exp pred) where
   interp = compThreadCMD
 instance (CompExp exp, CompTypeClass ct, ct Bool) => Interp ChanCMD CGen (Param2 exp ct) where
   interp = compChanCMD
