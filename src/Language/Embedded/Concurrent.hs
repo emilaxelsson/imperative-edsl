@@ -62,7 +62,10 @@ waitThread :: (ThreadCMD :<: instr)
            => ThreadId -> ProgramT instr (Param2 exp pred) m ()
 waitThread = singleton . inj . Wait
 
--- | Sleep for a given amount of microseconds.
+-- | Sleep for a given amount of microseconds. Implemented with `usleep`.
+--   A C compiler might require a feature test macro to be defined,
+--   otherwise it emits a warning about an implicitly declared function.
+--   For more details, see: http://man7.org/linux/man-pages/man3/usleep.3.html
 delayThread :: (Integral i, ThreadCMD :<: instr)
            => exp i -> ProgramT instr (Param2 exp pred) m ()
 delayThread = singleton . inj . Sleep
