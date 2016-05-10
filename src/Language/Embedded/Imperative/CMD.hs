@@ -396,20 +396,35 @@ mapPrintfArgM f (PrintfArg exp) = liftM PrintfArg (f exp)
 -- | Values that can be printed\/scanned using @printf@\/@scanf@
 class (Typeable a, Read a, Printf.PrintfArg a) => Formattable a
   where
-    formatSpecifier :: Proxy a -> String
+    -- | Format specifier for `printf`
+    formatSpecPrint :: Proxy a -> String
+    -- | Format specifier for `scanf`
+    formatSpecScan  :: Proxy a -> String
+    formatSpecScan = formatSpecPrint
 
-instance Formattable Int    where formatSpecifier _ = "%d"
-instance Formattable Int8   where formatSpecifier _ = "%hhd"
-instance Formattable Int16  where formatSpecifier _ = "%hd"
-instance Formattable Int32  where formatSpecifier _ = "%d"
-instance Formattable Int64  where formatSpecifier _ = "%ld"
-instance Formattable Word   where formatSpecifier _ = "%u"
-instance Formattable Word8  where formatSpecifier _ = "%hhu"
-instance Formattable Word16 where formatSpecifier _ = "%hu"
-instance Formattable Word32 where formatSpecifier _ = "%u"
-instance Formattable Word64 where formatSpecifier _ = "%lu"
-instance Formattable Float  where formatSpecifier _ = "%f"
-instance Formattable Double where formatSpecifier _ = "%lf"
+instance Formattable Int    where formatSpecPrint _ = "%d"
+instance Formattable Int8   where formatSpecPrint _ = "%hhd"
+instance Formattable Int16  where formatSpecPrint _ = "%hd"
+instance Formattable Int32  where formatSpecPrint _ = "%d"
+instance Formattable Int64  where formatSpecPrint _ = "%ld"
+instance Formattable Word   where formatSpecPrint _ = "%u"
+instance Formattable Word8  where formatSpecPrint _ = "%hhu"
+instance Formattable Word16 where formatSpecPrint _ = "%hu"
+instance Formattable Word32 where formatSpecPrint _ = "%u"
+instance Formattable Word64 where formatSpecPrint _ = "%lu"
+
+instance Formattable Float
+  where
+    formatSpecPrint _ = "%.9g"
+      -- See <http://stackoverflow.com/a/21162120/1105347>
+    formatSpecScan _ = "%g"
+
+instance Formattable Double
+  where
+    formatSpecPrint _ = "%.17g"
+      -- See <http://stackoverflow.com/a/21162120/1105347>
+    formatSpecScan _ = "%lg"
+      -- See <http://stackoverflow.com/q/210590/1105347>
 
 data FileCMD fs a
   where

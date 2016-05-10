@@ -331,7 +331,7 @@ fput :: forall instr exp pred a m
     -> String  -- ^ Suffix
     -> ProgramT instr (Param2 exp pred) m ()
 fput hdl prefix a suffix =
-    fprintf hdl (prefix ++ formatSpecifier (Proxy :: Proxy a) ++ suffix) a
+    fprintf hdl (prefix ++ formatSpecPrint (Proxy :: Proxy a) ++ suffix) a
 
 -- | Get a single value from a handle
 fget

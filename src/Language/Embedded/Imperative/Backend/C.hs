@@ -226,7 +226,7 @@ compFileCMD cmd@(FGet h) = do
     v <- freshVar (proxyPred cmd)
     touchVar h
     let mkProxy = (\_ -> Proxy) :: FileCMD (Param3 prog exp pred) (Val a) -> Proxy a
-        form    = formatSpecifier (mkProxy cmd)
+        form    = formatSpecScan (mkProxy cmd)
     addStm [cstm| fscanf($id:h, $string:form, &$id:v); |]
     return v
 compFileCMD cmd@(FEof h) = do
