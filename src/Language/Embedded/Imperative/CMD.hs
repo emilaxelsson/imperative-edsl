@@ -182,8 +182,8 @@ instance ToIdent (IArr i a) where toIdent (IArrComp arr) = C.Id arr
 -- | Commands for mutable arrays
 data ArrCMD fs a
   where
-    NewArr  :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    InitArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    NewArr  :: (pred a, Integral i, Ix i) => String -> Maybe i -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    InitArr :: (pred a, Integral i, Ix i) => String -> Maybe i -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
     GetArr  :: (pred a, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD (Param3 prog exp pred) (Val a)
     SetArr  :: (pred a, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD (Param3 prog exp pred) ()
     CopyArr :: (pred a, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) ()
@@ -197,8 +197,8 @@ data ArrCMD fs a
 
 instance HFunctor ArrCMD
   where
-    hfmap _ (NewArr base n)       = NewArr base n
-    hfmap _ (InitArr base as)     = InitArr base as
+    hfmap _ (NewArr base al n)    = NewArr base al n
+    hfmap _ (InitArr base al as)  = InitArr base al as
     hfmap _ (GetArr i arr)        = GetArr i arr
     hfmap _ (SetArr i a arr)      = SetArr i a arr
     hfmap _ (CopyArr a1 a2 l)     = CopyArr a1 a2 l
@@ -207,8 +207,8 @@ instance HFunctor ArrCMD
 
 instance HBifunctor ArrCMD
   where
-    hbimap _ f (NewArr base n)       = NewArr base (f n)
-    hbimap _ _ (InitArr base as)     = InitArr base as
+    hbimap _ f (NewArr base al n)    = NewArr base al (f n)
+    hbimap _ _ (InitArr base al as)  = InitArr base al as
     hbimap _ f (GetArr i arr)        = GetArr (f i) arr
     hbimap _ f (SetArr i a arr)      = SetArr (f i) (f a) arr
     hbimap _ f (CopyArr a1 a2 l)     = CopyArr a1 a2 (f l)
@@ -217,8 +217,8 @@ instance HBifunctor ArrCMD
 
 instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
   where
-    reexpressInstrEnv reexp (NewArr base n)       = lift . singleInj . NewArr base =<< reexp n
-    reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
+    reexpressInstrEnv reexp (NewArr base al n)    = lift . singleInj . NewArr base al =<< reexp n
+    reexpressInstrEnv reexp (InitArr base al as)  = lift $ singleInj $ InitArr base al as
     reexpressInstrEnv reexp (GetArr i arr)        = lift . singleInj . flip GetArr arr =<< reexp i
     reexpressInstrEnv reexp (SetArr i a arr)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr i' a' arr
     reexpressInstrEnv reexp (CopyArr a1 a2 l)     = lift . singleInj . CopyArr a1 a2 =<< reexp l
@@ -227,11 +227,11 @@ instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
 
 instance DryInterp ArrCMD
   where
-    dryInterp (NewArr base _)  = liftM ArrComp $ freshStr base
-    dryInterp (InitArr base _) = liftM ArrComp $ freshStr base
-    dryInterp (GetArr _ _)     = liftM ValComp $ freshStr "v"
-    dryInterp (SetArr _ _ _)   = return ()
-    dryInterp (CopyArr _ _ _)  = return ()
+    dryInterp (NewArr base _ _)  = liftM ArrComp $ freshStr base
+    dryInterp (InitArr base _ _) = liftM ArrComp $ freshStr base
+    dryInterp (GetArr _ _)       = liftM ValComp $ freshStr "v"
+    dryInterp (SetArr _ _ _)     = return ()
+    dryInterp (CopyArr _ _ _)    = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
     dryInterp (UnsafeThawArr (IArrComp arr))  = return (ArrComp arr)
 
@@ -634,11 +634,11 @@ runRefCMD (GetRef (RefRun r))     = ValRun <$> readIORef r
 runRefCMD cmd@(UnsafeFreezeRef r) = runRefCMD (GetRef r `asTypeOf` cmd)
 
 runArrCMD :: ArrCMD (Param3 IO IO pred) a -> IO a
-runArrCMD (NewArr _ n) = do
+runArrCMD (NewArr _ _ n) = do
     n'  <- n
     arr <- newArray_ (0, fromIntegral n'-1)
     ArrRun <$> newIORef arr
-runArrCMD (InitArr _ as) =
+runArrCMD (InitArr _ _ as) =
     fmap ArrRun . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr i (ArrRun arr)) = do
     arr'  <- readIORef arr

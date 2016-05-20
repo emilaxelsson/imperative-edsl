@@ -105,6 +105,13 @@ newArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 newArr = newNamedArr "a"
 
+-- | Create an uninitialized array with the specified optional alignment
+newAlignedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => Maybe i  -- ^ Optional alignment
+    -> exp i    -- ^ Length
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+newAlignedArr = newNamedAlignedArr "a"
+
 -- | Create an uninitialized named array
 --
 -- The provided base name may be appended with a unique identifier to avoid name
@@ -113,13 +120,31 @@ newNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     => String -- ^ Base name
     -> exp i  -- ^ Length
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
-newNamedArr base len = singleInj (NewArr base len)
+newNamedArr base len = newNamedAlignedArr base Nothing len
+
+-- | Create an uninitialized named array with the specified optional alignment
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+newNamedAlignedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => String   -- ^ Base name
+    -> Maybe i  -- ^ Optional alignment
+    -> exp i    -- ^ Length
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+newNamedAlignedArr base al len = singleInj (NewArr base al len)
 
 -- | Create and initialize an array
 initArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     => [a]  -- ^ Initial contents
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 initArr = initNamedArr "a"
+
+-- | Create and initialize an array with the specified optional alignment
+initAlignedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => Maybe i  -- ^ Optional alignment
+    -> [a]      -- ^ Initial contents
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+initAlignedArr = initNamedAlignedArr "a"
 
 -- | Create and initialize a named array
 --
@@ -129,7 +154,18 @@ initNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
     => String  -- ^ Base name
     -> [a]     -- ^ Initial contents
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
-initNamedArr base init = singleInj (InitArr base init)
+initNamedArr base init = initNamedAlignedArr base Nothing init
+
+-- | Create and initialize a named array with the specified optional alignment
+--
+-- The provided base name may be appended with a unique identifier to avoid name
+-- collisions.
+initNamedAlignedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+    => String   -- ^ Base name
+    -> Maybe i  -- ^ Optional alignment
+    -> [a]      -- ^ Initial contents
+    -> ProgramT instr (Param2 exp pred) m (Arr i a)
+initNamedAlignedArr base al init = singleInj (InitArr base al init)
 
 -- | Get an element of an array
 getArr
