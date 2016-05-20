@@ -14,7 +14,7 @@ import Control.Applicative
 import Control.Monad.State
 import Data.Proxy
 
-import Language.C.Quote.C
+import Language.C.Quote.GCC
 import qualified Language.C.Syntax as C
 
 import Control.Monad.Operational.Higher
@@ -82,25 +82,37 @@ instance ToIdent (BaseArrOf i a)
 -- | Compile `ArrCMD`
 compArrCMD :: (CompExp exp, CompTypeClass ct) =>
     ArrCMD (Param3 prog exp ct) a -> CGen a
-compArrCMD cmd@(NewArr base size) = do
+compArrCMD cmd@(NewArr base align size) = do
     sym <- gensym base
     let sym' = '_':sym
     n <- compExp size
     t <- compType (proxyPred cmd) (proxyArg cmd)
     case n of
       C.Const _ _ -> do
-        addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
+        case align of
+          Just a -> do
+            let a' = fromIntegral a :: Int
+            addLocal [cdecl| $ty:t $id:sym'[ $n ] __attribute__((aligned($a'))); |]
+          _ -> addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
         addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
       _ -> do
-        addItem [citem| $ty:t $id:sym'[ $n ]; |]
+        case align of
+          Just a -> do
+            let a' = fromIntegral a :: Int
+            addItem [citem| $ty:t $id:sym'[ $n ] __attribute__((aligned($a'))); |]
+          _ -> addItem [citem| $ty:t $id:sym'[ $n ]; |]
         addItem [citem| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
-compArrCMD cmd@(InitArr base as) = do
+compArrCMD cmd@(InitArr base align as) = do
     sym <- gensym base
     let sym' = '_':sym
     t   <- compType (proxyPred cmd) (proxyArg cmd)
     as' <- mapM (compLit (proxyPred cmd)) as
-    addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
+    case align of
+      Just a -> do
+        let a' = fromIntegral a :: Int
+        addLocal [cdecl| $ty:t $id:sym'[] __attribute__((aligned($a'))) = $init:(arrayInit as'); |]
+      _ -> addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
     addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
     return $ ArrComp sym
 compArrCMD cmd@(GetArr expi arr) = do
