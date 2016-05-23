@@ -14,7 +14,7 @@ import Control.Applicative
 import Control.Monad.State
 import Data.Proxy
 
-import Language.C.Quote.C
+import Language.C.Quote.GCC
 import qualified Language.C.Syntax as C
 
 import Control.Monad.Operational.Higher
@@ -80,29 +80,10 @@ instance ToIdent (BaseArrOf i a)
   where toIdent (BaseArrOf (ArrComp sym)) = toIdent $ '_':sym
 
 -- | Compile `ArrCMD`
-compArrCMD :: (CompExp exp, CompTypeClass ct) =>
-    ArrCMD (Param3 prog exp ct) a -> CGen a
-compArrCMD cmd@(NewArr base size) = do
-    sym <- gensym base
-    let sym' = '_':sym
-    n <- compExp size
-    t <- compType (proxyPred cmd) (proxyArg cmd)
-    case n of
-      C.Const _ _ -> do
-        addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
-        addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
-      _ -> do
-        addItem [citem| $ty:t $id:sym'[ $n ]; |]
-        addItem [citem| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
-    return $ ArrComp sym
-compArrCMD cmd@(InitArr base as) = do
-    sym <- gensym base
-    let sym' = '_':sym
-    t   <- compType (proxyPred cmd) (proxyArg cmd)
-    as' <- mapM (compLit (proxyPred cmd)) as
-    addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
-    addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation above
-    return $ ArrComp sym
+compArrCMD :: forall exp ct a. (CompExp exp, CompTypeClass ct) =>
+    ArrCMD (Param3 CGen exp ct) a -> CGen a
+compArrCMD cmd@(NewArr base size) = compC_CMD (NewCArr base Nothing size :: C_CMD (Param3 CGen exp ct) a)
+compArrCMD cmd@(InitArr base as) = compC_CMD (InitCArr base Nothing as   :: C_CMD (Param3 CGen exp ct) a)
 compArrCMD cmd@(GetArr expi arr) = do
     v <- freshVar (proxyPred cmd)
     i <- compExp expi
@@ -239,6 +220,39 @@ compFileCMD cmd@(FEof h) = do
 
 compC_CMD :: (CompExp exp, CompTypeClass ct) =>
     C_CMD (Param3 CGen exp ct) a -> CGen a
+compC_CMD cmd@(NewCArr base align size) = do
+    sym <- gensym base
+    let sym' = '_':sym
+    n <- compExp size
+    t <- compType (proxyPred cmd) (proxyArg cmd)
+    case n of
+      C.Const _ _ -> do
+        case align of
+          Just a -> do
+            let a' = fromIntegral a :: Int
+            addLocal [cdecl| $ty:t $id:sym'[ $n ] __attribute__((aligned($a'))); |]
+          _ -> addLocal [cdecl| $ty:t $id:sym'[ $n ]; |]
+        addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation at 'compArrCMD'
+      _ -> do
+        case align of
+          Just a -> do
+            let a' = fromIntegral a :: Int
+            addItem [citem| $ty:t $id:sym'[ $n ] __attribute__((aligned($a'))); |]
+          _ -> addItem [citem| $ty:t $id:sym'[ $n ]; |]
+        addItem [citem| $ty:t * $id:sym = $id:sym'; |]  -- explanation at 'compArrCMD'
+    return $ ArrComp sym
+compC_CMD cmd@(InitCArr base align as) = do
+    sym <- gensym base
+    let sym' = '_':sym
+    t   <- compType (proxyPred cmd) (proxyArg cmd)
+    as' <- mapM (compLit (proxyPred cmd)) as
+    case align of
+      Just a -> do
+        let a' = fromIntegral a :: Int
+        addLocal [cdecl| $ty:t $id:sym'[] __attribute__((aligned($a'))) = $init:(arrayInit as'); |]
+      _ -> addLocal [cdecl| $ty:t $id:sym'[] = $init:(arrayInit as');|]
+    addLocal [cdecl| $ty:t * $id:sym = $id:sym'; |]  -- explanation at 'compArrCMD'
+    return $ ArrComp sym
 compC_CMD cmd@(NewPtr base) = do
     addInclude "<stddef.h>"
     p <- PtrComp <$> gensym base

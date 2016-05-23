@@ -32,5 +32,5 @@ import qualified System.IO as IO
 import Language.Embedded.Imperative.CMD
 
 import Language.C.Syntax
-import Language.C.Quote.C
+import Language.C.Quote.GCC
 
