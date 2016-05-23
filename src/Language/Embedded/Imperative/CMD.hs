@@ -553,6 +553,8 @@ instance Assignable Object
 
 data C_CMD fs a
   where
+    NewCArr  :: (pred a, Integral i, Ix i) => String -> Maybe i -> exp i -> C_CMD (Param3 prog exp pred) (Arr i a)
+    InitCArr :: (pred a, Integral i, Ix i) => String -> Maybe i -> [a] -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewPtr   :: pred a => String -> C_CMD (Param3 prog exp pred) (Ptr a)
     PtrToArr :: Ptr a -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewObject
@@ -570,6 +572,8 @@ data C_CMD fs a
 
 instance HFunctor C_CMD
   where
+    hfmap _ (NewCArr base al n)       = NewCArr base al n
+    hfmap _ (InitCArr base al as)     = InitCArr base al as
     hfmap _ (NewPtr base)             = NewPtr base
     hfmap _ (PtrToArr p)              = PtrToArr p
     hfmap _ (NewObject base p t)      = NewObject base p t
@@ -583,6 +587,8 @@ instance HFunctor C_CMD
 
 instance HBifunctor C_CMD
   where
+    hbimap _ f (NewCArr base al n)       = NewCArr base al (f n)
+    hbimap _ _ (InitCArr base al as)     = InitCArr base al as
     hbimap _ _ (NewPtr base)             = NewPtr base
     hbimap _ _ (PtrToArr p)              = PtrToArr p
     hbimap _ _ (NewObject base p t)      = NewObject base p t
@@ -596,6 +602,8 @@ instance HBifunctor C_CMD
 
 instance (C_CMD :<: instr) => Reexpressible C_CMD instr
   where
+    reexpressInstrEnv reexp (NewCArr base al n)       = lift . singleInj . NewCArr base al =<< reexp n
+    reexpressInstrEnv reexp (InitCArr base al as)     = lift $ singleInj $ InitCArr base al as
     reexpressInstrEnv reexp (NewPtr base)             = lift $ singleInj $ NewPtr base
     reexpressInstrEnv reexp (PtrToArr p)              = lift $ singleInj $ PtrToArr p
     reexpressInstrEnv reexp (NewObject base p t)      = lift $ singleInj $ NewObject base p t
@@ -609,6 +617,8 @@ instance (C_CMD :<: instr) => Reexpressible C_CMD instr
 
 instance DryInterp C_CMD
   where
+    dryInterp (NewCArr base _ _)     = liftM ArrComp $ freshStr base
+    dryInterp (InitCArr base _ _)    = liftM ArrComp $ freshStr base
     dryInterp (NewPtr base)          = liftM PtrComp $ freshStr base
     dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
     dryInterp (NewObject base t p)   = liftM (Object p t) $ freshStr base
@@ -749,7 +759,9 @@ runFileCMD (FGet h)   = do
         _        -> error $ "fget: no parse (input " ++ show w ++ ")"
 runFileCMD (FEof h) = fmap ValRun $ IO.hIsEOF $ runHandle h
 
-runC_CMD :: C_CMD (Param3 IO IO pred) a -> IO a
+runC_CMD :: forall pred a. C_CMD (Param3 IO IO pred) a -> IO a
+runC_CMD (NewCArr base _ n)   = runArrCMD (NewArr base n   :: ArrCMD (Param3 IO IO pred) a)
+runC_CMD (InitCArr base _ as) = runArrCMD (InitArr base as :: ArrCMD (Param3 IO IO pred) a)
 runC_CMD (NewPtr base)        = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"
 runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
 runC_CMD (NewObject base _ _) = error $ "cannot run programs involving newObject (base name " ++ base ++ ")"
