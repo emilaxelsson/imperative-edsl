@@ -552,6 +552,12 @@ addr = AddrArg
 deref :: FunArg exp pred -> FunArg exp pred
 deref = DerefArg
 
+-- | Add an offset to another argument
+offset :: Integral i => FunArg exp pred -> exp i -> FunArg exp pred
+offset = OffsetArg
+  -- The `Integral` constraint isn't needed, but it makes sense, since the
+  -- intention of `offset` is to add an offset to a pointer.
+
 
 
 --------------------------------------------------------------------------------

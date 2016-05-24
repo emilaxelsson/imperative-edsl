@@ -237,12 +237,14 @@ testArgs = do
     callProcAssign o "ret" [valArg v]
     callProcAssign op "setPtr" [refArg r]
     callProc "printf"
-        [ strArg "%d %d %d %d %d %d %d %d\n"
+        [ strArg "%d %d %d %d %d %d %d %d %d %d\n"
         , valArg v
         , deref (refArg r)
         , deref (arrArg a)
         , deref (iarrArg ia)
         , deref (ptrArg p)
+        , deref (offset (iarrArg ia) (3 :: CExp Word32))
+        , deref (offset (ptrArg p) (0 :: CExp Word32))
         , objArg o
         , deref (objArg op)
         , constArg "bool" "true"
@@ -263,7 +265,9 @@ testExternArgs :: Prog ()
 testExternArgs = do
     addInclude "<stdbool.h>"
     let v = 55 :: CExp Int32
-    externProc "val_proc" [valArg v]
+    externProc "val_proc1" [valArg v]
+    externProc "val_proc2" [offset3 $ valArg v]
+      -- Normal integer addition (slight misuse of `offset`)
     _ :: CExp Int32 <- externFun "val_fun" [valArg v]
     r <- initRef v
     externProc "ref_proc1" [refArg r]
@@ -272,6 +276,9 @@ testExternArgs = do
     externProc "arr_proc1" [arrArg a]
     externProc "arr_proc2" [addr $ arrArg a]
     externProc "arr_proc3" [deref $ arrArg a]
+    externProc "arr_proc4" [offset3 $ arrArg a]
+    externProc "arr_proc5" [deref $ offset3 $ arrArg a]
+    externProc "arr_proc6" [offsetMinus $ arrArg a]
     p :: Ptr Int32 <- newPtr
     externProc "ptr_proc1" [ptrArg p]
     externProc "ptr_proc2" [addr $ ptrArg p]
@@ -283,11 +290,15 @@ testExternArgs = do
     externProc "obj_proc3" [objArg op]
     externProc "obj_proc4" [addr $ objArg op]
     externProc "obj_proc5" [deref $ objArg op]
+    externProc "obj_proc6" [offset3 $ objArg op]
     let s = "apa"
     externProc "str_proc1" [strArg s]
     externProc "str_proc2" [deref $ strArg s]
     externProc "const_proc" [constArg "bool" "true"]
     return ()
+  where
+    offset3     = flip offset (3 :: CExp Int32)
+    offsetMinus = flip offset (-3 :: CExp Int32) . offset3
 
 testCallFun :: Prog ()
 testCallFun = do
@@ -358,7 +369,7 @@ testAll = do
     tag "testFor3"   >> compareCompiled  testFor3   (runIO testFor3)                       ""
     tag "testAssert" >> compareCompiled  testAssert (runIO testAssert)                     "45"
     tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 55 66 1")  ""
+    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 237 66 55 66 1")  ""
 
     tag "testPrintScan_Int8"   >> compareCompiled (testPrintScan int8)   (runIO (testPrintScan int8))   "45"
     tag "testPrintScan_Int16"  >> compareCompiled (testPrintScan int16)  (runIO (testPrintScan int16))  "45"

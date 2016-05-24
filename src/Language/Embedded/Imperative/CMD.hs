@@ -495,10 +495,11 @@ class Arg arg pred
 
 data FunArg exp pred
   where
-    ValArg   :: pred a => exp a -> FunArg exp pred
-    AddrArg  :: FunArg exp pred -> FunArg exp pred
-    DerefArg :: FunArg exp pred -> FunArg exp pred
-    FunArg   :: Arg arg pred => arg pred -> FunArg exp pred
+    ValArg    :: pred a => exp a -> FunArg exp pred
+    AddrArg   :: FunArg exp pred -> FunArg exp pred
+    DerefArg  :: FunArg exp pred -> FunArg exp pred
+    OffsetArg :: FunArg exp pred -> exp i -> FunArg exp pred
+    FunArg    :: Arg arg pred => arg pred -> FunArg exp pred
 
 instance (CompExp exp, CompTypeClass ct) => Arg (FunArg exp) ct
   where
@@ -509,6 +510,13 @@ instance (CompExp exp, CompTypeClass ct) => Arg (FunArg exp) ct
     mkArg (DerefArg arg) = do
         e <- mkArg arg
         return [cexp| *$e |]
+    mkArg (OffsetArg arg i) = do
+        e  <- mkArg arg
+        i' <- compExp i
+        return $ case i' of
+          (C.Const (C.IntConst _ _ 0 _) _) -> e
+          (C.Const (C.IntConst _ _ c _) _) | c < 0 -> [cexp| $e - $(negate c) |]
+          _ -> [cexp| $e + $i' |]
     mkArg (FunArg a) = mkArg a
 
     mkParam (ValArg (a :: exp a)) = do
@@ -525,7 +533,8 @@ instance (CompExp exp, CompTypeClass ct) => Arg (FunArg exp) ct
          C.Param mid spec (C.Ptr [] decl _) loc -> return $ C.Param mid spec decl loc
          C.Param _ _ _ _ -> error "mkParam for Deref: cannot dereference non-pointer parameter"
          _ -> error "mkParam for Deref: cannot deal with antiquotes"
-    mkParam (FunArg a) = mkParam a
+    mkParam (OffsetArg a _) = mkParam a
+    mkParam (FunArg a)      = mkParam a
 
 mapFunArg ::
     (forall a . exp1 a -> exp2 a) -> FunArg exp1 pred -> FunArg exp2 pred
