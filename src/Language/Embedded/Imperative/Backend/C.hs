@@ -97,13 +97,21 @@ compArrCMD (SetArr expi expv arr) = do
     touchVar $ BaseArrOf arr  -- explanation above
     touchVar arr
     addStm [cstm| $id:arr[ $i ] = $v; |]
-compArrCMD cmd@(CopyArr arr1 arr2 expl) = do
+compArrCMD cmd@(CopyArr (arr1,expo1) (arr2,expo2) expl) = do
     addInclude "<string.h>"
-    mapM_ touchVar [BaseArrOf arr1,BaseArrOf arr2]  -- explanation above
+    mapM_ touchVar [BaseArrOf arr1, BaseArrOf arr2]  -- explanation above
     mapM_ touchVar [arr1,arr2]
-    l <- compExp expl
-    t <- compType (proxyPred cmd) arr1
-    addStm [cstm| memcpy($id:arr1, $id:arr2, $l * sizeof($ty:t)); |]
+    o1 <- compExp expo1
+    o2 <- compExp expo2
+    l  <- compExp expl
+    t  <- compType (proxyPred cmd) arr1
+    let a1 = case o1 of
+          C.Const (C.IntConst _ _ 0 _) _ -> [cexp| $id:arr1 |]
+          _ -> [cexp| $id:arr1 + $o1 |]
+    let a2 = case o2 of
+          C.Const (C.IntConst _ _ 0 _) _ -> [cexp| $id:arr2 |]
+          _ -> [cexp| $id:arr2 + $o2 |]
+    addStm [cstm| memcpy($a1, $a2, $l * sizeof($ty:t)); |]
 compArrCMD (UnsafeFreezeArr (ArrComp arr)) = return $ IArrComp arr
 compArrCMD (UnsafeThawArr (IArrComp arr))  = return $ ArrComp arr
 

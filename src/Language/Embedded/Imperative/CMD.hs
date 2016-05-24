@@ -186,7 +186,8 @@ data ArrCMD fs a
     InitArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
     GetArr  :: (pred a, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD (Param3 prog exp pred) (Val a)
     SetArr  :: (pred a, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD (Param3 prog exp pred) ()
-    CopyArr :: (pred a, Integral i, Ix i) => Arr i a -> Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) ()
+    CopyArr :: (pred a, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
+      -- The arrays are paired with their offset
     UnsafeFreezeArr :: (pred a, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
     UnsafeThawArr   :: (pred a, Integral i, Ix i) => IArr i a -> ArrCMD (Param3 prog exp pred) (Arr i a)
 #if  __GLASGOW_HASKELL__>=708
@@ -207,13 +208,13 @@ instance HFunctor ArrCMD
 
 instance HBifunctor ArrCMD
   where
-    hbimap _ f (NewArr base n)       = NewArr base (f n)
-    hbimap _ _ (InitArr base as)     = InitArr base as
-    hbimap _ f (GetArr i arr)        = GetArr (f i) arr
-    hbimap _ f (SetArr i a arr)      = SetArr (f i) (f a) arr
-    hbimap _ f (CopyArr a1 a2 l)     = CopyArr a1 a2 (f l)
-    hbimap _ _ (UnsafeFreezeArr arr) = UnsafeFreezeArr arr
-    hbimap _ _ (UnsafeThawArr arr)   = UnsafeThawArr arr
+    hbimap _ f (NewArr base n)             = NewArr base (f n)
+    hbimap _ _ (InitArr base as)           = InitArr base as
+    hbimap _ f (GetArr i arr)              = GetArr (f i) arr
+    hbimap _ f (SetArr i a arr)            = SetArr (f i) (f a) arr
+    hbimap _ f (CopyArr (a1,o1) (a2,o2) l) = CopyArr (a1, f o1) (a2, f o2) (f l)
+    hbimap _ _ (UnsafeFreezeArr arr)       = UnsafeFreezeArr arr
+    hbimap _ _ (UnsafeThawArr arr)         = UnsafeThawArr arr
 
 instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
   where
@@ -221,9 +222,13 @@ instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
     reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
     reexpressInstrEnv reexp (GetArr i arr)        = lift . singleInj . flip GetArr arr =<< reexp i
     reexpressInstrEnv reexp (SetArr i a arr)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr i' a' arr
-    reexpressInstrEnv reexp (CopyArr a1 a2 l)     = lift . singleInj . CopyArr a1 a2 =<< reexp l
     reexpressInstrEnv reexp (UnsafeFreezeArr arr) = lift $ singleInj $ UnsafeFreezeArr arr
     reexpressInstrEnv reexp (UnsafeThawArr arr)   = lift $ singleInj $ UnsafeThawArr arr
+    reexpressInstrEnv reexp (CopyArr (a1,o1) (a2,o2) l) = do
+        o1' <- reexp o1
+        o2' <- reexp o2
+        l'  <- reexp l
+        lift $ singleInj $ CopyArr (a1,o1') (a2,o2') l'
 
 instance DryInterp ArrCMD
   where
@@ -680,30 +685,38 @@ runArrCMD (SetArr i a (ArrRun arr)) = do
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
       else writeArray arr' (fromIntegral i') a'
-runArrCMD (CopyArr (ArrRun arr1) (ArrRun arr2) l) = do
+runArrCMD (CopyArr (ArrRun arr1, o1) (ArrRun arr2, o2) l) = do
     arr1'  <- readIORef arr1
     arr2'  <- readIORef arr2
+    o1'    <- o1
+    o2'    <- o2
     l'     <- l
     (0,h1) <- getBounds arr1'
     (0,h2) <- getBounds arr2'
-    if l'>h2+1
+    let l1 = h1+1-o1'
+        l2 = h2+1-o2'
+    if l'>l2
     then error $ "copyArr: cannot copy "
               ++ show (toInteger l')
               ++ " elements from array with "
-              ++ show (toInteger (h2+1))
+              ++ show (toInteger l2)
               ++ " allocated elements"
-    else if l'>h1+1
+    else if l'>l1
     then error $ "copyArr: cannot copy "
               ++ show (toInteger l')
               ++ " elements to array with "
-              ++ show (toInteger (h1+1))
+              ++ show (toInteger l1)
               ++ " allocated elements"
     else sequence_
-      [ readArray arr2' i >>= writeArray arr1' i | i <- genericTake l' [0..] ]
+      [ readArray arr2' (i+o2') >>= writeArray arr1' (i+o1')
+          | i <- genericTake l' [0..]
+      ]
 runArrCMD (UnsafeFreezeArr (ArrRun arr)) =
     fmap IArrRun . freeze =<< readIORef arr
 runArrCMD (UnsafeThawArr (IArrRun arr)) =
     fmap ArrRun . newIORef =<< thaw arr
+  -- Could use `unsafeFreeze` and `unsafeThaw` here. The downside would be that
+  -- incorrect use could lead to crash of the Haskell runtime (I think).
 
 runControlCMD :: ControlCMD (Param3 IO IO pred) a -> IO a
 runControlCMD (If c t f)        = c >>= \c' -> if c' then t else f

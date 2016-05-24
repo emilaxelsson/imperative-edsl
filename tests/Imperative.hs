@@ -83,13 +83,22 @@ testRef = do
     b <- unsafeFreezeRef r2
     printf "%d %d\n" a b
 
-testArr1 :: Prog ()
-testArr1 = do
+testCopyArr1 :: Prog ()
+testCopyArr1 = do
     arr1 :: Arr Word32 Int32 <- newArr (10 :: CExp Word32)
     arr2 :: Arr Word32 Int32 <- newArr (10 :: CExp Word32)
     sequence_ [setArr i (i2n i+10) arr1 | i' <- [0..9], let i = fromInteger i']
-    copyArr arr2 arr1 10
+    copyArr (arr2,0) (arr1,0) 10
     sequence_ [getArr i arr2 >>= printf "%d " . (*3) | i' <- [0..9], let i = fromInteger i']
+    printf "\n"
+
+testCopyArr2 :: Prog ()
+testCopyArr2 = do
+    arr1 :: Arr Word32 Int32 <- newArr (20 :: CExp Word32)
+    arr2 :: Arr Word32 Int32 <- newArr (20 :: CExp Word32)
+    sequence_ [setArr i (i2n i+10) arr1 | i' <- [0..19], let i = fromInteger i']
+    copyArr (arr2,10) (arr1,5) 10
+    sequence_ [getArr i arr2 >>= printf "%d " . (*3) | i' <- [10..19], let i = fromInteger i']
     printf "\n"
 
 testArr2 :: Prog ()
@@ -151,7 +160,7 @@ testSwap2 = do
     arr1 :: Arr Word32 Int32 <- initArr [1,2,3,4]
     n <- fget stdin
     arr2 :: Arr Word32 Int32 <- newArr n
-    copyArr arr2 arr1 4
+    copyArr (arr2,0) (arr1,0) 4
     setArr 2 22 arr2
     unsafeSwap arr1 arr2
     sequence_ [getArr i arr1 >>= printf "%d " | i <- map fromInteger [0..3]]
@@ -349,27 +358,28 @@ testMultiModule = do
 -- secondly, the tests would always fail when running a second time.
 
 testAll = do
-    tag "testTypes"  >> compareCompiled  testTypes  (runIO testTypes)                      "0\n"
-    tag "testCExp"   >> compareCompiledM testCExp   (runIO testCExp)                       "44\n"
-    tag "testRef"    >> compareCompiled  testRef    (runIO testRef)                        ""
-    tag "testArr1"   >> compareCompiled  testArr1   (runIO testArr1)                       ""
-    tag "testArr2"   >> compareCompiled  testArr2   (runIO testArr2)                       "20\n"
-    tag "testArr3"   >> compareCompiled  testArr3   (runIO testArr3)                       ""
-    tag "testArr4"   >> compareCompiled  testArr4   (runIO testArr4)                       ""
-    tag "testArr5"   >> compareCompiled  testArr5   (runIO testArr5)                       ""
-    tag "testArr6"   >> compareCompiled  testArr6   (runIO testArr6)                       ""
-    tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr6)                       ""
-    tag "testArr7"   >> compareCompiled  testArr7   (runIO testArr7)                       ""
-    tag "testSwap1"  >> compareCompiled  testSwap1  (runIO testSwap1)                      ""
-    tag "testSwap2"  >> compareCompiled  testSwap2  (runIO testSwap2)                      "45\n"
-    tag "testIf1"    >> compareCompiled  testIf1    (runIO testIf1)                        "12\n"
-    tag "testIf2"    >> compareCompiled  testIf2    (runIO testIf2)                        "12\n"
-    tag "testFor1"   >> compareCompiled  testFor1   (runIO testFor1)                       ""
-    tag "testFor2"   >> compareCompiled  testFor2   (runIO testFor2)                       ""
-    tag "testFor3"   >> compareCompiled  testFor3   (runIO testFor3)                       ""
-    tag "testAssert" >> compareCompiled  testAssert (runIO testAssert)                     "45"
-    tag "testPtr"    >> compareCompiled  testPtr    (putStrLn "34" >> putStrLn "sum: 280") ""
-    tag "testArgs"   >> compareCompiled  testArgs   (putStrLn "55 66 234 234 66 237 66 55 66 1")  ""
+    tag "testTypes"    >> compareCompiled  testTypes    (runIO testTypes)                      "0\n"
+    tag "testCExp"     >> compareCompiledM testCExp     (runIO testCExp)                       "44\n"
+    tag "testRef"      >> compareCompiled  testRef      (runIO testRef)                        ""
+    tag "testCopyArr1" >> compareCompiled  testCopyArr1 (runIO testCopyArr1)                   ""
+    tag "testCopyArr2" >> compareCompiled  testCopyArr2 (runIO testCopyArr2)                   ""
+    tag "testArr2"     >> compareCompiled  testArr2     (runIO testArr2)                       "20\n"
+    tag "testArr3"     >> compareCompiled  testArr3     (runIO testArr3)                       ""
+    tag "testArr4"     >> compareCompiled  testArr4     (runIO testArr4)                       ""
+    tag "testArr5"     >> compareCompiled  testArr5     (runIO testArr5)                       ""
+    tag "testArr6"     >> compareCompiled  testArr6     (runIO testArr6)                       ""
+    tag "testArr7"     >> compareCompiled  testArr7     (runIO testArr6)                       ""
+    tag "testArr7"     >> compareCompiled  testArr7     (runIO testArr7)                       ""
+    tag "testSwap1"    >> compareCompiled  testSwap1    (runIO testSwap1)                      ""
+    tag "testSwap2"    >> compareCompiled  testSwap2    (runIO testSwap2)                      "45\n"
+    tag "testIf1"      >> compareCompiled  testIf1      (runIO testIf1)                        "12\n"
+    tag "testIf2"      >> compareCompiled  testIf2      (runIO testIf2)                        "12\n"
+    tag "testFor1"     >> compareCompiled  testFor1     (runIO testFor1)                       ""
+    tag "testFor2"     >> compareCompiled  testFor2     (runIO testFor2)                       ""
+    tag "testFor3"     >> compareCompiled  testFor3     (runIO testFor3)                       ""
+    tag "testAssert"   >> compareCompiled  testAssert   (runIO testAssert)                     "45"
+    tag "testPtr"      >> compareCompiled  testPtr      (putStrLn "34" >> putStrLn "sum: 280") ""
+    tag "testArgs"     >> compareCompiled  testArgs     (putStrLn "55 66 234 234 66 237 66 55 66 1")  ""
 
     tag "testPrintScan_Int8"   >> compareCompiled (testPrintScan int8)   (runIO (testPrintScan int8))   "45"
     tag "testPrintScan_Int16"  >> compareCompiled (testPrintScan int16)  (runIO (testPrintScan int16))  "45"

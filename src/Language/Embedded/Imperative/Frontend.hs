@@ -153,21 +153,21 @@ setArr i a arr = singleInj (SetArr i a arr)
 -- copy must not be greater than the number of allocated elements in either
 -- array.
 copyArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
-    => Arr i a  -- ^ Destination
-    -> Arr i a  -- ^ Source
-    -> exp i    -- ^ Number of elements
+    => (Arr i a, exp i)  -- ^ (destination,offset)
+    -> (Arr i a, exp i)  -- ^ (source,offset
+    -> exp i             -- ^ Number of elements
     -> ProgramT instr (Param2 exp pred) m ()
 copyArr arr1 arr2 len = singleInj $ CopyArr arr1 arr2 len
 
 -- | Freeze a mutable array to an immutable one. This involves copying the array
 -- to a newly allocated one.
-freezeArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m)
+freezeArr :: (pred a, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
     => Arr i a
     -> exp i  -- ^ Length of new array
     -> ProgramT instr (Param2 exp pred) m (IArr i a)
 freezeArr arr n = do
     arr2 <- newArr n
-    copyArr arr2 arr n
+    copyArr (arr2,0) (arr,0) n
     unsafeFreezeArr arr2
 
 -- | Freeze a mutable array to an immutable one without making a copy. This is
@@ -179,14 +179,14 @@ unsafeFreezeArr arr = singleInj $ UnsafeFreezeArr arr
 
 -- | Thaw an immutable array to a mutable one. This involves copying the array
 -- to a newly allocated one.
-thawArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr, Monad m)
+thawArr :: (pred a, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
     => IArr i a
     -> exp i  -- ^ Number of elements to copy
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 thawArr arr n = do
     arr2 <- unsafeThawArr arr
     arr3 <- newArr n
-    copyArr arr3 arr2 n
+    copyArr (arr3,0) (arr2,0) n
     return arr3
 
 -- | Thaw an immutable array to a mutable one without making a copy. This is
