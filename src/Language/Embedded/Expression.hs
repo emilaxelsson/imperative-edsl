@@ -8,7 +8,11 @@ module Language.Embedded.Expression where
 
 import Data.Typeable
 
+#if __GLASGOW_HASKELL__ >= 800
+import GHC.Types (Constraint)
+#else
 import GHC.Prim (Constraint)
+#endif
 
 import Language.C.Quote.C (ToIdent (..))
 
