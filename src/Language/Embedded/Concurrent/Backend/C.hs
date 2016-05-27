@@ -98,9 +98,9 @@ compChanCMD cmd@(ReadOK c) = do
   addStm [cstm| $id:var = chan_last_read_ok($id:c); |]
   return var
 
-compChanSize :: (CompExp exp, CompTypeClass ct) => ChanSize exp ct i -> CGen C.Exp
+compChanSize :: forall exp ct i. (CompExp exp, CompTypeClass ct) => ChanSize exp ct i -> CGen C.Exp
 compChanSize (OneSize t sz) = do
-  t' <- compElemType t
+  t' <- compType (Proxy :: Proxy ct) t
   sz' <- compExp sz
   return [cexp| $sz' * sizeof($ty:t') |]
 compChanSize (TimesSize n sz) = do
@@ -111,9 +111,6 @@ compChanSize (PlusSize a b) = do
   a' <- compChanSize a
   b' <- compChanSize b
   return [cexp| $a' + $b' |]
-
-compElemType :: forall ct. CompTypeClass ct => ChanElemType ct -> CGen C.Type
-compElemType (ChanElemType p) = compType (Proxy :: Proxy ct) p
 
 instance CompExp exp => Interp ThreadCMD CGen (Param2 exp pred) where
   interp = compThreadCMD

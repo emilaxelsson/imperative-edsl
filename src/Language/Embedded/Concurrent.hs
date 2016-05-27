@@ -7,7 +7,7 @@
 module Language.Embedded.Concurrent
   ( ThreadId (..)
   , Chan (..)
-  , ChanSize (..), ChanElemType (..)
+  , ChanSize (..)
   , ThreadCMD
   , ChanCMD
   , Closeable, Uncloseable

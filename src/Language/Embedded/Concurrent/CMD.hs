@@ -5,7 +5,7 @@
 module Language.Embedded.Concurrent.CMD (
     TID, ThreadId (..),
     CID, Chan (..),
-    ChanElemType (..), ChanSize (..),
+    ChanSize (..),
     timesSizeOf, timesSize, plusSize,
     ThreadCMD (..),
     ChanCMD (..),
@@ -77,14 +77,10 @@ data Chan t a
   = ChanRun (Chan.Chan Dynamic)
   | ChanComp CID
 
--- | Describes an element type on a channel.
---   Used to represent types in 'ChanSize'.
-data ChanElemType pred = forall a. pred a => ChanElemType (Proxy a)
-
 -- | Channel size specification. For each possible element type, it shows how
 --   many elements of them could be stored in the given channel at once.
 data ChanSize exp pred i where
-  OneSize   :: Integral i => ChanElemType pred -> exp i -> ChanSize exp pred i
+  OneSize   :: (pred a, Integral i) => proxy a -> exp i -> ChanSize exp pred i
   TimesSize :: Integral i => exp i -> ChanSize exp pred i -> ChanSize exp pred i
   PlusSize  :: Integral i => ChanSize exp pred i -> ChanSize exp pred i -> ChanSize exp pred i
 
@@ -107,17 +103,17 @@ mapSizeExpA f (PlusSize a b) = do
   b' <- mapSizeExpA f b
   return $ PlusSize a' b'
 
--- | Takes 'n' times the size of type refered by proxy 'p'.
-timesSizeOf :: (pred a, Integral i) => exp i -> Proxy a -> ChanSize exp pred i
-n `timesSizeOf` p = OneSize (ChanElemType p) n
+-- | Takes 'n' times the size of type refered by proxy.
+timesSizeOf :: (pred a, Integral i) => exp i -> proxy a -> ChanSize exp pred i
+timesSizeOf = flip OneSize
 
 -- | Multiplies a channel size specification with a scalar.
 timesSize :: Integral i => exp i -> ChanSize exp pred i -> ChanSize exp pred i
-n `timesSize` sz = n `TimesSize` sz
+timesSize = TimesSize
 
 -- | Adds two channel size specifications together.
 plusSize :: Integral i => ChanSize exp pred i -> ChanSize exp pred i -> ChanSize exp pred i
-a `plusSize` b = a `PlusSize` b
+plusSize = PlusSize
 
 data ThreadCMD fs a where
   ForkWithId :: (ThreadId -> prog ()) -> ThreadCMD (Param3 prog exp pred) ThreadId
