@@ -555,7 +555,7 @@ mapFunArgM :: Monad m
     -> m (FunArg exp2 pred)
 mapFunArgM f (ValArg a)      = liftM ValArg (f a)
 mapFunArgM f (AddrArg a)     = liftM AddrArg $ mapFunArgM f a
-mapFunArgM f (OffsetArg a i) = OffsetArg <$> mapFunArgM f a <*> f i
+mapFunArgM f (OffsetArg a i) = do a' <- mapFunArgM f a; i' <- f i; return $ OffsetArg a' i'
 mapFunArgM f (DerefArg a)    = liftM DerefArg $ mapFunArgM f a
 mapFunArgM f (FunArg a)      = return (FunArg a)
 
