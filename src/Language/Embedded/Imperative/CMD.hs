@@ -543,19 +543,21 @@ instance (CompExp exp, CompTypeClass ct) => Arg (FunArg exp) ct
 
 mapFunArg ::
     (forall a . exp1 a -> exp2 a) -> FunArg exp1 pred -> FunArg exp2 pred
-mapFunArg f (ValArg a)   = ValArg (f a)
-mapFunArg f (AddrArg a)  = AddrArg $ mapFunArg f a
-mapFunArg f (DerefArg a) = DerefArg $ mapFunArg f a
-mapFunArg f (FunArg a)   = FunArg a
+mapFunArg f (ValArg a)      = ValArg (f a)
+mapFunArg f (AddrArg a)     = AddrArg $ mapFunArg f a
+mapFunArg f (OffsetArg a i) = OffsetArg (mapFunArg f a) (f i)
+mapFunArg f (DerefArg a)    = DerefArg $ mapFunArg f a
+mapFunArg f (FunArg a)      = FunArg a
 
 mapFunArgM :: Monad m
     => (forall a . exp1 a -> m (exp2 a))
     -> FunArg exp1 pred
     -> m (FunArg exp2 pred)
-mapFunArgM f (ValArg a)   = liftM ValArg (f a)
-mapFunArgM f (AddrArg a)  = liftM AddrArg $ mapFunArgM f a
-mapFunArgM f (DerefArg a) = liftM DerefArg $ mapFunArgM f a
-mapFunArgM f (FunArg a)   = return (FunArg a)
+mapFunArgM f (ValArg a)      = liftM ValArg (f a)
+mapFunArgM f (AddrArg a)     = liftM AddrArg $ mapFunArgM f a
+mapFunArgM f (OffsetArg a i) = OffsetArg <$> mapFunArgM f a <*> f i
+mapFunArgM f (DerefArg a)    = liftM DerefArg $ mapFunArgM f a
+mapFunArgM f (FunArg a)      = return (FunArg a)
 
 class ToIdent obj => Assignable obj
 
