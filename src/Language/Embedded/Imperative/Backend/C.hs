@@ -273,6 +273,59 @@ compC_CMD (CallProc obj fun as) = do
       Nothing -> addStm [cstm| $id:fun($args:as'); |]
       Just o  -> addStm [cstm| $id:o = $id:fun($args:as'); |]
 compC_CMD (InModule mod prog) = inModule mod prog
+compC_CMD (AssignPtr (PtrComp p) o exp) = do
+    v <- compExp exp    
+    addStm [cstm| *($id:p + $int:o) = $v; |]
+compC_CMD cmd@(LoadPtr (PtrComp p) o) = do
+    v <- freshVar (proxyPred cmd)
+    touchVar p
+    addStm [cstm| $id:v = *($id:p); |]
+    return v
+compC_CMD (ClosePtr) = do
+    addInclude "<fcntl.h>"
+    addStm [cstm| close(mem_fd); |]
+compC_CMD (Offload addr) = do
+    addGlobal f_map
+    addLocal [cdecl| unsigned page_size = 0;  |]
+    addLocal [cdecl| int mem_fd = -1; |]
+    addLocal [cdecl| unsigned offset; |]
+    addLocal [cdecl| int *ptr; |]
+    addStm   [cstm| f_map($string:addr, (void**) &ptr, &offset, page_size, mem_fd); |]
+    addStm   [cstm| ptr = ptr + offset; |]
+    addInclude "<fcntl.h>"
+    addInclude "<stddef.h>"
+    return $ PtrComp "ptr"
+  where
+    f_map ::  Definition
+    f_map = [cedecl|
+      int f_map(unsigned addr, void **ptr, unsigned *offset, unsigned page_size, int mem_fd) {
+        unsigned page_addr;
+ 
+        if(!page_size)
+          page_size = sysconf(_SC_PAGESIZE);
+
+        if(mem_fd < 1) {
+          mem_fd = open ("/dev/mem", O_RDWR);
+          if (mem_fd < 1) {
+            perror("f_map");
+            return -1;
+          }
+        }
+
+        page_addr = (addr & (~(page_size-1)));
+
+        if(offset != NULL)
+          *offset = addr - page_addr;
+
+        *ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, 
+                    mem_fd, page_addr);
+
+        if(*ptr == MAP_FAILED || !*ptr)
+          return -2;
+
+        return 0;
+      }
+  |]
 
 instance (CompExp exp, CompTypeClass ct)          => Interp RefCMD     CGen (Param2 exp ct) where interp = compRefCMD
 instance (CompExp exp, CompTypeClass ct)          => Interp ArrCMD     CGen (Param2 exp ct) where interp = compArrCMD

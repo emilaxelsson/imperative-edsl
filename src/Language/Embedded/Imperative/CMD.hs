@@ -552,6 +552,11 @@ data C_CMD fs a
     CallFun       :: pred a => String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) (Val a)
     CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) ()
     InModule      :: String -> prog () -> C_CMD (Param3 prog exp pred) ()
+    --
+    Offload   :: String -> C_CMD (Param3 prog exp pred) (Ptr Int)
+    AssignPtr :: Ptr Int -> Int -> exp Int -> C_CMD (Param3 prog exp pred) ()
+    LoadPtr   :: pred Int => Ptr Int -> Int -> C_CMD (Param3 prog exp pred) (Val Int)
+    ClosePtr   :: C_CMD (Param3 prog exp pred) ()
 
 instance HFunctor C_CMD
   where
@@ -565,6 +570,11 @@ instance HFunctor C_CMD
     hfmap _ (CallFun fun args)        = CallFun fun args
     hfmap _ (CallProc obj proc args)  = CallProc obj proc args
     hfmap f (InModule mod prog)       = InModule mod (f prog)
+    -- 
+    hfmap _ (Offload addr) = Offload addr
+    hfmap _ (AssignPtr p o v) = AssignPtr p o v
+    hfmap _ (LoadPtr p o) = LoadPtr p o
+    hfmap _ (ClosePtr) = ClosePtr
 
 instance HBifunctor C_CMD
   where
@@ -578,6 +588,11 @@ instance HBifunctor C_CMD
     hbimap _ f (CallFun fun args)        = CallFun fun (map (mapFunArg f) args)
     hbimap _ f (CallProc obj proc args)  = CallProc obj proc (map (mapFunArg f) args)
     hbimap f _ (InModule mod prog)       = InModule mod (f prog)
+    -- 
+    hbimap _ _ (Offload addr) = Offload addr
+    hbimap _ f (AssignPtr p o v) = AssignPtr p o (f v)
+    hbimap _ _ (LoadPtr p o) = LoadPtr p o
+    hbimap _ _ (ClosePtr) = ClosePtr
 
 instance (C_CMD :<: instr) => Reexpressible C_CMD instr
   where
@@ -591,6 +606,12 @@ instance (C_CMD :<: instr) => Reexpressible C_CMD instr
     reexpressInstrEnv reexp (CallFun fun args)        = lift . singleInj . CallFun fun =<< mapM (mapFunArgM reexp) args
     reexpressInstrEnv reexp (CallProc obj proc args)  = lift . singleInj . CallProc obj proc =<< mapM (mapFunArgM reexp) args
     reexpressInstrEnv reexp (InModule mod prog)       = ReaderT $ \env -> singleInj $ InModule mod (runReaderT prog env)
+    --
+    reexpressInstrEnv reexp (Offload addr) = lift $ singleInj $ Offload addr
+    reexpressInstrEnv reexp (AssignPtr p o v) = lift . singleInj . AssignPtr p o =<< reexp v
+    reexpressInstrEnv reexp (LoadPtr p o) = lift $ singleInj $ LoadPtr p o
+    reexpressInstrEnv reexp (ClosePtr) = lift $ singleInj $ ClosePtr
+
 
 instance DryInterp C_CMD
   where
@@ -604,8 +625,10 @@ instance DryInterp C_CMD
     dryInterp (CallFun _ _)          = liftM ValComp $ freshStr "v"
     dryInterp (CallProc _ _ _)       = return ()
     dryInterp (InModule _ _)         = return ()
-
-
+    --
+    dryInterp (Offload _) = liftM PtrComp $ freshStr "o"
+    dryInterp (AssignPtr _ _ _) = return ()
+    dryInterp (LoadPtr _ _) = liftM ValComp $ freshStr "v"
 
 --------------------------------------------------------------------------------
 -- * Running commands

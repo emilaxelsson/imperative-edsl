@@ -507,6 +507,20 @@ getTime = do
       |]
       -- From http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
 
+-- ...
+
+type Offset = Int
+
+offload :: (C_CMD :<: instr) => String -> ProgramT instr (Param2 exp pred) m (Ptr Int)
+offload = singleInj . Offload
+
+assignp :: (C_CMD :<: instr) => Ptr Int -> Offset -> exp Int -> ProgramT instr (Param2 exp pred) m ()
+assignp ptr o = singleInj . AssignPtr ptr o
+
+loadp   :: (pred Int, C_CMD :<: instr, FreeExp exp, FreePred exp Int, Monad m)
+        => Ptr Int -> Offset -> ProgramT instr (Param2 exp pred) m (exp Int)
+loadp ptr o = fmap valToExp $ singleInj $ LoadPtr ptr o
+
 -- Arguments
 
 -- | Value argument
