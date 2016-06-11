@@ -10,6 +10,7 @@ module Language.Embedded.Imperative.Frontend where
 
 import Prelude hiding (break)
 
+import Data.Int (Int32)
 import Data.Array.IO
 import Data.IORef
 import Data.Typeable
@@ -511,15 +512,18 @@ getTime = do
 
 type Offset = Int
 
-offload :: (C_CMD :<: instr) => String -> ProgramT instr (Param2 exp pred) m (Ptr Int)
+offload :: (C_CMD :<: instr) => String -> ProgramT instr (Param2 exp pred) m (Ptr Int32)
 offload = singleInj . Offload
 
-assignp :: (C_CMD :<: instr) => Ptr Int -> Offset -> exp Int -> ProgramT instr (Param2 exp pred) m ()
+assignp :: (C_CMD :<: instr) => Ptr Int32 -> Offset -> exp Int32 -> ProgramT instr (Param2 exp pred) m ()
 assignp ptr o = singleInj . AssignPtr ptr o
 
-loadp   :: (pred Int, C_CMD :<: instr, FreeExp exp, FreePred exp Int, Monad m)
-        => Ptr Int -> Offset -> ProgramT instr (Param2 exp pred) m (exp Int)
+loadp   :: (pred Int32, C_CMD :<: instr, FreeExp exp, FreePred exp Int32, Monad m)
+        => Ptr Int32 -> Offset -> ProgramT instr (Param2 exp pred) m (exp Int32)
 loadp ptr o = fmap valToExp $ singleInj $ LoadPtr ptr o
+
+closep  :: (C_CMD :<: instr) => ProgramT instr (Param2 exp pred) m ()
+closep = singleInj $ ClosePtr
 
 -- Arguments
 

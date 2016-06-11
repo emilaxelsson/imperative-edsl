@@ -553,9 +553,9 @@ data C_CMD fs a
     CallProc      :: Assignable obj => Maybe obj -> String -> [FunArg exp pred] -> C_CMD (Param3 prog exp pred) ()
     InModule      :: String -> prog () -> C_CMD (Param3 prog exp pred) ()
     --
-    Offload   :: String -> C_CMD (Param3 prog exp pred) (Ptr Int)
-    AssignPtr :: Ptr Int -> Int -> exp Int -> C_CMD (Param3 prog exp pred) ()
-    LoadPtr   :: pred Int => Ptr Int -> Int -> C_CMD (Param3 prog exp pred) (Val Int)
+    Offload   :: String -> C_CMD (Param3 prog exp pred) (Ptr Int32)
+    AssignPtr :: Ptr Int32 -> Int -> exp Int32 -> C_CMD (Param3 prog exp pred) ()
+    LoadPtr   :: pred Int32 => Ptr Int32 -> Int -> C_CMD (Param3 prog exp pred) (Val Int32)
     ClosePtr   :: C_CMD (Param3 prog exp pred) ()
 
 instance HFunctor C_CMD
