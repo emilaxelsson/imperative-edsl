@@ -96,7 +96,7 @@ library
     language-c-quote >= 0.11.5 && < 0.12,
     mainland-pretty >= 0.4 && < 0.5,
     microlens >= 0.3.0.0,
-    microlens-mtl,
+    microlens-mtl >= 0.1.8,
     microlens-th,
     mtl,
     process,

@@ -141,22 +141,6 @@ data CEnv = CEnv
 
 makeLenses ''CEnv
 
--- | Reimplementation of @<<%=@ from the lens package
-(<<%=) :: MonadState s m =>
-    (forall f . Functor f => LensLike' f s a) -> (a -> a) -> m a
-l <<%= f = do
-    s <- get
-    l %= f
-    return (s ^. l)
-
--- | Reimplementation of @<<.=@ from the lens package
-(<<.=) :: MonadState s m =>
-    (forall f . Functor f => LensLike' f s a) -> a -> m a
-l <<.= f = do
-    s <- get
-    l .= f
-    return (s ^. l)
-
 -- | Default code generator state
 defaultCEnv :: Flags -> CEnv
 defaultCEnv fl = CEnv
