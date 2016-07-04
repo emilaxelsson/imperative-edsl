@@ -125,7 +125,7 @@ instance HBifunctor RefCMD
     hbimap _ f (SetRef r a)        = SetRef r (f a)
     hbimap _ _ (UnsafeFreezeRef r) = UnsafeFreezeRef r
 
-instance (RefCMD :<: instr) => Reexpressible RefCMD instr
+instance (RefCMD :<: instr) => Reexpressible RefCMD instr env
   where
     reexpressInstrEnv reexp (NewRef base)       = lift $ singleInj $ NewRef base
     reexpressInstrEnv reexp (InitRef base a)    = lift . singleInj . InitRef base =<< reexp a
@@ -216,7 +216,7 @@ instance HBifunctor ArrCMD
     hbimap _ _ (UnsafeFreezeArr arr)       = UnsafeFreezeArr arr
     hbimap _ _ (UnsafeThawArr arr)         = UnsafeThawArr arr
 
-instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr
+instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr env
   where
     reexpressInstrEnv reexp (NewArr base n)       = lift . singleInj . NewArr base =<< reexp n
     reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
@@ -299,7 +299,7 @@ instance HBifunctor ControlCMD
     hbimap _ _ Break                   = Break
     hbimap _ g (Assert cond msg)       = Assert (g cond) msg
 
-instance (ControlCMD :<: instr) => Reexpressible ControlCMD instr
+instance (ControlCMD :<: instr) => Reexpressible ControlCMD instr env
   where
     reexpressInstrEnv reexp (If c thn els) = do
         c' <- reexp c
@@ -354,7 +354,7 @@ data PtrCMD fs a
 instance HFunctor   PtrCMD where hfmap _    (SwapPtr a b) = SwapPtr a b
 instance HBifunctor PtrCMD where hbimap _ _ (SwapPtr a b) = SwapPtr a b
 
-instance (PtrCMD :<: instr) => Reexpressible PtrCMD instr
+instance (PtrCMD :<: instr) => Reexpressible PtrCMD instr env
   where
     reexpressInstrEnv reexp (SwapPtr a b) = lift $ singleInj (SwapPtr a b)
 
@@ -455,7 +455,7 @@ instance HBifunctor FileCMD
     hbimap _ _ (FGet hdl)            = FGet hdl
     hbimap _ _ (FEof hdl)            = FEof hdl
 
-instance (FileCMD :<: instr) => Reexpressible FileCMD instr
+instance (FileCMD :<: instr) => Reexpressible FileCMD instr env
   where
     reexpressInstrEnv reexp (FOpen file mode)   = lift $ singleInj $ FOpen file mode
     reexpressInstrEnv reexp (FClose h)          = lift $ singleInj $ FClose h
@@ -616,7 +616,7 @@ instance HBifunctor C_CMD
     hbimap _ f (CallProc obj proc args)  = CallProc obj proc (map (mapFunArg f) args)
     hbimap f _ (InModule mod prog)       = InModule mod (f prog)
 
-instance (C_CMD :<: instr) => Reexpressible C_CMD instr
+instance (C_CMD :<: instr) => Reexpressible C_CMD instr env
   where
     reexpressInstrEnv reexp (NewCArr base al n)       = lift . singleInj . NewCArr base al =<< reexp n
     reexpressInstrEnv reexp (InitCArr base al as)     = lift $ singleInj $ InitCArr base al as

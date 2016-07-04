@@ -100,7 +100,7 @@ library
     microlens-th,
     mtl,
     process,
-    operational-alacarte >= 0.2,
+    operational-alacarte >= 0.3,
     BoundedChan,
     srcloc,
     syntactic >= 3.2,

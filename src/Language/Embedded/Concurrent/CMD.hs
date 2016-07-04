@@ -150,7 +150,7 @@ instance HBifunctor ThreadCMD where
   hbimap _ _ (Wait tid)     = Wait tid
   hbimap _ g (Sleep us)     = Sleep $ g us
 
-instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr where
+instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr env where
   reexpressInstrEnv reexp (ForkWithId p) = ReaderT $ \env ->
       singleInj $ ForkWithId (flip runReaderT env . p)
   reexpressInstrEnv reexp (Kill tid) = lift $ singleInj $ Kill tid
@@ -175,7 +175,7 @@ instance HBifunctor ChanCMD where
   hbimap _ _ (CloseChan c    )    = CloseChan c
   hbimap _ _ (ReadOK c)           = ReadOK c
 
-instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr where
+instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr env where
   reexpressInstrEnv reexp (NewChan sz) =
       lift . singleInj . NewChan =<< mapSizeExpA reexp sz
   reexpressInstrEnv reexp (ReadOne c) = lift $ singleInj $ ReadOne c
