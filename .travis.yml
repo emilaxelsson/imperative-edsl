@@ -3,14 +3,14 @@ language: c
 
 cache:
   directories:
-    - .cabal-sandbox
+    - $HOME/.cabal
 
 matrix:
   include:
-    - env: CABALVER=1.18 GHCVER=7.8.4
-      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.18,ghc-7.8.4,happy-1.19.5,alex-3.1.7]}}
-    - env: CABALVER=1.22 GHCVER=7.10.2
-      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.22,ghc-7.10.2,happy-1.19.5,alex-3.1.7]}}
+    - env: CABALVER=1.24 GHCVER=7.8.4
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-7.8.4,happy-1.19.5,alex-3.1.7]}}
+    - env: CABALVER=1.24 GHCVER=7.10.2
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-7.10.2,happy-1.19.5,alex-3.1.7]}}
     - env: CABALVER=1.24 GHCVER=8.0.1
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-8.0.1,happy-1.19.5,alex-3.1.7]}}
     - env: CABALVER=head GHCVER=head
@@ -28,24 +28,23 @@ install:
   - cabal --version
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
   - travis_retry cabal update
-  - cabal sandbox init
-  - cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --constraint="language-c-quote -full-haskell-antiquotes"
+  - cabal new-configure --enable-tests --enable-benchmarks     --constraint="language-c-quote -full-haskell-antiquotes"
+  - cabal new-build     --enable-tests --enable-benchmarks -v2 --constraint="language-c-quote -full-haskell-antiquotes"
 
 script:
-  - cabal configure --enable-tests --enable-benchmarks -v2
-  - cabal build
-  - cabal test
-  - if [ $CABALVER == 1.22 ]; then cabal check; fi # Cabal 1.18 complains about PatternSynonyms
+  - TESTS=( $(awk 'tolower($0) ~ /^test-suite / { print $2 }' *.cabal) );
+    RC=true; for T in ${TESTS[@]}; do echo \"== $T ==\";
+    if dist-newstyle/build/*/build/$T/$T; then echo \"= $T OK =\";
+    else echo \"= $T FAILED =\"; RC=false; fi; done; $RC
+  - cabal check
   - cabal sdist
   - export SRC_TGZ=$(cabal info . | awk '{print $2;exit}');
     cd dist/;
     if [ -f "$SRC_TGZ".tar.gz ]; then
       cabal unpack "$SRC_TGZ".tar.gz;
       cd "$SRC_TGZ";
-      cabal sandbox init --sandbox ../../.cabal-sandbox;
-      cabal configure --disable-optimization --enable-test;
-      cabal build;
-      cabal install --disable-optimization --force-reinstalls;
+      cabal new-configure --disable-optimization --enable-test --enable-bench --constraint="language-c-quote -full-haskell-antiquotes";
+      cabal new-build     --disable-optimization --enable-test --enable-bench --constraint="language-c-quote -full-haskell-antiquotes";
     else
        echo "expected '$SRC_TGZ.tar.gz' not found";
        exit 1;
