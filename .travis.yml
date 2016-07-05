@@ -1,3 +1,6 @@
+# Inspired by
+# https://github.com/hvr/multi-ghc-travis/blob/master/make_travis_yml_2.hs
+
 sudo: false
 language: c
 
@@ -9,8 +12,8 @@ matrix:
   include:
     - env: CABALVER=1.24 GHCVER=7.8.4
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-7.8.4,happy-1.19.5,alex-3.1.7]}}
-    - env: CABALVER=1.24 GHCVER=7.10.2
-      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-7.10.2,happy-1.19.5,alex-3.1.7]}}
+    - env: CABALVER=1.24 GHCVER=7.10.3
+      addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-7.10.3,happy-1.19.5,alex-3.1.7]}}
     - env: CABALVER=1.24 GHCVER=8.0.1
       addons: {apt: {sources: [hvr-ghc], packages: [cabal-install-1.24,ghc-8.0.1,happy-1.19.5,alex-3.1.7]}}
     - env: CABALVER=head GHCVER=head
@@ -27,26 +30,21 @@ before_install:
 install:
   - cabal --version
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
-  - travis_retry cabal update
-  - cabal new-configure --enable-tests --enable-benchmarks     --constraint="language-c-quote -full-haskell-antiquotes"
-  - cabal new-build     --enable-tests --enable-benchmarks -v2 --constraint="language-c-quote -full-haskell-antiquotes"
+  - travis_retry cabal update -v
+  - cabal new-build --enable-tests --enable-benchmarks --constraint="language-c-quote -full-haskell-antiquotes" --dependencies
 
 script:
+  - cabal new-build --enable-tests --enable-benchmarks --constraint="language-c-quote -full-haskell-antiquotes" -v2
   - TESTS=( $(awk 'tolower($0) ~ /^test-suite / { print $2 }' *.cabal) );
-    RC=true; for T in ${TESTS[@]}; do echo \"== $T ==\";
-    if dist-newstyle/build/*/build/$T/$T; then echo \"= $T OK =\";
-    else echo \"= $T FAILED =\"; RC=false; fi; done; $RC
+    RC=true; for T in ${TESTS[@]}; do echo "== $T ==";
+    if dist-newstyle/build/*/build/$T/$T; then echo "= $T OK =";
+    else echo "= $T FAILED ="; RC=false; fi; done; $RC
   - cabal check
   - cabal sdist
-  - export SRC_TGZ=$(cabal info . | awk '{print $2;exit}');
-    cd dist/;
-    if [ -f "$SRC_TGZ".tar.gz ]; then
-      cabal unpack "$SRC_TGZ".tar.gz;
-      cd "$SRC_TGZ";
-      cabal new-configure --disable-optimization --enable-test --enable-bench --constraint="language-c-quote -full-haskell-antiquotes";
-      cabal new-build     --disable-optimization --enable-test --enable-bench --constraint="language-c-quote -full-haskell-antiquotes";
-    else
-       echo "expected '$SRC_TGZ.tar.gz' not found";
-       exit 1;
-    fi
+  # Check that the resulting source distribution can be built
+  - SRC_BASENAME=$(cabal info . | awk '{print $2;exit}')
+  - tar -C dist/ -xf dist/$SRC_BASENAME.tar.gz
+  - "echo 'packages: *.cabal' > dist/$SRC_BASENAME/cabal.project"
+  - cd dist/$SRC_BASENAME/
+  - cabal new-build --enable-tests --enable-benchmarks --constraint="language-c-quote -full-haskell-antiquotes" --disable-optimization
 
