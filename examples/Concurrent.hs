@@ -120,7 +120,7 @@ testAll = do
     tag "chanOps" >> compareCompiled' opts chanOps (runIO chanOps) ""
   where
     tag str = putStrLn $ "---------------- examples/Concurrent.hs/" ++ str ++ "\n"
-    opts = defaultExtCompilerOpts
+    opts = def
          { externalFlagsPre  = ["-Iinclude", "csrc/chan.c"]
          , externalFlagsPost = ["-lpthread"]
          }

@@ -6,6 +6,7 @@
 module Language.Embedded.Backend.C
   ( module Language.Embedded.Backend.C.Expression
   , module Language.Embedded.Backend.C
+  , Default (..)
   ) where
 
 
@@ -21,6 +22,7 @@ import System.Exit (ExitCode (..))
 import System.IO
 import System.Process (system, readProcess)
 
+import Data.Default.Class
 import Data.Loc (noLoc)
 import qualified Language.C.Syntax as C
 import Text.PrettyPrint.Mainland (pretty)
@@ -105,21 +107,14 @@ data ExternalCompilerOpts = ExternalCompilerOpts
       , externalSilent     :: Bool      -- ^ Don't print anything besides what the program prints
       }
 
-defaultExtCompilerOpts :: ExternalCompilerOpts
-defaultExtCompilerOpts = ExternalCompilerOpts
-    { externalKeepFiles = False
-    , externalFlagsPre  = []
-    , externalFlagsPost = []
-    , externalSilent    = False
-    }
-
-instance Monoid ExternalCompilerOpts
+instance Default ExternalCompilerOpts
   where
-    mempty = defaultExtCompilerOpts
-    mappend
-        (ExternalCompilerOpts keep1 pre1 post1 silent1)
-        (ExternalCompilerOpts keep2 pre2 post2 silent2) =
-            ExternalCompilerOpts keep2 (pre1 ++ pre2) (post1 ++ post2) silent2
+    def = ExternalCompilerOpts
+      { externalKeepFiles = False
+      , externalFlagsPre  = []
+      , externalFlagsPost = []
+      , externalSilent    = False
+      }
 
 maybePutStrLn :: Bool -> String -> IO ()
 maybePutStrLn False str = putStrLn str
@@ -165,7 +160,7 @@ compileAndCheck' opts prog = do
 -- | Generate C code and use CC to check that it compiles (no linking)
 compileAndCheck :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
-compileAndCheck = compileAndCheck' mempty
+compileAndCheck = compileAndCheck' def
 
 -- | Generate C code, use CC to compile it, and run the resulting executable
 runCompiled' :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
@@ -182,7 +177,7 @@ runCompiled' opts@(ExternalCompilerOpts {..}) prog = bracket
 -- | Generate C code, use CC to compile it, and run the resulting executable
 runCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr) =>
     Program instr (Param2 exp pred) a -> IO ()
-runCompiled = runCompiled' mempty
+runCompiled = runCompiled' def
 
 -- | Compile a program and make it available as an 'IO' function from 'String'
 -- to 'String' (connected to @stdin@/@stdout@. respectively). Note that
@@ -208,7 +203,7 @@ withCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     -> ((String -> IO String) -> IO b)
          -- ^ Function that has access to the compiled executable as a function
     -> IO b
-withCompiled = withCompiled' defaultExtCompilerOpts {externalSilent = True}
+withCompiled = withCompiled' def {externalSilent = True}
 
 -- | Like 'runCompiled'' but with explicit input/output connected to
 -- @stdin@/@stdout@. Note that the program will be compiled every time the
@@ -229,7 +224,7 @@ captureCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     => Program instr (Param2 exp pred) a  -- ^ Program to run
     -> String                             -- ^ Input to send to @stdin@
     -> IO String                          -- ^ Result from @stdout@
-captureCompiled = captureCompiled' defaultExtCompilerOpts
+captureCompiled = captureCompiled' def
 
 -- | Compare the content written to @stdout@ from the reference program and from
 -- running the compiled C code
@@ -258,5 +253,5 @@ compareCompiled :: (Interp instr CGen (Param2 exp pred), HFunctor instr)
     -> IO a                               -- ^ Reference program
     -> String                             -- ^ Input to send to @stdin@
     -> IO ()
-compareCompiled = compareCompiled' defaultExtCompilerOpts
+compareCompiled = compareCompiled' def
 

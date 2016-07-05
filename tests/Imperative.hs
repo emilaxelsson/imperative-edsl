@@ -399,8 +399,7 @@ testAll = do
     tag "multiModule" >> testMultiModule
   where
     tag str = putStrLn $ "---------------- tests/Imperative.hs/" ++ str ++ "\n"
-    compareCompiledM = compareCompiled'
-        defaultExtCompilerOpts {externalFlagsPost = ["-lm"]}
+    compareCompiledM = compareCompiled' def {externalFlagsPost = ["-lm"]}
 
     int8   = 0 :: CExp Int8
     int16  = 0 :: CExp Int16

@@ -94,7 +94,6 @@
 module Language.C.Monad
   where
 
-import Lens.Micro
 import Lens.Micro.Mtl
 import Lens.Micro.TH
 #if __GLASGOW_HASKELL__ < 710
