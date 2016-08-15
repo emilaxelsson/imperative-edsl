@@ -27,6 +27,8 @@ import Data.IORef
 import Data.Ix (Ix)
 import Data.Maybe (fromMaybe)
 
+import Control.Monads
+import Language.Embedded.Traversal
 import Language.Embedded.Expression
 import Language.Embedded.Imperative.CMD
 import Language.Embedded.Imperative (getArr, setArr)
@@ -150,6 +152,12 @@ instance HBifunctor ThreadCMD where
   hbimap _ _ (Wait tid)     = Wait tid
   hbimap _ g (Sleep us)     = Sleep $ g us
 
+instance DryInterp ThreadCMD where
+  dryInterp (ForkWithId _) = liftM TIDComp $ freshStr "t"
+  dryInterp (Kill _)       = return ()
+  dryInterp (Wait _)       = return ()
+  dryInterp (Sleep _)      = return ()
+
 instance (ThreadCMD :<: instr) => Reexpressible ThreadCMD instr env where
   reexpressInstrEnv reexp (ForkWithId p) = ReaderT $ \env ->
       singleInj $ ForkWithId (flip runReaderT env . p)
@@ -174,6 +182,15 @@ instance HBifunctor ChanCMD where
   hbimap _ f (WriteChan c n n' a) = WriteChan c (f n) (f n') a
   hbimap _ _ (CloseChan c    )    = CloseChan c
   hbimap _ _ (ReadOK c)           = ReadOK c
+
+instance DryInterp ChanCMD where
+  dryInterp (NewChan _)         = liftM ChanComp $ freshStr "chan"
+  dryInterp (ReadOne _)         = liftM ValComp $ freshStr "v"
+  dryInterp (ReadChan _ _ _ _)  = liftM ValComp $ freshStr "v"
+  dryInterp (WriteOne _ _)      = liftM ValComp $ freshStr "v"
+  dryInterp (WriteChan _ _ _ _) = liftM ValComp $ freshStr "v"
+  dryInterp (CloseChan _)       = return ()
+  dryInterp (ReadOK _)          = liftM ValComp $ freshStr "v"
 
 instance (ChanCMD :<: instr) => Reexpressible ChanCMD instr env where
   reexpressInstrEnv reexp (NewChan sz) =
