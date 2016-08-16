@@ -347,6 +347,10 @@ instance IsPointer (Arr i a)
         writeIORef arr1 arr2'
         writeIORef arr2 arr1'
 
+instance IsPointer (Ptr a)
+  where
+    runSwapPtr = error "cannot run SwapPtr for Ptr"
+
 data PtrCMD fs a
   where
     SwapPtr :: IsPointer a => a -> a -> PtrCMD (Param3 prog exp pred) ()
