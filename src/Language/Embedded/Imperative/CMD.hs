@@ -88,7 +88,7 @@ import Language.Embedded.Backend.C.Expression
 data Ref a
     = RefComp VarId
     | RefRun (IORef a)
-  deriving Typeable
+  deriving (Eq, Typeable)
 
 instance ToIdent (Ref a) where toIdent (RefComp r) = C.Id r
 
@@ -152,7 +152,7 @@ data Arr i a
     = ArrComp VarId
     | ArrRun (IORef (IOArray i a))
         -- The `IORef` is needed in order to make the `IsPointer` instance
-  deriving Typeable
+  deriving (Eq, Typeable)
 
 -- | Immutable array
 data IArr i a
@@ -376,7 +376,7 @@ instance DryInterp PtrCMD
 data Handle
     = HandleComp VarId
     | HandleRun IO.Handle
-  deriving Typeable
+  deriving (Eq, Show, Typeable)
 
 instance ToIdent Handle where toIdent (HandleComp h) = C.Id h
 
@@ -493,7 +493,7 @@ data Object = Object
     , objectType :: String
     , objectId   :: VarId
     }
-  deriving (Eq, Show, Ord, Typeable)
+  deriving (Eq, Show, Typeable)
 
 instance ToIdent Object where toIdent (Object _ _ o) = C.Id o
 
