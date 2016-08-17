@@ -158,7 +158,7 @@ data Arr i a
 data IArr i a
     = IArrComp VarId
     | IArrRun (Array i a)
-  deriving (Eq, Show, Typeable)
+  deriving (Show, Typeable)
 
 -- In a way, it's not terribly useful to have `Arr` parameterized on the index
 -- type, since it's required to be an integer type, and it doesn't really matter
