@@ -177,11 +177,15 @@ compControlCMD (Assert cond msg) = do
 
 compPtrCMD :: PtrCMD (Param3 prog exp pred) a -> CGen a
 compPtrCMD (SwapPtr a b) = do
-    sym <- gensym "tmp"
-    addLocal [cdecl| void * $id:sym; |]
-    addStm   [cstm| $id:sym = $id:a; |]
-    addStm   [cstm| $id:a = $id:b; |]
-    addStm   [cstm| $id:b = $id:sym; |]
+    let swap_ptr =
+          "#define swap_ptr(a,b) do {void* TmP=a; a=b; b=TmP;} while (0)"
+      -- See this solution on the use of `do{}while(0)`:
+      -- <http://stackoverflow.com/a/3982397/1105347>
+      --
+      -- The name "TmP" is to make it very unlikely to have the same name as `a`
+      -- or `b`.
+    addGlobal [cedecl| $esc:swap_ptr |]
+    addStm [cstm| swap_ptr($id:a, $id:b); |]
 
 compIOMode :: IOMode -> String
 compIOMode ReadMode      = "r"
