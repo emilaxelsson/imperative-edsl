@@ -4,9 +4,7 @@ synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
                      The main module for users who want to write imperative
-                     programs is "Language.Embedded.Imperative" (and optionally
-                     "Language.Embedded.CExp" which provides a simple expression
-                     language).
+                     programs is "Language.Embedded.Imperative".
                      .
                      Examples can be found in the @examples@ directory.
 license:             BSD3
