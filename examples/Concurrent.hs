@@ -101,8 +101,8 @@ chanOps = do
   writeChanBuf c (0 :: CExp Int8) 2 sent
   received <- newArr (2 :: CExp Int8)
   readChanBuf c (0 :: CExp Int8) 2 received
-  a <- getArr 0 received
-  b <- getArr 1 received
+  a <- getArr received 0
+  b <- getArr received 1
   printf "%d %d\n" a b
 
   writeChan' c (67 :: CExp Word8)

@@ -84,14 +84,14 @@ compArrCMD :: forall exp ct a. (CompExp exp, CompTypeClass ct) =>
     ArrCMD (Param3 CGen exp ct) a -> CGen a
 compArrCMD cmd@(NewArr base size) = compC_CMD (NewCArr base Nothing size :: C_CMD (Param3 CGen exp ct) a)
 compArrCMD cmd@(InitArr base as) = compC_CMD (InitCArr base Nothing as   :: C_CMD (Param3 CGen exp ct) a)
-compArrCMD cmd@(GetArr expi arr) = do
+compArrCMD cmd@(GetArr arr expi) = do
     v <- freshVar (proxyPred cmd)
     i <- compExp expi
     touchVar $ BaseArrOf arr  -- explanation above
     touchVar arr
     addStm [cstm| $id:v = $id:arr[ $i ]; |]
     return v
-compArrCMD (SetArr expi expv arr) = do
+compArrCMD (SetArr arr expi expv) = do
     v <- compExp expv
     i <- compExp expi
     touchVar $ BaseArrOf arr  -- explanation above

@@ -184,8 +184,8 @@ data ArrCMD fs a
   where
     NewArr  :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
     InitArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    GetArr  :: (pred a, Integral i, Ix i) => exp i -> Arr i a -> ArrCMD (Param3 prog exp pred) (Val a)
-    SetArr  :: (pred a, Integral i, Ix i) => exp i -> exp a -> Arr i a -> ArrCMD (Param3 prog exp pred) ()
+    GetArr  :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) (Val a)
+    SetArr  :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> exp a -> ArrCMD (Param3 prog exp pred) ()
     CopyArr :: (pred a, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
       -- The arrays are paired with their offset
     UnsafeFreezeArr :: (pred a, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
@@ -210,8 +210,8 @@ instance HBifunctor ArrCMD
   where
     hbimap _ f (NewArr base n)             = NewArr base (f n)
     hbimap _ _ (InitArr base as)           = InitArr base as
-    hbimap _ f (GetArr i arr)              = GetArr (f i) arr
-    hbimap _ f (SetArr i a arr)            = SetArr (f i) (f a) arr
+    hbimap _ f (GetArr arr i)              = GetArr arr (f i)
+    hbimap _ f (SetArr arr i a)            = SetArr arr (f i) (f a)
     hbimap _ f (CopyArr (a1,o1) (a2,o2) l) = CopyArr (a1, f o1) (a2, f o2) (f l)
     hbimap _ _ (UnsafeFreezeArr arr)       = UnsafeFreezeArr arr
     hbimap _ _ (UnsafeThawArr arr)         = UnsafeThawArr arr
@@ -220,8 +220,8 @@ instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr env
   where
     reexpressInstrEnv reexp (NewArr base n)       = lift . singleInj . NewArr base =<< reexp n
     reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
-    reexpressInstrEnv reexp (GetArr i arr)        = lift . singleInj . flip GetArr arr =<< reexp i
-    reexpressInstrEnv reexp (SetArr i a arr)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr i' a' arr
+    reexpressInstrEnv reexp (GetArr arr i)        = lift . singleInj . GetArr arr =<< reexp i
+    reexpressInstrEnv reexp (SetArr arr i a)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr arr i' a'
     reexpressInstrEnv reexp (UnsafeFreezeArr arr) = lift $ singleInj $ UnsafeFreezeArr arr
     reexpressInstrEnv reexp (UnsafeThawArr arr)   = lift $ singleInj $ UnsafeThawArr arr
     reexpressInstrEnv reexp (CopyArr (a1,o1) (a2,o2) l) = do
@@ -670,7 +670,7 @@ runArrCMD (NewArr _ n) = do
     ArrRun <$> newIORef arr
 runArrCMD (InitArr _ as) =
     fmap ArrRun . newIORef =<< newListArray (0, genericLength as - 1) as
-runArrCMD (GetArr i (ArrRun arr)) = do
+runArrCMD (GetArr (ArrRun arr) i) = do
     arr'  <- readIORef arr
     i'    <- i
     (l,h) <- getBounds arr'
@@ -680,7 +680,7 @@ runArrCMD (GetArr i (ArrRun arr)) = do
                 ++ " out of bounds "
                 ++ show (toInteger l, toInteger h)
       else ValRun <$> readArray arr' i'
-runArrCMD (SetArr i a (ArrRun arr)) = do
+runArrCMD (SetArr (ArrRun arr) i a) = do
     arr'  <- readIORef arr
     i'    <- i
     a'    <- a

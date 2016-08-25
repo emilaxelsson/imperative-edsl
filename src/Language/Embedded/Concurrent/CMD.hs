@@ -238,7 +238,7 @@ runChanCMD (ReadChan (ChanRun c) off len arr) = do
   xs <- Chan.readChan c $ fromIntegral (len' - off')
   let xs' = map convertDynamic xs
   interpretBi id $ forM_ (zip [off' .. ] xs') $ \(i, x) -> do
-    setArr (return i) (return x) arr :: Program ArrCMD (Param2 IO pred) ()
+    setArr arr (return i) (return x) :: Program ArrCMD (Param2 IO pred) ()
   ValRun <$> Chan.lastReadOK c
 runChanCMD (WriteOne (ChanRun c) x) =
   ValRun <$> (Chan.writeChan c . return . toDyn =<< x)
@@ -246,7 +246,7 @@ runChanCMD (WriteChan (ChanRun c) off len (arr :: Arr ix el)) = do
   off' <- off
   len' <- len
   xs <- interpretBi id $ forM [off' .. off' + len' - 1] $ \i -> do
-    getArr (return i) arr :: Program ArrCMD (Param2 IO pred) (IO el)
+    getArr arr (return i) :: Program ArrCMD (Param2 IO pred) (IO el)
   ValRun <$> (Chan.writeChan c =<< map toDyn <$> sequence xs)
 runChanCMD (CloseChan (ChanRun c)) = Chan.closeChan c
 runChanCMD (ReadOK    (ChanRun c)) = ValRun <$> Chan.lastReadOK c

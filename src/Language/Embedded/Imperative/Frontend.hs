@@ -141,13 +141,13 @@ getArr
        , ArrCMD :<: instr
        , Monad m
        )
-    => exp i -> Arr i a -> ProgramT instr (Param2 exp pred) m (exp a)
-getArr i arr = fmap valToExp $ singleInj $ GetArr i arr
+    => Arr i a -> exp i -> ProgramT instr (Param2 exp pred) m (exp a)
+getArr arr i = fmap valToExp $ singleInj $ GetArr arr i
 
 -- | Set an element of an array
 setArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
-    exp i -> exp a -> Arr i a -> ProgramT instr (Param2 exp pred) m ()
-setArr i a arr = singleInj (SetArr i a arr)
+    Arr i a -> exp i -> exp a -> ProgramT instr (Param2 exp pred) m ()
+setArr arr i a = singleInj (SetArr arr i a)
 
 -- | Copy the contents of an array to another array. The number of elements to
 -- copy must not be greater than the number of allocated elements in either
