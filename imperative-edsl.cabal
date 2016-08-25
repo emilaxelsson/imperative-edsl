@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.6
+version:             0.7
 synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
