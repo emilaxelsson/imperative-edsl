@@ -83,7 +83,7 @@ instance ToIdent (BaseArrOf i a)
 compArrCMD :: forall exp ct a. (CompExp exp, CompTypeClass ct) =>
     ArrCMD (Param3 CGen exp ct) a -> CGen a
 compArrCMD cmd@(NewArr base size) = compC_CMD (NewCArr base Nothing size :: C_CMD (Param3 CGen exp ct) a)
-compArrCMD cmd@(InitArr base as) = compC_CMD (InitCArr base Nothing as   :: C_CMD (Param3 CGen exp ct) a)
+compArrCMD cmd@(ConstArr base as) = compC_CMD (ConstCArr base Nothing as :: C_CMD (Param3 CGen exp ct) a)
 compArrCMD cmd@(GetArr arr expi) = do
     v <- freshVar (proxyPred cmd)
     i <- compExp expi
@@ -257,7 +257,7 @@ compC_CMD cmd@(NewCArr base align size) = do
           _ -> addItem [citem| $ty:t $id:sym'[ $n ]; |]
         addItem [citem| $ty:t * $id:sym = $id:sym'; |]  -- explanation at 'compArrCMD'
     return $ ArrComp sym
-compC_CMD cmd@(InitCArr base align as) = do
+compC_CMD cmd@(ConstCArr base align as) = do
     sym <- gensym base
     let sym' = '_':sym
     t   <- compType (proxyPred cmd) (proxyArg cmd)

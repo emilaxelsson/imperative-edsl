@@ -97,7 +97,7 @@ chanOps = do
   b <- readChan c
   printf "%d %d\n" a b
 
-  sent :: Arr Int8 Int32 <- initArr [ 12, 34 ]
+  sent :: Arr Int8 Int32 <- constArr [ 12, 34 ]
   writeChanBuf c (0 :: CExp Int8) 2 sent
   received <- newArr (2 :: CExp Int8)
   readChanBuf c (0 :: CExp Int8) 2 received

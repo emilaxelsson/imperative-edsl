@@ -182,11 +182,11 @@ instance ToIdent (IArr i a) where toIdent (IArrComp arr) = C.Id arr
 -- | Commands for mutable arrays
 data ArrCMD fs a
   where
-    NewArr  :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    InitArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    GetArr  :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) (Val a)
-    SetArr  :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> exp a -> ArrCMD (Param3 prog exp pred) ()
-    CopyArr :: (pred a, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
+    NewArr   :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    ConstArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    GetArr   :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) (Val a)
+    SetArr   :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> exp a -> ArrCMD (Param3 prog exp pred) ()
+    CopyArr  :: (pred a, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
       -- The arrays are paired with their offset
     UnsafeFreezeArr :: (pred a, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
     UnsafeThawArr   :: (pred a, Integral i, Ix i) => IArr i a -> ArrCMD (Param3 prog exp pred) (Arr i a)
@@ -199,7 +199,7 @@ data ArrCMD fs a
 instance HFunctor ArrCMD
   where
     hfmap _ (NewArr base n)       = NewArr base n
-    hfmap _ (InitArr base as)     = InitArr base as
+    hfmap _ (ConstArr base as)    = ConstArr base as
     hfmap _ (GetArr i arr)        = GetArr i arr
     hfmap _ (SetArr i a arr)      = SetArr i a arr
     hfmap _ (CopyArr a1 a2 l)     = CopyArr a1 a2 l
@@ -209,7 +209,7 @@ instance HFunctor ArrCMD
 instance HBifunctor ArrCMD
   where
     hbimap _ f (NewArr base n)             = NewArr base (f n)
-    hbimap _ _ (InitArr base as)           = InitArr base as
+    hbimap _ _ (ConstArr base as)          = ConstArr base as
     hbimap _ f (GetArr arr i)              = GetArr arr (f i)
     hbimap _ f (SetArr arr i a)            = SetArr arr (f i) (f a)
     hbimap _ f (CopyArr (a1,o1) (a2,o2) l) = CopyArr (a1, f o1) (a2, f o2) (f l)
@@ -219,7 +219,7 @@ instance HBifunctor ArrCMD
 instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr env
   where
     reexpressInstrEnv reexp (NewArr base n)       = lift . singleInj . NewArr base =<< reexp n
-    reexpressInstrEnv reexp (InitArr base as)     = lift $ singleInj $ InitArr base as
+    reexpressInstrEnv reexp (ConstArr base as)    = lift $ singleInj $ ConstArr base as
     reexpressInstrEnv reexp (GetArr arr i)        = lift . singleInj . GetArr arr =<< reexp i
     reexpressInstrEnv reexp (SetArr arr i a)      = do i' <- reexp i; a' <- reexp a; lift $ singleInj $ SetArr arr i' a'
     reexpressInstrEnv reexp (UnsafeFreezeArr arr) = lift $ singleInj $ UnsafeFreezeArr arr
@@ -232,11 +232,11 @@ instance (ArrCMD :<: instr) => Reexpressible ArrCMD instr env
 
 instance DryInterp ArrCMD
   where
-    dryInterp (NewArr base _)  = liftM ArrComp $ freshStr base
-    dryInterp (InitArr base _) = liftM ArrComp $ freshStr base
-    dryInterp (GetArr _ _)     = liftM ValComp $ freshStr "v"
-    dryInterp (SetArr _ _ _)   = return ()
-    dryInterp (CopyArr _ _ _)  = return ()
+    dryInterp (NewArr base _)   = liftM ArrComp $ freshStr base
+    dryInterp (ConstArr base _) = liftM ArrComp $ freshStr base
+    dryInterp (GetArr _ _)      = liftM ValComp $ freshStr "v"
+    dryInterp (SetArr _ _ _)    = return ()
+    dryInterp (CopyArr _ _ _)   = return ()
     dryInterp (UnsafeFreezeArr (ArrComp arr)) = return (IArrComp arr)
     dryInterp (UnsafeThawArr (IArrComp arr))  = return (ArrComp arr)
 
@@ -573,10 +573,10 @@ instance Assignable Object
 
 data C_CMD fs a
   where
-    NewCArr  :: (pred a, Integral i, Ix i) => String -> Maybe i -> exp i -> C_CMD (Param3 prog exp pred) (Arr i a)
-    InitCArr :: (pred a, Integral i, Ix i) => String -> Maybe i -> [a] -> C_CMD (Param3 prog exp pred) (Arr i a)
-    NewPtr   :: pred a => String -> C_CMD (Param3 prog exp pred) (Ptr a)
-    PtrToArr :: Ptr a -> C_CMD (Param3 prog exp pred) (Arr i a)
+    NewCArr   :: (pred a, Integral i, Ix i) => String -> Maybe i -> exp i -> C_CMD (Param3 prog exp pred) (Arr i a)
+    ConstCArr :: (pred a, Integral i, Ix i) => String -> Maybe i -> [a] -> C_CMD (Param3 prog exp pred) (Arr i a)
+    NewPtr    :: pred a => String -> C_CMD (Param3 prog exp pred) (Ptr a)
+    PtrToArr  :: Ptr a -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewObject
         :: String  -- Base name
         -> String  -- Type
@@ -593,7 +593,7 @@ data C_CMD fs a
 instance HFunctor C_CMD
   where
     hfmap _ (NewCArr base al n)       = NewCArr base al n
-    hfmap _ (InitCArr base al as)     = InitCArr base al as
+    hfmap _ (ConstCArr base al as)    = ConstCArr base al as
     hfmap _ (NewPtr base)             = NewPtr base
     hfmap _ (PtrToArr p)              = PtrToArr p
     hfmap _ (NewObject base p t)      = NewObject base p t
@@ -608,7 +608,7 @@ instance HFunctor C_CMD
 instance HBifunctor C_CMD
   where
     hbimap _ f (NewCArr base al n)       = NewCArr base al (f n)
-    hbimap _ _ (InitCArr base al as)     = InitCArr base al as
+    hbimap _ _ (ConstCArr base al as)    = ConstCArr base al as
     hbimap _ _ (NewPtr base)             = NewPtr base
     hbimap _ _ (PtrToArr p)              = PtrToArr p
     hbimap _ _ (NewObject base p t)      = NewObject base p t
@@ -623,7 +623,7 @@ instance HBifunctor C_CMD
 instance (C_CMD :<: instr) => Reexpressible C_CMD instr env
   where
     reexpressInstrEnv reexp (NewCArr base al n)       = lift . singleInj . NewCArr base al =<< reexp n
-    reexpressInstrEnv reexp (InitCArr base al as)     = lift $ singleInj $ InitCArr base al as
+    reexpressInstrEnv reexp (ConstCArr base al as)    = lift $ singleInj $ ConstCArr base al as
     reexpressInstrEnv reexp (NewPtr base)             = lift $ singleInj $ NewPtr base
     reexpressInstrEnv reexp (PtrToArr p)              = lift $ singleInj $ PtrToArr p
     reexpressInstrEnv reexp (NewObject base p t)      = lift $ singleInj $ NewObject base p t
@@ -638,7 +638,7 @@ instance (C_CMD :<: instr) => Reexpressible C_CMD instr env
 instance DryInterp C_CMD
   where
     dryInterp (NewCArr base _ _)     = liftM ArrComp $ freshStr base
-    dryInterp (InitCArr base _ _)    = liftM ArrComp $ freshStr base
+    dryInterp (ConstCArr base _ _)   = liftM ArrComp $ freshStr base
     dryInterp (NewPtr base)          = liftM PtrComp $ freshStr base
     dryInterp (PtrToArr (PtrComp p)) = return $ ArrComp p
     dryInterp (NewObject base t p)   = liftM (Object p t) $ freshStr base
@@ -668,7 +668,7 @@ runArrCMD (NewArr _ n) = do
     n'  <- n
     arr <- newArray_ (0, fromIntegral n'-1)
     ArrRun <$> newIORef arr
-runArrCMD (InitArr _ as) =
+runArrCMD (ConstArr _ as) =
     fmap ArrRun . newIORef =<< newListArray (0, genericLength as - 1) as
 runArrCMD (GetArr (ArrRun arr) i) = do
     arr'  <- readIORef arr
@@ -788,18 +788,18 @@ runFileCMD (FGet h)   = do
 runFileCMD (FEof h) = fmap ValRun $ IO.hIsEOF $ runHandle h
 
 runC_CMD :: forall pred a. C_CMD (Param3 IO IO pred) a -> IO a
-runC_CMD (NewCArr base _ n)   = runArrCMD (NewArr base n   :: ArrCMD (Param3 IO IO pred) a)
-runC_CMD (InitCArr base _ as) = runArrCMD (InitArr base as :: ArrCMD (Param3 IO IO pred) a)
-runC_CMD (NewPtr base)        = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"
-runC_CMD (PtrToArr p)         = error "cannot run programs involving ptrToArr"
-runC_CMD (NewObject base _ _) = error $ "cannot run programs involving newObject (base name " ++ base ++ ")"
-runC_CMD (AddInclude _)       = return ()
-runC_CMD (AddDefinition _)    = return ()
-runC_CMD (AddExternFun _ _ _) = return ()
-runC_CMD (AddExternProc _ _)  = return ()
-runC_CMD (CallFun _ _)        = error "cannot run programs involving callFun"
-runC_CMD (CallProc _ _ _)     = error "cannot run programs involving callProc"
-runC_CMD (InModule _ prog)    = prog
+runC_CMD (NewCArr base _ n)    = runArrCMD (NewArr base n    :: ArrCMD (Param3 IO IO pred) a)
+runC_CMD (ConstCArr base _ as) = runArrCMD (ConstArr base as :: ArrCMD (Param3 IO IO pred) a)
+runC_CMD (NewPtr base)         = error $ "cannot run programs involving newPtr (base name " ++ base ++ ")"
+runC_CMD (PtrToArr p)          = error "cannot run programs involving ptrToArr"
+runC_CMD (NewObject base _ _)  = error $ "cannot run programs involving newObject (base name " ++ base ++ ")"
+runC_CMD (AddInclude _)        = return ()
+runC_CMD (AddDefinition _)     = return ()
+runC_CMD (AddExternFun _ _ _)  = return ()
+runC_CMD (AddExternProc _ _)   = return ()
+runC_CMD (CallFun _ _)         = error "cannot run programs involving callFun"
+runC_CMD (CallProc _ _ _)      = error "cannot run programs involving callProc"
+runC_CMD (InModule _ prog)     = prog
 
 instance InterpBi RefCMD     IO (Param1 pred) where interpBi = runRefCMD
 instance InterpBi ArrCMD     IO (Param1 pred) where interpBi = runArrCMD
