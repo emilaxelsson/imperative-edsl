@@ -10,7 +10,7 @@ description:         Deep embedding of imperative programs with code generation.
 license:             BSD3
 license-file:        LICENSE
 author:              Anders Persson, Emil Axelsson, Markus Aronsson
-maintainer:          emax@chalmers.se
+maintainer:          78emil@gmail.com
 copyright:           Copyright (c) 2016 Anton Ekblad, Emil Axelsson, Máté Karácsony
                      Copyright (c) 2015 Anders Persson, Anton Ekblad, Emil Axelsson,
                                         Markus Aronsson, Josef Svenningsson
@@ -93,7 +93,7 @@ library
     exception-transformers,
     ghc-prim,
     language-c-quote >= 0.11.5 && < 0.12,
-    mainland-pretty >= 0.4 && < 0.5,
+    mainland-pretty >= 0.4 && < 0.6,
     microlens >= 0.3.0.0,
     microlens-mtl >= 0.1.8,
     microlens-th,
