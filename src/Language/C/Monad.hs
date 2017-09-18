@@ -109,6 +109,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Monoid
 import Text.PrettyPrint.Mainland
+import Text.PrettyPrint.Mainland.Class
 import Data.Loc
 import Data.List (partition,nub)
 
