@@ -133,10 +133,10 @@ data ChanCMD fs a where
   WriteOne  :: (Typeable a, pred a)
             => Chan t c -> exp a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
-  ReadChan  :: (Typeable a, pred a, Ix i, Integral i)
+  ReadChan  :: (Typeable a, pred a, pred i, Ix i, Integral i)
             => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
-  WriteChan :: (Typeable a, pred a, Ix i, Integral i)
+  WriteChan :: (Typeable a, pred a, pred i, Ix i, Integral i)
             => Chan t c -> exp i -> exp i
             -> Arr i a -> ChanCMD (Param3 prog exp pred) (Val Bool)
 
