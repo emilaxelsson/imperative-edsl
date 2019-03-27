@@ -109,7 +109,9 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Monoid
 import Text.PrettyPrint.Mainland
+#if MIN_VERSION_mainland_pretty(0,6,0)
 import Text.PrettyPrint.Mainland.Class
+#endif
 import Data.Loc
 import Data.List (partition,nub)
 
@@ -172,9 +174,8 @@ type CGen = CGenT Identity
 
 -- | Run the C code generation monad
 runCGenT :: Monad m => CGenT m a -> CEnv -> m (a, CEnv)
-runCGenT m s = do
-    Right ac <- runExceptionT (runStateT (unCGenT m) s)
-    return ac
+runCGenT m s =
+    either (error . show) return =<< runExceptionT (runStateT (unCGenT m) s)
 
 -- | Run the C code generation monad
 runCGen :: CGen a -> CEnv -> (a, CEnv)
