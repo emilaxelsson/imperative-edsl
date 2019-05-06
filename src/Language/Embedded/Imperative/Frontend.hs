@@ -261,7 +261,11 @@ assert :: (ControlCMD :<: instr)
     -> ProgramT instr (Param2 exp pred) m ()
 assert cond msg = singleInj $ Assert cond msg
 
-
+-- | Hint that an expression may be used in an invariant
+hint :: (ControlCMD :<: instr, pred a)
+  => exp a -- ^ Expression to be used in invariant
+  -> ProgramT instr (Param2 exp pred) m ()
+hint exp = singleInj $ Hint exp
 
 --------------------------------------------------------------------------------
 -- * Pointer operations
