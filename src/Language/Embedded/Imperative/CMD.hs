@@ -363,18 +363,28 @@ instance IsPointer (Ptr a)
 
 data PtrCMD fs a
   where
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD (Param3 prog exp pred) ()
+    SwapPtr :: Ptr a -> Ptr a -> PtrCMD (Param3 prog exp pred) ()
+    SwapArr :: Arr i a -> Arr i a -> PtrCMD (Param3 prog exp pred) ()
 
-instance HFunctor   PtrCMD where hfmap _    (SwapPtr a b) = SwapPtr a b
-instance HBifunctor PtrCMD where hbimap _ _ (SwapPtr a b) = SwapPtr a b
+instance HFunctor   PtrCMD
+  where
+    hfmap _    (SwapPtr a b) = SwapPtr a b
+    hfmap _    (SwapArr a b) = SwapArr a b
+    
+instance HBifunctor PtrCMD
+  where
+    hbimap _ _ (SwapPtr a b) = SwapPtr a b
+    hbimap _ _ (SwapArr a b) = SwapArr a b
 
 instance (PtrCMD :<: instr) => Reexpressible PtrCMD instr env
   where
     reexpressInstrEnv reexp (SwapPtr a b) = lift $ singleInj (SwapPtr a b)
+    reexpressInstrEnv reexp (SwapArr a b) = lift $ singleInj (SwapArr a b)
 
 instance DryInterp PtrCMD
   where
     dryInterp (SwapPtr _ _) = return ()
+    dryInterp (SwapArr _ _) = return ()
 
 
 
@@ -761,6 +771,7 @@ runControlCMD (Assert cond msg) = do
 
 runPtrCMD :: PtrCMD (Param3 IO IO pred) a -> IO a
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
+runPtrCMD (SwapArr a b) = runSwapPtr a b
 
 runHandle :: Handle -> IO.Handle
 runHandle (HandleRun h)         = h
