@@ -282,7 +282,7 @@ unsafeSwap :: (PtrCMD :<: instr) =>
     Ptr a -> Ptr a -> ProgramT instr (Param2 exp pred) m ()
 unsafeSwap a b = singleInj $ SwapPtr a b
 
-unsafeSwapArr :: (PtrCMD :<: instr) =>
+unsafeSwapArr :: (Typeable i, Typeable a, pred i, pred a, PtrCMD :<: instr) =>
     Arr i a -> Arr i a -> ProgramT instr (Param2 exp pred) m ()
 unsafeSwapArr a b = singleInj $ SwapArr a b
 

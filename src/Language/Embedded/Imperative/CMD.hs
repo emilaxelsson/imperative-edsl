@@ -364,7 +364,8 @@ instance IsPointer (Ptr a)
 data PtrCMD fs a
   where
     SwapPtr :: Ptr a -> Ptr a -> PtrCMD (Param3 prog exp pred) ()
-    SwapArr :: Arr i a -> Arr i a -> PtrCMD (Param3 prog exp pred) ()
+    SwapArr :: (Typeable i, Typeable a, pred i, pred a)
+      => Arr i a -> Arr i a -> PtrCMD (Param3 prog exp pred) ()
 
 instance HFunctor   PtrCMD
   where
