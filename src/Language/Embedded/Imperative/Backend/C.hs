@@ -13,6 +13,7 @@ import Control.Applicative
 #endif
 import Control.Monad.State
 import Data.Proxy
+import Data.Loc
 
 import Language.C.Quote.GCC
 import qualified Language.C.Syntax as C
@@ -174,7 +175,10 @@ compControlCMD (Assert cond msg) = do
     addInclude "<assert.h>"
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
-
+compControlCMD (Hint _) = return ()
+compControlCMD (Comment msg) = do
+  addStm (C.EscStm ("/* " ++ msg ++ " */") noLoc)
+      
 compPtrCMD :: PtrCMD (Param3 prog exp pred) a -> CGen a
 compPtrCMD (SwapPtr a b) = do
     let swap_ptr =
