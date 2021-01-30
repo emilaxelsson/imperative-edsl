@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.8
+version:             0.8.1
 synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
@@ -84,27 +84,27 @@ library
     UndecidableInstances
 
   build-depends:
-    array,
+    array < 0.6,
     base >=4 && <5,
-    containers,
-    data-default-class,
-    deepseq,
-    directory,
-    exception-transformers,
-    ghc-prim,
+    containers < 0.7,
+    data-default-class < 0.2,
+    deepseq < 1.5,
+    directory < 1.4,
+    exception-transformers < 0.5,
+    ghc-prim < 0.7,
     language-c-quote >= 0.11.5 && < 0.13,
-    mainland-pretty >= 0.4 && < 0.7,
-    microlens >= 0.3.0.0,
-    microlens-mtl >= 0.1.8,
-    microlens-th,
-    mtl,
-    process,
+    mainland-pretty >= 0.4 && < 0.8,
+    microlens >= 0.3.0.0 && < 0.5,
+    microlens-mtl >= 0.1.8 && < 0.2,
+    microlens-th < 0.5,
+    mtl < 2.3,
+    process < 1.7,
     operational-alacarte >= 0.3,
-    BoundedChan,
-    srcloc,
+    BoundedChan < 1.1,
+    srcloc < 0.6,
     syntactic >= 3.8,
       -- That version fixes overlap bugs
-    time >= 1.5.0.1,
+    time >= 1.5.0.1 && < 1.12,
     stm >= 2.4 && < 2.6
 
   hs-source-dirs: src
