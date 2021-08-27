@@ -102,6 +102,10 @@ binaryOp BiGt   = Gt
 binaryOp BiLe   = Le
 binaryOp BiGe   = Ge
 
+type SupportCode = forall m . MonadC m => m ()
+  -- Only needed because GHC 7.8 can't represent tuple constraints (like
+  -- `MonadC`) in Template Haskell.
+
 -- | Syntactic symbols for C
 data Sym sig
   where
@@ -129,9 +133,45 @@ data Sym sig
     -- Attach extra code to an expression
     WithCode :: SupportCode -> Sym (a :-> Full a)
 
-type SupportCode = forall m . MonadC m => m ()
-  -- Only needed because GHC 7.8 can't represent tuple constraints (like
-  -- `MonadC`) in Template Haskell.
+deriveSymbol ''Sym
+
+instance Render Sym
+  where
+    renderSym (Lit a _)    = a
+    renderSym (Const a _)  = a
+    renderSym (Fun name _) = name
+    renderSym (UOp op)     = show $ unaryOp op
+    renderSym (Op op)      = show $ binaryOp op
+    renderSym (Cast _)     = "cast"
+    renderSym (Var v)      = v
+    renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
+    renderSym (ArrIx _)              = "ArrIx ..."
+    renderSym (WithCode _) = "WithCode ..."
+
+    renderArgs = renderArgsSmart
+
+instance Equality Sym
+  where
+    equal = equalDefault
+    hash  = hashDefault
+
+instance StringTree Sym
+
+instance Symbol T where symSig (T s) = symSig s
+
+instance Render T
+  where
+    renderSym (T s)     = renderSym s
+    renderArgs as (T s) = renderArgs as s
+
+instance Equality T
+  where
+    equal (T s) (T t) = equal s t
+    hash (T s)        = hash s
+
+instance StringTree T
+  where
+    stringTreeSym as (T s) = stringTreeSym as s
 
 data T sig
   where
@@ -139,6 +179,7 @@ data T sig
 
 -- | C expression
 newtype CExp a = CExp {unCExp :: ASTF T a}
+  deriving (Eq)
 
 instance Syntactic (CExp a)
   where
@@ -360,7 +401,7 @@ instance (Fractional a, Ord a, CType a) => Fractional (CExp a)
     recip = error "recip not implemented for CExp"
 
 -- | Integer division truncated toward zero
-quot_ :: (Integral a, CType a) => CExp a -> CExp a -> CExp a
+quot_ :: (Eq a, Integral a, CType a) => CExp a -> CExp a -> CExp a
 quot_ (LitP 0) b = 0
 quot_ a (LitP 1) = a
 quot_ a b
@@ -479,54 +520,4 @@ infixl 1 ?
 -- | Array indexing
 (#!) :: (CType a, Integral i, Ix i) => IArr i a -> CExp i -> CExp a
 arr #! i = sugarSym (T $ ArrIx arr) i
-
-
-
---------------------------------------------------------------------------------
--- Instances
---------------------------------------------------------------------------------
-
-deriveSymbol ''Sym
-
-instance Render Sym
-  where
-    renderSym (Lit a _)    = a
-    renderSym (Const a _)  = a
-    renderSym (Fun name _) = name
-    renderSym (UOp op)     = show $ unaryOp op
-    renderSym (Op op)      = show $ binaryOp op
-    renderSym (Cast _)     = "cast"
-    renderSym (Var v)      = v
-    renderSym (ArrIx (IArrComp arr)) = "ArrIx " ++ arr
-    renderSym (ArrIx _)              = "ArrIx ..."
-    renderSym (WithCode _) = "WithCode ..."
-
-    renderArgs = renderArgsSmart
-
-instance Equality Sym
-  where
-    equal = equalDefault
-    hash  = hashDefault
-
-instance StringTree Sym
-
-instance Symbol T where symSig (T s) = symSig s
-
-instance Render T
-  where
-    renderSym (T s)     = renderSym s
-    renderArgs as (T s) = renderArgs as s
-
-instance Equality T
-  where
-    equal (T s) (T t) = equal s t
-    hash (T s)        = hash s
-
-instance StringTree T
-  where
-    stringTreeSym as (T s) = stringTreeSym as s
-
-deriving instance Eq (CExp a)
-  -- Must be placed here due to the sequential dependencies introduced by
-  -- Template Haskell
 
