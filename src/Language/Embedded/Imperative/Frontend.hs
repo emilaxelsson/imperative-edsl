@@ -12,9 +12,9 @@ import Prelude hiding (break)
 
 import Data.Array.IO
 import Data.IORef
+import Data.Kind (Constraint)
 import Data.Typeable
 import System.IO.Unsafe
-import Data.Constraint
 
 import Control.Monad.Operational.Higher
 import System.IO.Fake
