@@ -151,7 +151,7 @@ testSwap1 :: Prog ()
 testSwap1 = do
     arr1 :: Arr Word32 Int32 <- constArr [1,2,3,4]
     arr2 :: Arr Word32 Int32 <- constArr [11,12,13,14]
-    unsafeSwap arr1 arr2
+    unsafeSwapArr arr1 arr2
     sequence_ [getArr arr1 i >>= printf "%d " | i <- map fromInteger [0..3]]
     printf "\n"
 
@@ -162,7 +162,7 @@ testSwap2 = do
     arr2 :: Arr Word32 Int32 <- newArr n
     copyArr (arr2,0) (arr1,0) 4
     setArr arr2 2 22
-    unsafeSwap arr1 arr2
+    unsafeSwapArr arr1 arr2
     sequence_ [getArr arr1 i >>= printf "%d " | i <- map fromInteger [0..3]]
     printf "\n"
     sequence_ [getArr arr2 i >>= printf "%d " | i <- map fromInteger [0..3]]
