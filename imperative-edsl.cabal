@@ -1,5 +1,5 @@
 name:                imperative-edsl
-version:             0.8.1
+version:             0.8.2
 synopsis:            Deep embedding of imperative programs with code generation
 description:         Deep embedding of imperative programs with code generation.
                      .
@@ -86,7 +86,8 @@ library
   build-depends:
     array < 0.6,
     base >=4 && <5,
-    containers < 0.7,
+    constraints >= 0.9,
+    containers >= 0.5.10 && < 0.7,
     data-default-class < 0.2,
     deepseq < 1.5,
     directory < 1.4,
@@ -106,7 +107,7 @@ library
       -- That version fixes overlap bugs
     time >= 1.5.0.1 && < 1.12,
     stm >= 2.4 && < 2.6
-
+    
   hs-source-dirs: src
 
 test-suite Tests

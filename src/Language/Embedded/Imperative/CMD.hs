@@ -182,14 +182,14 @@ instance ToIdent (IArr i a) where toIdent (IArrComp arr) = C.Id arr
 -- | Commands for mutable arrays
 data ArrCMD fs a
   where
-    NewArr   :: (pred a, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    ConstArr :: (pred a, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
-    GetArr   :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) (Val a)
-    SetArr   :: (pred a, Integral i, Ix i) => Arr i a -> exp i -> exp a -> ArrCMD (Param3 prog exp pred) ()
-    CopyArr  :: (pred a, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
+    NewArr   :: (pred a, pred i, Integral i, Ix i) => String -> exp i -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    ConstArr :: (pred a, pred i, Integral i, Ix i) => String -> [a] -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    GetArr   :: (pred a, pred i, Integral i, Ix i) => Arr i a -> exp i -> ArrCMD (Param3 prog exp pred) (Val a)
+    SetArr   :: (pred a, pred i, Integral i, Ix i) => Arr i a -> exp i -> exp a -> ArrCMD (Param3 prog exp pred) ()
+    CopyArr  :: (pred a, pred i, Integral i, Ix i) => (Arr i a, exp i) -> (Arr i a, exp i) -> exp i -> ArrCMD (Param3 prog exp pred) ()
       -- The arrays are paired with their offset
-    UnsafeFreezeArr :: (pred a, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
-    UnsafeThawArr   :: (pred a, Integral i, Ix i) => IArr i a -> ArrCMD (Param3 prog exp pred) (Arr i a)
+    UnsafeFreezeArr :: (pred a, pred i, Integral i, Ix i) => Arr i a -> ArrCMD (Param3 prog exp pred) (IArr i a)
+    UnsafeThawArr   :: (pred a, pred i, Integral i, Ix i) => IArr i a -> ArrCMD (Param3 prog exp pred) (Arr i a)
 #if  __GLASGOW_HASKELL__>=708
   deriving Typeable
 #endif
@@ -277,11 +277,13 @@ type IxRange i = (i, Int, Border i)
 
 data ControlCMD fs a
   where
-    If     :: exp Bool -> prog () -> prog () -> ControlCMD (Param3 prog exp pred) ()
-    While  :: prog (exp Bool) -> prog () -> ControlCMD (Param3 prog exp pred) ()
-    For    :: (pred i, Integral i) => IxRange (exp i) -> (Val i -> prog ()) -> ControlCMD (Param3 prog exp pred) ()
-    Break  :: ControlCMD (Param3 prog exp pred) ()
-    Assert :: exp Bool -> String -> ControlCMD (Param3 prog exp pred) ()
+    If      :: exp Bool -> prog () -> prog () -> ControlCMD (Param3 prog exp pred) ()
+    While   :: prog (exp Bool) -> prog () -> ControlCMD (Param3 prog exp pred) ()
+    For     :: (pred i, Integral i) => IxRange (exp i) -> (Val i -> prog ()) -> ControlCMD (Param3 prog exp pred) ()
+    Break   :: ControlCMD (Param3 prog exp pred) ()
+    Assert  :: exp Bool -> String -> ControlCMD (Param3 prog exp pred) ()
+    Hint    :: pred a => exp a -> ControlCMD (Param3 prog exp pred) ()
+    Comment :: String -> ControlCMD (Param3 prog exp pred) ()
 
 instance HFunctor ControlCMD
   where
@@ -290,6 +292,8 @@ instance HFunctor ControlCMD
     hfmap f (For rng body)    = For rng (f . body)
     hfmap _ Break             = Break
     hfmap _ (Assert cond msg) = Assert cond msg
+    hfmap _ (Hint exp)        = Hint exp
+    hfmap _ (Comment msg)     = Comment msg
 
 instance HBifunctor ControlCMD
   where
@@ -298,6 +302,8 @@ instance HBifunctor ControlCMD
     hbimap f g (For (lo,step,hi) body) = For (g lo, step, fmap g hi) (f . body)
     hbimap _ _ Break                   = Break
     hbimap _ g (Assert cond msg)       = Assert (g cond) msg
+    hbimap _ g (Hint exp)              = Hint (g exp)
+    hbimap _ _ (Comment msg)           = Comment msg
 
 instance (ControlCMD :<: instr) => Reexpressible ControlCMD instr env
   where
@@ -316,6 +322,8 @@ instance (ControlCMD :<: instr) => Reexpressible ControlCMD instr env
             For (lo',step,hi') (flip runReaderT env . body)
     reexpressInstrEnv reexp Break             = lift $ singleInj Break
     reexpressInstrEnv reexp (Assert cond msg) = lift . singleInj . flip Assert msg =<< reexp cond
+    reexpressInstrEnv reexp (Hint exp)        = lift . singleInj . Hint =<< reexp exp
+    reexpressInstrEnv reexp (Comment msg)     = lift $ singleInj (Comment msg)
 
 instance DryInterp ControlCMD
   where
@@ -324,7 +332,9 @@ instance DryInterp ControlCMD
     dryInterp (For _ _)    = return ()
     dryInterp Break        = return ()
     dryInterp (Assert _ _) = return ()
-
+    dryInterp (Hint _)     = return ()
+    dryInterp (Comment _)  = return ()
+    
 
 
 --------------------------------------------------------------------------------
@@ -353,18 +363,29 @@ instance IsPointer (Ptr a)
 
 data PtrCMD fs a
   where
-    SwapPtr :: IsPointer a => a -> a -> PtrCMD (Param3 prog exp pred) ()
+    SwapPtr :: Ptr a -> Ptr a -> PtrCMD (Param3 prog exp pred) ()
+    SwapArr :: (Typeable i, Typeable a, pred i, pred a)
+      => Arr i a -> Arr i a -> PtrCMD (Param3 prog exp pred) ()
 
-instance HFunctor   PtrCMD where hfmap _    (SwapPtr a b) = SwapPtr a b
-instance HBifunctor PtrCMD where hbimap _ _ (SwapPtr a b) = SwapPtr a b
+instance HFunctor   PtrCMD
+  where
+    hfmap _    (SwapPtr a b) = SwapPtr a b
+    hfmap _    (SwapArr a b) = SwapArr a b
+    
+instance HBifunctor PtrCMD
+  where
+    hbimap _ _ (SwapPtr a b) = SwapPtr a b
+    hbimap _ _ (SwapArr a b) = SwapArr a b
 
 instance (PtrCMD :<: instr) => Reexpressible PtrCMD instr env
   where
     reexpressInstrEnv reexp (SwapPtr a b) = lift $ singleInj (SwapPtr a b)
+    reexpressInstrEnv reexp (SwapArr a b) = lift $ singleInj (SwapArr a b)
 
 instance DryInterp PtrCMD
   where
     dryInterp (SwapPtr _ _) = return ()
+    dryInterp (SwapArr _ _) = return ()
 
 
 
@@ -388,18 +409,18 @@ stdin = HandleComp "stdin"
 stdout :: Handle
 stdout = HandleComp "stdout"
 
-data PrintfArg exp
+data PrintfArg exp pred
   where
-    PrintfArg :: Printf.PrintfArg a => exp a -> PrintfArg exp
+    PrintfArg :: (Printf.PrintfArg a, pred a) => exp a -> PrintfArg exp pred
 
 mapPrintfArg
-    :: (forall a . exp1 a -> exp2 a)
-    -> PrintfArg exp1 -> PrintfArg exp2
+    :: (forall a . pred a => exp1 a -> exp2 a)
+    -> PrintfArg exp1 pred -> PrintfArg exp2 pred
 mapPrintfArg f (PrintfArg exp) = PrintfArg (f exp)
 
 mapPrintfArgM :: Monad m
-    => (forall a . exp1 a -> m (exp2 a))
-    -> PrintfArg exp1 -> m (PrintfArg exp2)
+    => (forall a . pred a => exp1 a -> m (exp2 a))
+    -> PrintfArg exp1 pred -> m (PrintfArg exp2 pred)
 mapPrintfArgM f (PrintfArg exp) = liftM PrintfArg (f exp)
 
 -- | Values that can be printed\/scanned using @printf@\/@scanf@
@@ -437,10 +458,10 @@ instance Formattable Double
 
 data FileCMD fs a
   where
-    FOpen   :: FilePath -> IOMode                  -> FileCMD (Param3 prog exp pred) Handle
-    FClose  :: Handle                              -> FileCMD (Param3 prog exp pred) ()
-    FEof    :: Handle                              -> FileCMD (Param3 prog exp pred) (Val Bool)
-    FPrintf :: Handle -> String -> [PrintfArg exp] -> FileCMD (Param3 prog exp pred) ()
+    FOpen   :: FilePath -> IOMode -> FileCMD (Param3 prog exp pred) Handle
+    FClose  :: Handle -> FileCMD (Param3 prog exp pred) ()
+    FEof    :: Handle -> FileCMD (Param3 prog exp pred) (Val Bool)
+    FPrintf :: Handle -> String -> [PrintfArg exp pred] -> FileCMD (Param3 prog exp pred) ()
     FGet    :: (pred a, Formattable a) => Handle   -> FileCMD (Param3 prog exp pred) (Val a)
 
 instance HFunctor FileCMD
@@ -573,8 +594,8 @@ instance Assignable Object
 
 data C_CMD fs a
   where
-    NewCArr   :: (pred a, Integral i, Ix i) => String -> Maybe i -> exp i -> C_CMD (Param3 prog exp pred) (Arr i a)
-    ConstCArr :: (pred a, Integral i, Ix i) => String -> Maybe i -> [a] -> C_CMD (Param3 prog exp pred) (Arr i a)
+    NewCArr   :: (pred a, pred i, Integral i, Ix i) => String -> Maybe i -> exp i -> C_CMD (Param3 prog exp pred) (Arr i a)
+    ConstCArr :: (pred a, pred i, Integral i, Ix i) => String -> Maybe i -> [a] -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewPtr    :: pred a => String -> C_CMD (Param3 prog exp pred) (Ptr a)
     PtrToArr  :: Ptr a -> C_CMD (Param3 prog exp pred) (Arr i a)
     NewObject
@@ -751,6 +772,7 @@ runControlCMD (Assert cond msg) = do
 
 runPtrCMD :: PtrCMD (Param3 IO IO pred) a -> IO a
 runPtrCMD (SwapPtr a b) = runSwapPtr a b
+runPtrCMD (SwapArr a b) = runSwapPtr a b
 
 runHandle :: Handle -> IO.Handle
 runHandle (HandleRun h)         = h
@@ -770,7 +792,7 @@ readWord h = do
         cs <- readWord h
         return (c:cs)
 
-runFPrintf :: [PrintfArg IO] -> (forall r . Printf.HPrintfType r => r) -> IO ()
+runFPrintf :: [PrintfArg IO pred] -> (forall r . Printf.HPrintfType r => r) -> IO ()
 runFPrintf []               pf = pf
 runFPrintf (PrintfArg a:as) pf = a >>= \a' -> runFPrintf as (pf a')
 

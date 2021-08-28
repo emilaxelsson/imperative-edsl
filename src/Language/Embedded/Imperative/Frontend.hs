@@ -14,6 +14,7 @@ import Data.Array.IO
 import Data.IORef
 import Data.Typeable
 import System.IO.Unsafe
+import Data.Constraint
 
 import Control.Monad.Operational.Higher
 import System.IO.Fake
@@ -100,7 +101,7 @@ veryUnsafeFreezeRef (RefComp v) = varExp v
 --------------------------------------------------------------------------------
 
 -- | Create an uninitialized array
-newArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+newArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr)
     => exp i  -- ^ Length
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 newArr = newNamedArr "a"
@@ -109,14 +110,14 @@ newArr = newNamedArr "a"
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-newNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+newNamedArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr)
     => String -- ^ Base name
     -> exp i  -- ^ Length
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 newNamedArr base len = singleInj (NewArr base len)
 
 -- | Create an array and initialize it with a constant list
-constArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+constArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr)
     => [a]  -- ^ Initial contents
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
 constArr = constNamedArr "a"
@@ -125,7 +126,7 @@ constArr = constNamedArr "a"
 --
 -- The provided base name may be appended with a unique identifier to avoid name
 -- collisions.
-constNamedArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+constNamedArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr)
     => String  -- ^ Base name
     -> [a]     -- ^ Initial contents
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
@@ -134,6 +135,7 @@ constNamedArr base init = singleInj (ConstArr base init)
 -- | Get an element of an array
 getArr
     :: ( pred a
+       , pred i
        , FreeExp exp
        , FreePred exp a
        , Integral i
@@ -145,14 +147,14 @@ getArr
 getArr arr i = fmap valToExp $ singleInj $ GetArr arr i
 
 -- | Set an element of an array
-setArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+setArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr) =>
     Arr i a -> exp i -> exp a -> ProgramT instr (Param2 exp pred) m ()
 setArr arr i a = singleInj (SetArr arr i a)
 
 -- | Copy the contents of an array to another array. The number of elements to
 -- copy must not be greater than the number of allocated elements in either
 -- array.
-copyArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr)
+copyArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr)
     => (Arr i a, exp i)  -- ^ (destination,offset)
     -> (Arr i a, exp i)  -- ^ (source,offset
     -> exp i             -- ^ Number of elements
@@ -161,7 +163,7 @@ copyArr arr1 arr2 len = singleInj $ CopyArr arr1 arr2 len
 
 -- | Freeze a mutable array to an immutable one. This involves copying the array
 -- to a newly allocated one.
-freezeArr :: (pred a, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
+freezeArr :: (pred a, pred i, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
     => Arr i a
     -> exp i  -- ^ Length of new array
     -> ProgramT instr (Param2 exp pred) m (IArr i a)
@@ -173,13 +175,13 @@ freezeArr arr n = do
 -- | Freeze a mutable array to an immutable one without making a copy. This is
 -- generally only safe if the the mutable array is not updated as long as the
 -- immutable array is alive.
-unsafeFreezeArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+unsafeFreezeArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr) =>
     Arr i a -> ProgramT instr (Param2 exp pred) m (IArr i a)
 unsafeFreezeArr arr = singleInj $ UnsafeFreezeArr arr
 
 -- | Thaw an immutable array to a mutable one. This involves copying the array
 -- to a newly allocated one.
-thawArr :: (pred a, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
+thawArr :: (pred a, pred i, Integral i, Ix i, Num (exp i), ArrCMD :<: instr, Monad m)
     => IArr i a
     -> exp i  -- ^ Number of elements to copy
     -> ProgramT instr (Param2 exp pred) m (Arr i a)
@@ -192,7 +194,7 @@ thawArr arr n = do
 -- | Thaw an immutable array to a mutable one without making a copy. This is
 -- generally only safe if the the mutable array is not updated as long as the
 -- immutable array is alive.
-unsafeThawArr :: (pred a, Integral i, Ix i, ArrCMD :<: instr) =>
+unsafeThawArr :: (pred a, pred i, Integral i, Ix i, ArrCMD :<: instr) =>
     IArr i a -> ProgramT instr (Param2 exp pred) m (Arr i a)
 unsafeThawArr arr = singleInj $ UnsafeThawArr arr
 
@@ -259,7 +261,11 @@ assert :: (ControlCMD :<: instr)
     -> ProgramT instr (Param2 exp pred) m ()
 assert cond msg = singleInj $ Assert cond msg
 
-
+-- | Hint that an expression may be used in an invariant
+hint :: (ControlCMD :<: instr, pred a)
+  => exp a -- ^ Expression to be used in invariant
+  -> ProgramT instr (Param2 exp pred) m ()
+hint exp = singleInj $ Hint exp
 
 --------------------------------------------------------------------------------
 -- * Pointer operations
@@ -272,10 +278,13 @@ assert cond msg = singleInj $ Assert cond msg
 --
 -- The 'IsPointer' class ensures that the operation is only possible for types
 -- that are represented as pointers in C.
-unsafeSwap :: (IsPointer a, PtrCMD :<: instr) =>
-    a -> a -> ProgramT instr (Param2 exp pred) m ()
+unsafeSwap :: (PtrCMD :<: instr) =>
+    Ptr a -> Ptr a -> ProgramT instr (Param2 exp pred) m ()
 unsafeSwap a b = singleInj $ SwapPtr a b
 
+unsafeSwapArr :: (Typeable i, Typeable a, pred i, pred a, PtrCMD :<: instr) =>
+    Arr i a -> Arr i a -> ProgramT instr (Param2 exp pred) m ()
+unsafeSwapArr a b = singleInj $ SwapArr a b
 
 
 --------------------------------------------------------------------------------
@@ -299,18 +308,21 @@ feof = fmap valToExp . singleInj . FEof
 class PrintfType r
   where
     type PrintfExp r :: * -> *
-    fprf :: Handle -> String -> [PrintfArg (PrintfExp r)] -> r
+    type PrintfPred r :: * -> Constraint
+    fprf :: Handle -> String -> [PrintfArg (PrintfExp r) (PrintfPred r)] -> r
 
 instance (FileCMD :<: instr, a ~ ()) =>
     PrintfType (ProgramT instr (Param2 exp pred) m a)
   where
     type PrintfExp (ProgramT instr (Param2 exp pred) m a) = exp
+    type PrintfPred (ProgramT instr (Param2 exp pred) m a) = pred
     fprf h form as = singleInj $ FPrintf h form (reverse as)
 
-instance (Formattable a, PrintfType r, exp ~ PrintfExp r) =>
+instance (Formattable a, PrintfType r, exp ~ PrintfExp r, PrintfPred r a) =>
     PrintfType (exp a -> r)
   where
     type PrintfExp  (exp a -> r) = exp
+    type PrintfPred (exp a -> r) = PrintfPred r
     fprf h form as = \a -> fprf h form (PrintfArg a : as)
 
 -- | Print to a handle. Accepts a variable number of arguments.
@@ -319,7 +331,7 @@ fprintf h format = fprf h format []
 
 -- | Put a single value to a handle
 fput :: forall instr exp pred a m
-    .  (Formattable a, FreePred exp a, FileCMD :<: instr)
+    .  (Formattable a, FreePred exp a, FileCMD :<: instr, pred a)
     => Handle
     -> String  -- ^ Prefix
     -> exp a   -- ^ Expression to print

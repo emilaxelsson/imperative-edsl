@@ -106,7 +106,7 @@ readChan = readChan'
 --   The semantics are the same as for 'readChan', where "channel is empty"
 --   is defined as "channel contains less data than requested".
 --   Returns @False@ without reading any data if the channel is closed.
-readChanBuf :: ( Typeable a, pred a
+readChanBuf :: ( Typeable a, pred a, pred i
                , Ix i, Integral i
                , FreeExp exp, FreePred exp Bool
                , ChanCMD :<: instr, Monad m )
@@ -134,7 +134,7 @@ writeChan = writeChan'
 --   The semantics are the same as for 'writeChan', where "channel is full"
 --   is defined as "channel has insufficient free space to store all written
 --   data".
-writeChanBuf :: ( Typeable a, pred a
+writeChanBuf :: ( Typeable a, pred a, pred i
                 , Ix i, Integral i
                 , FreeExp exp, FreePred exp Bool
                 , ChanCMD :<: instr, Monad m )
@@ -184,7 +184,7 @@ readChan' :: ( Typeable a, pred a
           -> ProgramT instr (Param2 exp pred) m (exp a)
 readChan' = fmap valToExp . singleInj . ReadOne
 
-readChanBuf' :: ( Typeable a, pred a
+readChanBuf' :: ( Typeable a, pred a, pred i
                 , Ix i, Integral i
                 , FreeExp exp, FreePred exp Bool
                 , ChanCMD :<: instr, Monad m )
@@ -203,7 +203,7 @@ writeChan' :: ( Typeable a, pred a
            -> ProgramT instr (Param2 exp pred) m (exp Bool)
 writeChan' c = fmap valToExp . singleInj . WriteOne c
 
-writeChanBuf' :: ( Typeable a, pred a
+writeChanBuf' :: ( Typeable a, pred a, pred i
                  , Ix i, Integral i
                  , FreeExp exp, FreePred exp Bool
                  , ChanCMD :<: instr, Monad m )

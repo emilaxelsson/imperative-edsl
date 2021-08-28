@@ -13,6 +13,7 @@ import Control.Applicative
 #endif
 import Control.Monad.State
 import Data.Proxy
+import Data.Loc
 
 import Language.C.Quote.GCC
 import qualified Language.C.Syntax as C
@@ -174,7 +175,10 @@ compControlCMD (Assert cond msg) = do
     addInclude "<assert.h>"
     c <- compExp cond
     addStm [cstm| assert($c && $msg); |]
-
+compControlCMD (Hint _) = return ()
+compControlCMD (Comment msg) = do
+  addStm (C.EscStm ("/* " ++ msg ++ " */") noLoc)
+      
 compPtrCMD :: PtrCMD (Param3 prog exp pred) a -> CGen a
 compPtrCMD (SwapPtr a b) = do
     let swap_ptr =
@@ -186,6 +190,16 @@ compPtrCMD (SwapPtr a b) = do
       -- or `b`.
     addGlobal [cedecl| $esc:swap_ptr |]
     addStm [cstm| swap_ptr($id:a, $id:b); |]
+compPtrCMD (SwapArr a b) = do
+    let swap_arr =
+          "#define swap_arr(a,b) do {void* TmP=a; a=b; b=TmP;} while (0)"
+      -- See this solution on the use of `do{}while(0)`:
+      -- <http://stackoverflow.com/a/3982397/1105347>
+      --
+      -- The name "TmP" is to make it very unlikely to have the same name as `a`
+      -- or `b`.
+    addGlobal [cedecl| $esc:swap_arr |]
+    addStm [cstm| swap_arr($id:a, $id:b); |]
 
 compIOMode :: IOMode -> String
 compIOMode ReadMode      = "r"
