@@ -91,7 +91,7 @@ library
     deepseq < 1.5,
     directory < 1.4,
     exception-transformers < 0.5,
-    ghc-prim < 0.8,
+    ghc-prim < 0.9,
     language-c-quote >= 0.11.5 && < 0.14,
     mainland-pretty >= 0.4 && < 0.8,
     microlens >= 0.3.0.0 && < 0.5,
